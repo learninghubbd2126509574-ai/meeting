@@ -1,0 +1,6 @@
+{
+  "name": "Unity Earning Counselling Meeting System",
+  "description": "Counselling Meeting System for Unity Earning-E-learning Platform enabling session links creation, participant log tracking, and real-time IP-based device blocking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

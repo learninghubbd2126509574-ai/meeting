@@ -1,0 +1,83 @@
+{
+  "entities": {
+    "Meeting": {
+      "title": "Meeting",
+      "description": "Represents a counselling meeting and its corresponding Google Meet link",
+      "type": "object",
+      "properties": {
+        "googleMeetLink": { "type": "string", "description": "The target Google Meet URL" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the meeting link was added" },
+        "active": { "type": "boolean", "description": "Whether the meeting is currently active" }
+      },
+      "required": ["googleMeetLink", "createdAt", "active"]
+    },
+    "Participant": {
+      "title": "Participant",
+      "description": "A single person who joined a specific counselling session",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Full name of the participant" },
+        "meetingId": { "type": "string", "description": "The ID of the meeting they joined" },
+        "ip": { "type": "string", "description": "IP Address of the participant" },
+        "deviceId": { "type": "string", "description": "Persistent browser hardware/device ID" },
+        "userAgent": { "type": "string", "description": "Browser User-Agent string of the participant" },
+        "joinedAt": { "type": "string", "format": "date-time", "description": "Timestamp of joining" },
+        "blocked": { "type": "boolean", "description": "Whether the participant is blocked" }
+      },
+      "required": ["name", "meetingId", "ip", "deviceId", "userAgent", "joinedAt", "blocked"]
+    },
+    "BlockedIP": {
+      "title": "Blocked IP",
+      "description": "An IP Address blocked from accessing meeting links",
+      "type": "object",
+      "properties": {
+        "ip": { "type": "string", "description": "The blocked IP Address string" },
+        "deviceId": { "type": "string", "description": "The persistent device ID associated with this block" },
+        "blockedAt": { "type": "string", "format": "date-time", "description": "Timestamp when this IP was blocked" },
+        "name": { "type": "string", "description": "Last name used with this IP" }
+      },
+      "required": ["ip", "blockedAt", "name"]
+    },
+    "BlockedDevice": {
+      "title": "Blocked Device",
+      "description": "A unique hardware/browser fingerprint blocked from joining",
+      "type": "object",
+      "properties": {
+        "deviceId": { "type": "string", "description": "The blocked device identifier" },
+        "blockedAt": { "type": "string", "format": "date-time", "description": "Timestamp when this device was blocked" }
+      },
+      "required": ["deviceId", "blockedAt"]
+    },
+    "AdminSettings": {
+      "title": "Admin Settings",
+      "description": "System configuration values such as the admin application password",
+      "type": "object",
+      "properties": {
+        "password": { "type": "string", "description": "The current password used to log in to the admin panel" }
+      },
+      "required": ["password"]
+    }
+  },
+  "firestore": {
+    "/meetings/{meetingId}": {
+      "schema": "Meeting",
+      "description": "A collection containing Google Meet links and metadata"
+    },
+    "/participants/{participantId}": {
+      "schema": "Participant",
+      "description": "Participant details such as name, joined time, and IP address"
+    },
+    "/blockedIPs/{ip}": {
+      "schema": "BlockedIP",
+      "description": "Blacklisted IPs that are rejected from joining Google Meet links"
+    },
+    "/blockedDevices/{deviceId}": {
+      "schema": "BlockedDevice",
+      "description": "Blacklisted devices that are rejected even if using a VPN/different IP"
+    },
+    "/adminSettings/{docId}": {
+      "schema": "AdminSettings",
+      "description": "Stores admin configuration parameters like panel password"
+    }
+  }
+}
