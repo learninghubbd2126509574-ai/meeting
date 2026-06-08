@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
-import { AlertCircle, User, Loader2, CheckCircle, ShieldAlert, Bell } from 'lucide-react';
+import { AlertCircle, User, Loader2, CheckCircle, ShieldAlert, Bell, Clock } from 'lucide-react';
 import { motion } from 'motion/react';
 
 const Marquee = 'marquee' as any;
@@ -30,6 +30,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
   const [noticeText, setNoticeText] = useState<string>('');
   const [noticeActive, setNoticeActive] = useState<boolean>(false);
   const [preventRepeatJoins, setPreventRepeatJoins] = useState<boolean>(true);
+  const [publicLinkActive, setPublicLinkActive] = useState<boolean>(true);
 
   // 1. Live Listeners for Meeting, Block Status, and Settings
   useEffect(() => {
@@ -125,6 +126,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
             setNoticeText(sData.noticeText || '');
             setNoticeActive(sData.noticeActive === true);
             setPreventRepeatJoins(sData.preventRepeatJoins !== false);
+            setPublicLinkActive(sData.publicLinkActive !== false);
           }
           setIsLoading(false);
         }, (err) => {
@@ -421,8 +423,57 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
           </div>
         )}
 
+        {/* PUBLIC LINK DISABLED / TIMER OFF SCREEN (FULL SYSTEM ERROR WEB GATE) */}
+        {!isLoading && !isBlocked && !publicLinkActive && (
+          <div className="flex-1 flex flex-col justify-between p-6 bg-slate-50 pt-16 font-sans">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.3 }}
+              className="space-y-6 text-center pt-8"
+            >
+              <div className="h-20 w-20 bg-rose-50 rounded-3xl shadow-inner flex items-center justify-center mx-auto border-2 border-rose-200">
+                <ShieldAlert className="h-11 w-11 text-rose-600 animate-bounce" />
+              </div>
+              
+              <div className="space-y-3">
+                <div className="inline-flex items-center gap-1.5 bg-rose-100 border border-rose-200 px-3 py-1 rounded-full text-[10px] font-black text-rose-850 shadow-sm uppercase tracking-wide">
+                  <span>ERROR: 403_ACCESS_DISABLED</span>
+                </div>
+                
+                <h1 className="text-2xl font-black text-slate-900 tracking-tight leading-tight">
+                  সিস্টেম লিংক নিষ্ক্রিয় করা হয়েছে!
+                </h1>
+                
+                <p className="text-slate-600 text-[12px] leading-relaxed px-2 font-bold select-none">
+                  দুঃখিত, এই ওয়েবসাইটের জয়েনিং লিঙ্ক সাময়িকভাবে বন্ধ বা অফ করে দেওয়া হয়েছে। সিস্টেম সুরক্ষার স্বার্থে বর্তমানে নতুন কোনো মেম্বার এই মিটিংয়ে যুক্ত হতে পারবেন না।
+                </p>
+              </div>
+
+              <div className="bg-rose-50/70 border border-rose-150 rounded-2xl p-4.5 flex flex-col gap-1.5 text-left shadow-sm">
+                <p className="text-[11.5px] text-rose-800 font-extrabold uppercase tracking-wider flex items-center gap-1.5 border-b border-rose-200/50 pb-1.5 mb-1">
+                  <AlertCircle className="h-4.5 w-4.5 text-rose-600" />
+                  গুরুত্বপূর্ণ নির্দেশাবলী:
+                </p>
+                <p className="text-[12px] text-slate-700 leading-normal font-bold">
+                  যদি আপনি সেশনে অংশগ্রহণ করতে ইচ্ছুক হন অথবা মনে করেন এটি অনাকাঙ্ক্ষিত কোনো যান্ত্রিক ত্রুটি, তবে এখনই আপনার ইউনিটি আর্নিং (<span className="text-red-705">Unity Earning</span>) কাউন্সেলর বা সুপিরিয়র লিডারের সাথে সরাসরি যোগাযোগ করুন।
+                </p>
+              </div>
+
+              <div className="bg-slate-200/50 border border-slate-300/45 px-3.5 py-2.5 rounded-xl font-mono text-[10px] text-slate-500 font-bold space-y-0.5 text-left">
+                <p className="flex justify-between"><span>LINK STATUS:</span> <span className="text-rose-600 font-black">OFFLINE</span></p>
+                <p className="flex justify-between"><span>SECURITY LEVEL:</span> <span className="text-slate-700 font-black">STRICT_ACTIVE</span></p>
+              </div>
+            </motion.div>
+            
+            <div className="text-center text-[9px] text-slate-400 font-mono py-2 font-semibold select-none">
+              SYSTEM BLOCKED BY UNITY EARNING V2
+            </div>
+          </div>
+        )}
+
         {/* STUDENT SIGN IN / MEETING JOIN FORM SCREEN */}
-        {!isLoading && !isBlocked && (
+        {!isLoading && !isBlocked && publicLinkActive && (
           <div className="flex-1 overflow-y-auto pt-6 md:pt-14 pb-8 flex flex-col bg-slate-50 relative">
             
             {/* Thin Scrolling Notice Bar */}

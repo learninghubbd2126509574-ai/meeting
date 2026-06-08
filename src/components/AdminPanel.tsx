@@ -55,6 +55,7 @@ export default function AdminPanel() {
   // Firestore Saved Settings
   const [savedPassword, setSavedPassword] = useState('212650');
   const [preventRepeatJoins, setPreventRepeatJoins] = useState(true);
+  const [publicLinkActive, setPublicLinkActive] = useState(true);
   const [noticeText, setNoticeText] = useState('');
   const [noticeActive, setNoticeActive] = useState(false);
   const [isUpdatingNotice, setIsUpdatingNotice] = useState(false);
@@ -123,13 +124,15 @@ export default function AdminPanel() {
           const data = docSnap.data();
           setSavedPassword(data.password || '212650');
           setPreventRepeatJoins(data.preventRepeatJoins !== false);
+          setPublicLinkActive(data.publicLinkActive !== false);
           setNoticeText(data.noticeText || '');
           setNoticeActive(data.noticeActive === true);
         } else {
           // Initialize settings collection
-          await setDoc(docRef, { password: '212650', preventRepeatJoins: true, noticeText: '', noticeActive: false });
+          await setDoc(docRef, { password: '212650', preventRepeatJoins: true, publicLinkActive: true, noticeText: '', noticeActive: false });
           setSavedPassword('212650');
           setPreventRepeatJoins(true);
+          setPublicLinkActive(true);
           setNoticeText('');
           setNoticeActive(false);
         }
@@ -194,6 +197,8 @@ export default function AdminPanel() {
       if (snap.exists()) {
         const data = snap.data();
         setSavedPassword(data.password || '212650');
+        setPreventRepeatJoins(data.preventRepeatJoins !== false);
+        setPublicLinkActive(data.publicLinkActive !== false);
         setNoticeText(data.noticeText || '');
         setNoticeActive(data.noticeActive === true);
       }
@@ -429,6 +434,18 @@ export default function AdminPanel() {
       await setDoc(docRef, { preventRepeatJoins: nextVal }, { merge: true });
     } catch (err) {
       console.error('Failed to update repeat joins settings:', err);
+    }
+  }
+
+  // 8.2. Toggle Public Link Active Setting
+  async function togglePublicLinkActiveSetting() {
+    try {
+      const nextVal = !publicLinkActive;
+      setPublicLinkActive(nextVal);
+      const docRef = doc(db, 'adminSettings', 'settings');
+      await setDoc(docRef, { publicLinkActive: nextVal }, { merge: true });
+    } catch (err) {
+      console.error('Failed to update public link active settings:', err);
     }
   }
 
@@ -1474,6 +1491,25 @@ export default function AdminPanel() {
                         <span
                           className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
                             preventRepeatJoins ? 'translate-x-5' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
+                      <div className="max-w-[200px]">
+                        <p className="text-[10px] font-black text-slate-800">পাবলিক লিংক সচল রাখুন</p>
+                        <p className="text-[9px] text-slate-500 leading-relaxed mt-0.5">অন থাকলে সাধারণ লিঙ্কে ক্লিক করে জয়েন সচল থাকবে। অফ করে দিলে টাইম আউট বার্তা দেখানো হবে।</p>
+                      </div>
+                      <button
+                        onClick={togglePublicLinkActiveSetting}
+                        className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          publicLinkActive ? 'bg-amber-500' : 'bg-slate-300'
+                        }`}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                            publicLinkActive ? 'translate-x-5' : 'translate-x-0'
                           }`}
                         />
                       </button>
