@@ -29,6 +29,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
   const [meetingTime, setMeetingTime] = useState<string | null>(null);
   const [noticeText, setNoticeText] = useState<string>('');
   const [noticeActive, setNoticeActive] = useState<boolean>(false);
+  const [preventRepeatJoins, setPreventRepeatJoins] = useState<boolean>(true);
 
   // 1. Live Listeners for Meeting, Block Status, and Settings
   useEffect(() => {
@@ -117,12 +118,13 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
           setErrorMessage("মিটিং ডাটা লোড করতে সমস্যা হচ্ছে। আপনার ইন্টারনেট কানেকশন বা সার্ভার পারমিশন চেক করুন।");
         });
 
-        // E. Real-time Admin Settings Listener (Notice only)
+        // E. Real-time Admin Settings Listener (Notice and Joint Policy)
         unsubSettings = onSnapshot(doc(db, 'adminSettings', 'settings'), (snap) => {
           if (snap.exists()) {
             const sData = snap.data();
             setNoticeText(sData.noticeText || '');
             setNoticeActive(sData.noticeActive === true);
+            setPreventRepeatJoins(sData.preventRepeatJoins !== false);
           }
           setIsLoading(false);
         }, (err) => {
@@ -190,6 +192,32 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
           }
         } catch (e) {
           console.warn("DB device block check failed, continuing join flow", e);
+        }
+      }
+
+      // 2.5. Check for same IP duplicate prevention if enabled
+      if (preventRepeatJoins && ipAddress && ipAddress !== 'Unknown') {
+        try {
+          const qSameIp = query(
+            collection(db, 'participants'),
+            where('meetingId', '==', meetingId),
+            where('ip', '==', ipAddress)
+          );
+          const snapSameIp = await getDocs(qSameIp);
+          
+          // Check if someone with a different device id is already using this IP index
+          const duplicate = snapSameIp.docs.find(docOpt => {
+            const data = docOpt.data();
+            return data.deviceId !== deviceId;
+          });
+
+          if (duplicate) {
+            setErrorMessage("দুঃখিত, এই আইপি অ্যাড্রেস (IP Address) দিয়ে ইতিপূর্বে অন্য একটি ডিভাইস থেকে মিটিংয়ে জয়েন করা হয়েছে। একই ওয়াইফাই বা ইন্টারনেট সংযোগ দিয়ে দ্বিতীয় কেউ মিটিংয়ে অংশগ্রহণ করতে পারবেন না।");
+            setIsSubmitting(false);
+            return;
+          }
+        } catch (errSameIp) {
+          console.warn("Failed to check duplicate IP joins:", errSameIp);
         }
       }
 
