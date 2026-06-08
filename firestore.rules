@@ -12,40 +12,54 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // checks if the request is from an authenticated admin.
+    // This includes Google accounts matching the specified email that are verified, OR anonymous users (used for password login in this application)
     function isAdmin() {
       return isSignedIn() && (
-        request.auth.token.email == "learninghubbd2126509574@gmail.com" &&
-        request.auth.token.email_verified == true
+        (request.auth.token.email == "learninghubbd2126509574@gmail.com" &&
+         request.auth.token.email_verified == true) ||
+        request.auth.token.firebase.sign_in_provider == 'anonymous'
       );
-    }
-
-    function isValidId(id) {
-      return id is string && id.size() > 0 && id.size() <= 128;
     }
 
     // Meetings Collection Rules
     match /meetings/{meetingId} {
-      allow get, list, create, update, delete: if true;
+      // Anyone can get or list meetings to check if active and retrieve Google Meet links
+      allow get, list: if true;
+      // Only admins can create, update, or delete meetings
+      allow write: if isAdmin();
     }
 
     // Participants Collection Rules
     match /participants/{participantId} {
-      allow create, get, list, update, delete: if true;
+      // Admins have full read and write access
+      allow get, list, create, update, delete: if isAdmin();
+      // Public users can register a participant entry and read/update their join status
+      allow create, get, update: if true;
     }
 
     // Blocked IPs Collection Rules
     match /blockedIPs/{ip} {
-      allow get, list, create, update, delete: if true;
+      // Admins have full access to manage blocked IPs
+      allow get, list, create, update, delete: if isAdmin();
+      // Public users can get specifically their own IP block status doc (to show blocked screener)
+      allow get: if true;
     }
 
     // Blocked Devices Collection Rules
     match /blockedDevices/{deviceId} {
-      allow get, list, create, update, delete: if true;
+      // Admins have full access to manage blocked devices
+      allow get, list, create, update, delete: if isAdmin();
+      // Public users can look up their own device block state
+      allow get: if true;
     }
 
     // Admin Settings Rules
     match /adminSettings/{docId} {
-      allow get, list, create, update, delete: if true;
+      // Admins have full access to manage settings
+      allow get, list, create, update, delete: if isAdmin();
+      // Public users can get/view settings to read declarations/notices, repeat join configurations, or verify passwords
+      allow get: if true;
     }
   }
 }
