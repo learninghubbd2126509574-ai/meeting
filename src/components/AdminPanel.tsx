@@ -119,6 +119,14 @@ function getDeviceDetails(uaString?: string) {
   return { name, iconType };
 }
 
+function getTodayDateString() {
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, '0');
+  const dd = String(today.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 export default function AdminPanel() {
   // Navigation & Authentication
   const [activeTab, setActiveTab] = useState<'dashboard' | 'meeting' | 'data' | 'blocked' | 'settings'>('dashboard');
@@ -154,7 +162,7 @@ export default function AdminPanel() {
 
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
-  const [dateFilter, setDateFilter] = useState('');
+  const [dateFilter, setDateFilter] = useState(getTodayDateString);
   const [blockedSearchQuery, setBlockedSearchQuery] = useState('');
   const [blockedDateFilter, setBlockedDateFilter] = useState('');
   const [meetingsDateFilter, setMeetingsDateFilter] = useState('');
@@ -658,11 +666,18 @@ export default function AdminPanel() {
   function isSameDay(timestamp: any, filterDateStr: string) {
     if (!timestamp || !filterDateStr) return true;
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-    const filterDate = new Date(filterDateStr);
+    
+    // Parse YYYY-MM-DD manually to prevent UTC timezone offset discrepancies in JavaScript parsing
+    const parts = filterDateStr.split('-');
+    if (parts.length !== 3) return true;
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10);
+    const day = parseInt(parts[2], 10);
+    
     return (
-      date.getFullYear() === filterDate.getFullYear() &&
-      date.getMonth() === filterDate.getMonth() &&
-      date.getDate() === filterDate.getDate()
+      date.getFullYear() === year &&
+      (date.getMonth() + 1) === month &&
+      date.getDate() === day
     );
   }
 
@@ -670,7 +685,9 @@ export default function AdminPanel() {
   const filteredParticipants = participants.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           p.ip.includes(searchQuery);
-    const matchesDate = dateFilter ? isSameDay(p.joinedAt, dateFilter) : true;
+    // If dateFilter is empty, default to today's date so we never show "all" of history at once
+    const activeFilterDate = dateFilter || getTodayDateString();
+    const matchesDate = isSameDay(p.joinedAt, activeFilterDate);
     return matchesSearch && matchesDate;
   });
 
@@ -1171,7 +1188,7 @@ export default function AdminPanel() {
                       </div>
                     </div>
 
-                    <div className="space-y-2 max-h-[220px] overflow-y-auto pr-0.5">
+                    <div className="space-y-2 pr-0.5">
                       {(() => {
                         const filteredMeetings = meetings.filter((m) => {
                           if (!meetingsDateFilter) return true;
@@ -1284,12 +1301,12 @@ export default function AdminPanel() {
                           onChange={(e) => setDateFilter(e.target.value)}
                           className="bg-slate-50 border border-slate-200 rounded p-1 text-[9px] focus:outline-none"
                         />
-                        {dateFilter && (
+                        {dateFilter && dateFilter !== getTodayDateString() && (
                           <button
-                            onClick={() => setDateFilter('')}
-                            className="text-[9px] border border-red-200 bg-red-50 text-red-600 px-1.5 py-1 rounded hover:bg-red-500 hover:text-white transition cursor-pointer"
+                            onClick={() => setDateFilter(getTodayDateString())}
+                            className="text-[9px] border border-red-200 bg-red-50 text-red-600 px-1.5 py-1 rounded hover:bg-red-500 hover:text-white transition cursor-pointer font-bold"
                           >
-                            মুছুন
+                            আজকের তারিখ
                           </button>
                         )}
                       </div>
@@ -1300,7 +1317,7 @@ export default function AdminPanel() {
                   <div className="space-y-3">
                     <h3 className="text-xs font-extrabold text-slate-800">অংশগ্রহণকারীদের বিবরণ ({filteredParticipants.length})</h3>
                     
-                    <div className="space-y-2 max-h-[350px] overflow-y-auto pr-0.5">
+                    <div className="space-y-2 pr-0.5">
                       {filteredParticipants.length === 0 ? (
                         <p className="text-[10px] text-slate-450 italic text-center py-4">কোনো জয়েনিং লগ পাওয়া যায়নি।</p>
                       ) : (
@@ -1509,7 +1526,7 @@ export default function AdminPanel() {
                       </div>
                     </div>
 
-                    <div className="space-y-2 max-h-[350px] overflow-y-auto pr-0.5">
+                    <div className="space-y-2 pr-0.5">
                       {filteredBlockedIPs.length === 0 ? (
                         <div className="bg-slate-50 border border-slate-200 rounded-xl p-6 text-center">
                           <p className="text-[10px] text-slate-400 italic font-medium">কোনো ব্লকড আইপি রেকর্ড পাওয়া যায়নি।</p>
