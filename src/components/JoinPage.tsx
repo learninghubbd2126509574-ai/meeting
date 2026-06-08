@@ -523,19 +523,19 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                     <ul className="space-y-3.5 text-[12.5px] text-[#78350f] list-none pl-0.5 leading-relaxed font-bold">
                       <li className="flex items-start gap-2.5">
                         <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 text-[10px] font-black shadow-inner">১</span>
-                        <span>মিটিংয়ে ঢুকেই প্রথম কাজের একটি <strong className="text-red-700 font-extrabold underline decoration-red-300">স্ক্রিনশট (Screenshot)</strong> নিয়ে ইনবক্স করুন।</span>
+                        <span>মিটিংয়ে ঢুকেই প্রথম একটি <strong className="text-red-700 font-extrabold underline decoration-red-300">স্ক্রিনশট (Screenshot)</strong> নিয়ে কাউন্সেলরকে ইনবক্স করুন।</span>
                       </li>
                       <li className="flex items-start gap-2.5">
                         <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 text-[10px] font-black shadow-inner">২</span>
-                        <span>সেশনের সমস্ত নিয়মনীতি মেনে সম্পূর্ণ সময় ক্লাসে থাকা আবশ্যক।</span>
+                        <span>সেশনের সমস্ত নিয়মনীতি মেনে সম্পূর্ণ সময় মিটিংয়ে থাকা আবশ্যক।</span>
                       </li>
                       <li className="flex items-start gap-2.5">
                         <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 text-[10px] font-black shadow-inner">৩</span>
-                        <span>মাঝখানে চলে গেলে পুনরায় রিকোয়েস্ট এক্সেপ্ট করা হবে না।</span>
+                        <span>মাঝখানে চলে গেলে পুনরায় জয়েন রিকোয়েস্ট এক্সেপ্ট করা হবে না।</span>
                       </li>
                       <li className="flex items-start gap-2.5">
                         <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 text-[10px] font-black shadow-inner">৪</span>
-                        <span>মিটিং চলাকালীন ফোনের কোনো প্রকার অন্য কলে কথা বলা যাবে না।</span>
+                        <span>মিটিং চলাকালীন ফোনের কোনো প্রকার কলে কথা বলা যাবে না।</span>
                       </li>
                     </ul>
                   </div>
