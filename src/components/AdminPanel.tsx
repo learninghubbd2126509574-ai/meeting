@@ -1351,18 +1351,6 @@ export default function AdminPanel() {
                                 <Clock className="h-3 w-3 shrink-0" />
                                 {formatTime(p.joinedAt)}
                               </span>
-                              {(() => {
-                                const dev = getDeviceDetails(p.userAgent);
-                                return (
-                                  <span className="flex items-center gap-1 bg-amber-50/70 border border-amber-100/50 px-1.5 py-0.5 rounded text-amber-900 font-bold transition hover:bg-amber-100 max-w-[150px] truncate" title={`raw: ${p.userAgent}`}>
-                                    {dev.iconType === 'phone' && <Smartphone className="h-3 w-3 text-amber-500 shrink-0" />}
-                                    {dev.iconType === 'tablet' && <Tablet className="h-3 w-3 text-amber-500 shrink-0" />}
-                                    {dev.iconType === 'laptop' && <Laptop className="h-3 w-3 text-amber-500 shrink-0" />}
-                                    {dev.iconType === 'monitor' && <Monitor className="h-3 w-3 text-amber-500 shrink-0" />}
-                                    <span className="truncate">{dev.name}</span>
-                                  </span>
-                                );
-                              })()}
                             </div>
 
                             <div className="flex justify-end pt-1">
