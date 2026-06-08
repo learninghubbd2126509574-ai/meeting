@@ -36,10 +36,88 @@ import {
   Eye,
   Filter,
   Share2,
-  ExternalLink
+  ExternalLink,
+  Smartphone,
+  Laptop,
+  Tablet,
+  Monitor
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Meeting, Participant, BlockedIP } from '../types';
+
+// Helper function to extract user-friendly device info from userAgent
+function getDeviceDetails(uaString?: string) {
+  const ua = uaString || '';
+  let name = 'অন্যান্য ডিভাইস (Unknown)';
+  let iconType: 'phone' | 'laptop' | 'tablet' | 'monitor' = 'phone';
+
+  if (!ua) {
+    return { name, iconType };
+  }
+
+  const lowerUa = ua.toLowerCase();
+
+  if (/iphone/i.test(lowerUa)) {
+    name = 'আইফোন (iPhone)';
+    iconType = 'phone';
+  } else if (/ipad/i.test(lowerUa)) {
+    name = 'আইপ্যাড (iPad Tablet)';
+    iconType = 'tablet';
+  } else if (/android/i.test(lowerUa)) {
+    // Try to extract Android model name or brand
+    let model = 'Android Phone';
+    
+    const brands = [
+      { regex: /samsung|sm-/i, label: 'Samsung' },
+      { regex: /redmi|xiaomi|mi /i, label: 'Xiaomi/Redmi' },
+      { regex: /oppo|cph|pafm/i, label: 'Oppo' },
+      { regex: /vivo|v\d{4}/i, label: 'Vivo' },
+      { regex: /realme|rmx/i, label: 'Realme' },
+      { regex: /oneplus|op\d+/i, label: 'OnePlus' },
+      { regex: /pixel \d+/i, label: 'Google Pixel' },
+      { regex: /huawei|hry/i, label: 'Huawei' },
+      { regex: /infinix/i, label: 'Infinix' },
+      { regex: /tecno/i, label: 'Tecno' }
+    ];
+    
+    const foundBrand = brands.find(b => b.regex.test(ua));
+    if (foundBrand) {
+      model = foundBrand.label;
+    } else {
+      // Find possible device model in standard android string
+      const match = ua.match(/\(([^)]+)\)/);
+      if (match && match[1]) {
+        const parts = match[1].split(';');
+        const androidPartIdx = parts.findIndex(p => p.includes('Android'));
+        if (androidPartIdx !== -1 && androidPartIdx < parts.length - 1) {
+          const possible = parts[androidPartIdx + 1].trim();
+          if (possible && possible !== 'K' && !possible.includes('Build')) {
+            model = possible;
+          }
+        }
+      }
+    }
+    
+    if (/tablet/i.test(lowerUa)) {
+      name = `অ্যান্ড্রয়েড ট্যাবলেট (${model})`;
+      iconType = 'tablet';
+    } else {
+      name = `অ্যান্ড্রয়েড ফোন (${model})`;
+      iconType = 'phone';
+    }
+  } else if (/windows/i.test(lowerUa)) {
+    name = 'উইন্ডোজ পিসি (Windows PC)';
+    iconType = 'monitor';
+  } else if (/macintosh|mac os/i.test(lowerUa)) {
+    name = 'ম্যাক পিসি (Mac)';
+    iconType = 'laptop';
+  } else if (/linux/i.test(lowerUa)) {
+    name = 'লিনাক্স পিসি (Linux)';
+    iconType = 'monitor';
+  }
+
+  return { name, iconType };
+}
 
 export default function AdminPanel() {
   // Navigation & Authentication
@@ -1273,7 +1351,18 @@ export default function AdminPanel() {
                                 <Clock className="h-3 w-3 shrink-0" />
                                 {formatTime(p.joinedAt)}
                               </span>
-                              <span className="truncate max-w-[120px]" title={p.userAgent}>{p.userAgent}</span>
+                              {(() => {
+                                const dev = getDeviceDetails(p.userAgent);
+                                return (
+                                  <span className="flex items-center gap-1 bg-amber-50/70 border border-amber-100/50 px-1.5 py-0.5 rounded text-amber-900 font-bold transition hover:bg-amber-100 max-w-[150px] truncate" title={`raw: ${p.userAgent}`}>
+                                    {dev.iconType === 'phone' && <Smartphone className="h-3 w-3 text-amber-500 shrink-0" />}
+                                    {dev.iconType === 'tablet' && <Tablet className="h-3 w-3 text-amber-500 shrink-0" />}
+                                    {dev.iconType === 'laptop' && <Laptop className="h-3 w-3 text-amber-500 shrink-0" />}
+                                    {dev.iconType === 'monitor' && <Monitor className="h-3 w-3 text-amber-500 shrink-0" />}
+                                    <span className="truncate">{dev.name}</span>
+                                  </span>
+                                );
+                              })()}
                             </div>
 
                             <div className="flex justify-end pt-1">

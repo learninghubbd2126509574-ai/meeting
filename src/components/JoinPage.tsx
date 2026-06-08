@@ -472,15 +472,15 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
           </div>
         )}
 
-        {/* STUDENT SIGN IN / MEETING JOIN FORM SCREEN */}
+        {/* STUDENT SIGN IN / MEETING JOIN FORM SCREEN - ULTRA COMPACT NON-SCROLLABLE PHONE INTERFACE */}
         {!isLoading && !isBlocked && publicLinkActive && (
-          <div className="flex-1 overflow-y-auto pt-6 md:pt-14 pb-8 flex flex-col bg-slate-50 relative">
+          <div className="flex-1 overflow-hidden pt-3 md:pt-11 pb-4 flex flex-col bg-slate-50 relative">
             
             {/* Thin Scrolling Notice Bar */}
             {noticeActive && noticeText.trim() && (
-              <div className="w-full bg-[#10b981] text-white py-2.5 px-3.5 overflow-hidden flex items-center gap-2 select-none shrink-0 sticky top-0 z-40 shadow-md">
-                <span className="inline-flex items-center gap-1.5 bg-white text-emerald-800 px-2 py-0.5 rounded-md text-[9px] font-black shrink-0 tracking-wide uppercase leading-none shadow-sm">
-                  <Bell className="h-3 w-3 text-[#10b981] shrink-0 font-bold" />
+              <div className="w-full bg-[#10b981] text-white py-1.5 px-3 overflow-hidden flex items-center gap-2 select-none shrink-0 sticky top-0 z-40 shadow-sm">
+                <span className="inline-flex items-center gap-1 bg-white text-emerald-800 px-1.5 py-0.5 rounded text-[8px] font-black shrink-0 tracking-wide uppercase leading-none shadow-sm">
+                  <Bell className="h-2.5 w-2.5 text-[#10b981] shrink-0 font-bold" />
                   <span>ঘোষণা</span>
                 </span>
                 
@@ -489,7 +489,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                   <Marquee 
                     scrollamount="3" 
                     direction="left"
-                    className="text-[10.5px] font-extrabold font-sans whitespace-nowrap text-white"
+                    className="text-[9.5px] font-extrabold font-sans whitespace-nowrap text-white"
                   >
                     {noticeText} &nbsp;&nbsp;&nbsp;&nbsp; ★ &nbsp;&nbsp;&nbsp;&nbsp; {noticeText}
                   </Marquee>
@@ -501,17 +501,17 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3 }}
-              className="flex-1 flex flex-col justify-between space-y-6 px-5 mt-4"
+              className="flex-1 flex flex-col justify-between space-y-2.5 px-4.5 mt-2"
             >
-              {/* Premium Luxury Header Banner (Redesigned) */}
-              <div className="bg-white rounded-3xl p-6 border border-slate-150 shadow-[0_8px_30px_rgb(0,0,0,0.03)] space-y-4 shrink-0 relative overflow-hidden text-center">
+              {/* Premium Luxury Header Banner (Compressed and optimized for height) */}
+              <div className="bg-white rounded-2xl p-3.5 border border-slate-150 shadow-[0_4px_20px_rgb(0,0,0,0.02)] space-y-2.5 shrink-0 relative overflow-hidden text-center">
                 {/* Decorative Amber Elegant Accents */}
                 <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-amber-400 via-yellow-500 to-amber-500"></div>
                 <div className="absolute -top-12 -right-12 w-28 h-28 bg-amber-500/[0.03] rounded-full blur-xl pointer-events-none"></div>
                 <div className="absolute -bottom-12 -left-12 w-28 h-28 bg-indigo-500/[0.03] rounded-full blur-xl pointer-events-none"></div>
 
-                <div className="space-y-2">
-                  <div className="inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200/60 px-3 py-1 rounded-full text-[10px] font-extrabold text-amber-800 shadow-sm uppercase tracking-wide">
+                <div className="space-y-1">
+                  <div className="inline-flex items-center gap-1 bg-amber-50 border border-amber-200/50 px-2 py-0.5 rounded-full text-[8.5px] font-extrabold text-amber-800 shadow-sm uppercase tracking-wide">
                     <span className="relative flex h-1.5 w-1.5">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                       <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
@@ -519,58 +519,58 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                     <span>সেশন লাইভ পোর্টাল</span>
                   </div>
                   
-                  <h1 className="text-2xl font-black tracking-tight text-slate-900 font-sans">
+                  <h1 className="text-lg font-black tracking-tight text-slate-900 font-sans">
                     <span className="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 bg-clip-text text-transparent">UNITY</span>
-                    <span className="bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 bg-clip-text text-transparent ml-1.5">EARNING</span>
+                    <span className="bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 bg-clip-text text-transparent ml-1">EARNING</span>
                   </h1>
-                  <p className="text-[12px] font-bold text-slate-500 tracking-wide">
+                  <p className="text-[10px] font-bold text-slate-500 tracking-wide mt-0.5">
                     অফিসিয়াল সেশন জয়েনিং পোর্টাল
                   </p>
                 </div>
 
                 {meetingDate && (
-                  <div className="inline-flex items-center gap-2 bg-amber-50 border-2 border-amber-200 text-amber-900 px-4.5 py-2.5 rounded-2xl text-[12.5px] font-black shadow-sm">
-                    <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse shrink-0"></span>
+                  <div className="inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-900 px-3 py-1.5 rounded-xl text-[11px] font-black shadow-sm">
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse shrink-0"></span>
                     <span>সেশন সময়: <span className="text-amber-800 underline decoration-amber-300 font-bold">{formatMeetingDateTime(meetingDate, meetingTime)}</span></span>
                   </div>
                 )}
               </div>
 
-              {/* Warnings / System Information */}
-              <div className="space-y-4">
+              {/* Warnings / System Information and Input/Rules Form */}
+              <div className="flex-1 flex flex-col justify-center space-y-2.5">
                 {errorMessage && (
-                  <div className="bg-red-50 border border-red-200 rounded-2xl p-3.5 flex items-start gap-2.5 shadow-sm">
-                    <AlertCircle className="h-4.5 w-4.5 text-red-500 shrink-0 mt-0.5" />
-                    <p className="text-xs text-red-800 font-bold leading-normal">{errorMessage}</p>
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-2.5 flex items-start gap-2 shadow-sm">
+                    <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+                    <p className="text-[10.5px] text-red-805 font-bold leading-normal">{errorMessage}</p>
                   </div>
                 )}
 
                 {!meetingActive && (
-                  <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 flex items-start gap-2.5 shadow-sm">
-                    <AlertCircle className="h-4.5 w-4.5 text-amber-600 shrink-0 mt-0.5" />
-                    <p className="text-[10.5px] text-amber-900 leading-normal font-medium">
-                      এই কাউন্সেলিং সেশনটি বৰ্তমানে অ্যাডমিন কর্তৃক নিষ্ক্রিয় রাখা হয়েছে। আপনি আপনার নাম সাবমিট করে রাখতে পারেন, কিন্তু মিটিং লিংক অন না করা পর্যন্ত রিডাইরেক্ট হতে পারবেন না।
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-2.5 flex items-start gap-2 shadow-sm">
+                    <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                    <p className="text-[10px] text-amber-905 leading-normal font-bold">
+                      এই কাউন্সেলিং সেশনটি বৰ্তমানে অ্যাডমিন কর্তৃক নিষ্ক্রিয় রাখা হয়েছে। আপনি আপনার নাম সাবমিট করতে পারেন, কিন্তু মিটিং অন না হওয়া পর্যন্ত রিডাইরেক্ট হতে পারবেন না।
                     </p>
                   </div>
                 )}
 
-                {/* Form Elements with Redesigned Name Input & Submission wrapper */}
-                <form onSubmit={handleJoin} className="space-y-5">
-                  <div className="bg-white rounded-3xl p-5 border border-slate-150 shadow-[0_10px_45px_rgb(0,0,0,0.03)] space-y-4">
+                {/* Form Elements with Compact Layout for No-Scroll compatibility */}
+                <form onSubmit={handleJoin} className="space-y-2.5">
+                  <div className="bg-white rounded-2xl p-3.5 border border-slate-150 shadow-[0_4px_25px_rgb(0,0,0,0.015)] space-y-2.5">
                     <div className="flex items-center justify-between px-0.5">
-                      <label className="block text-[11px] font-black text-slate-800 uppercase tracking-widest">
+                      <label className="block text-[9px] font-black text-slate-800 uppercase tracking-wider">
                         আপনার সঠিক নাম টাইপ করুন
                       </label>
-                      <span className="text-[8.5px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-lg font-black uppercase tracking-wider">ভেরিফাইড লিংক</span>
+                      <span className="text-[7.5px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded font-black uppercase tracking-wider">ভেরিফাইড লিংক</span>
                     </div>
                     
                     <div className="relative group">
                       {/* Interactive focus gold glow */}
-                      <div className="absolute -inset-0.5 bg-gradient-to-r from-amber-500 to-amber-400 rounded-2xl blur opacity-10 group-focus-within:opacity-30 transition duration-300"></div>
+                      <div className="absolute -inset-0.5 bg-gradient-to-r from-amber-500 to-amber-400 rounded-xl blur opacity-10 group-focus-within:opacity-25 transition duration-300"></div>
                       
                       <div className="relative">
-                        <span className="absolute inset-y-0 left-0 pl-4.5 flex items-center text-amber-500">
-                          <User className="h-5 w-5" />
+                        <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-amber-500">
+                          <User className="h-4 w-4" />
                         </span>
                         <input
                           type="text"
@@ -578,66 +578,66 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                           placeholder="আপনার নাম এখানে লিখুন..."
                           value={fullName}
                           onChange={(e) => setFullName(e.target.value)}
-                          className="w-full pl-12.5 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-amber-500/10 focus:border-amber-500 focus:bg-white text-[15px] font-bold transition-all shadow-inner"
+                          className="w-full pl-10 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder-slate-405 focus:outline-none focus:ring-4 focus:ring-amber-500/5 focus:border-amber-500 focus:bg-white text-[13px] font-bold transition-all shadow-inner"
                         />
                       </div>
                     </div>
                     
-                    <div className="bg-rose-50/60 px-3 py-2 rounded-xl border border-rose-150/70 text-center">
-                      <p className="text-[10px] text-rose-600 font-black">
+                    <div className="bg-rose-50/60 px-2.5 py-1.5 rounded-lg border border-rose-150 text-center">
+                      <p className="text-[9px] text-rose-600 font-black">
                         ⚠️ নাম ভুল হলে মিটিং থেকে সরাসরি বের করে দেয়া হতে পারে।
                       </p>
                     </div>
                   </div>
 
-                  {/* Rules Container (Redesigned with larger text and beautiful bullet badges) */}
-                  <div className="bg-gradient-to-br from-[#fffdf5] to-[#fffcf3] border border-amber-200 rounded-3xl p-5.5 space-y-4 shadow-sm relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/[0.02] rounded-full blur-xl pointer-events-none"></div>
+                  {/* Rules Container (Compact, neat line boundaries matching mobile frame height) */}
+                  <div className="bg-gradient-to-br from-[#fffdf5] to-[#fffcf3] border border-amber-200 rounded-2xl p-3.5 space-y-2 shadow-sm relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-20 h-20 bg-amber-500/[0.015] rounded-full blur-xl pointer-events-none"></div>
                     
-                    <div className="flex items-center gap-2 font-black text-sm text-[#92400e] border-b border-amber-200/60 pb-2.5">
-                      <AlertCircle className="h-5 w-5 shrink-0 text-amber-500" />
+                    <div className="flex items-center gap-1.5 font-black text-xs text-[#92400e] border-b border-amber-200/50 pb-1.5">
+                      <AlertCircle className="h-4 w-4 shrink-0 text-amber-500" />
                       <h2>বিশেষ কাউন্সেলিং সেশন রুলস:</h2>
                     </div>
                     
-                    <ul className="space-y-3.5 text-[12.5px] text-[#78350f] list-none pl-0.5 leading-relaxed font-bold">
-                      <li className="flex items-start gap-2.5">
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 text-[10px] font-black shadow-inner">১</span>
-                        <span>মিটিংয়ে ঢুকেই প্রথম একটি <strong className="text-red-700 font-extrabold underline decoration-red-300">স্ক্রিনশট (Screenshot)</strong> নিয়ে কাউন্সেলরকে ইনবক্স করুন।</span>
+                    <ul className="space-y-1.5 text-[10px] md:text-[11px] text-[#78350f] list-none pl-0.5 leading-normal font-bold">
+                      <li className="flex items-start gap-1.5">
+                        <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 text-[8px] font-black shadow-inner">১</span>
+                        <span>মিটিংয়ে ঢুকেই প্রথম একটি <strong className="text-red-700 font-extrabold underline decoration-red-300">স্ক্রিনশট</strong> নিয়ে কাউন্সেলরকে ইনবক্স করুন।</span>
                       </li>
-                      <li className="flex items-start gap-2.5">
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 text-[10px] font-black shadow-inner">২</span>
+                      <li className="flex items-start gap-1.5">
+                        <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 text-[8px] font-black shadow-inner">২</span>
                         <span>সেশনের সমস্ত নিয়মনীতি মেনে সম্পূর্ণ সময় মিটিংয়ে থাকা আবশ্যক।</span>
                       </li>
-                      <li className="flex items-start gap-2.5">
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 text-[10px] font-black shadow-inner">৩</span>
+                      <li className="flex items-start gap-1.5">
+                        <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 text-[8px] font-black shadow-inner">৩</span>
                         <span>মাঝখানে চলে গেলে পুনরায় জয়েন রিকোয়েস্ট এক্সেপ্ট করা হবে না।</span>
                       </li>
-                      <li className="flex items-start gap-2.5">
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 text-[10px] font-black shadow-inner">৪</span>
+                      <li className="flex items-start gap-1.5">
+                        <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 text-[8px] font-black shadow-inner">৪</span>
                         <span>মিটিং চলাকালীন ফোনের কোনো প্রকার কলে কথা বলা যাবে না।</span>
                       </li>
                     </ul>
                   </div>
 
-                  {/* Redesigned Premium Submit Trigger */}
+                  {/* Redesigned Premium Submit Trigger (Slimmer but prominent) */}
                   <button
                     type="submit"
                     disabled={isSubmitting || !fullName.trim() || ipAddress === 'যাচাই হচ্ছে...'}
-                    className="w-full py-4.5 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-600 hover:to-amber-500 text-slate-950 font-black rounded-2xl shadow-[0_10px_25px_-5px_rgba(245,158,11,0.4)] hover:shadow-[0_12px_30px_-5px_rgba(245,158,11,0.55)] transition-all duration-300 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2 text-[14px] border border-amber-300/40 cursor-pointer text-center"
+                    className="w-full py-3 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-600 hover:to-amber-500 text-slate-950 font-black rounded-xl shadow-[0_6px_15px_-3px_rgba(245,158,11,0.3)] hover:shadow-[0_8px_20px_-3px_rgba(245,158,11,0.45)] transition-all duration-300 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2 text-xs border border-amber-300/30 cursor-pointer text-center font-sans uppercase tracking-wider"
                   >
                     {ipAddress === 'যাচাই হচ্ছে...' ? (
-                      <div className="flex items-center justify-center gap-2">
-                        <Loader2 className="h-5 w-5 animate-spin text-slate-950" />
+                      <div className="flex items-center justify-center gap-1.5">
+                        <Loader2 className="h-4 w-4 animate-spin text-slate-950" />
                         <span>নিরাপত্তা ভেরিফাই করা হচ্ছে...</span>
                       </div>
                     ) : isSubmitting ? (
-                      <div className="flex flex-col items-center gap-1 py-0.5">
-                        <Loader2 className="h-5 w-5 animate-spin text-slate-950" />
-                        <span className="text-[10px] font-bold animate-pulse">লিঙ্ক রিকোয়েস্ট হচ্ছে, অপেক্ষা করুন...</span>
+                      <div className="flex items-center gap-1.5">
+                        <Loader2 className="h-4 w-4 animate-spin text-slate-950" />
+                        <span className="animate-pulse">লিঙ্ক রিকোয়েস্ট হচ্ছে...</span>
                       </div>
                     ) : (
-                      <div className="flex items-center justify-center gap-2 px-1">
-                        <CheckCircle className="h-5 w-5 text-slate-950" strokeWidth={2.5} />
+                      <div className="flex items-center justify-center gap-1.5 px-0.5">
+                        <CheckCircle className="h-4 w-4 text-slate-950" strokeWidth={2.5} />
                         <span>মিটিংয়ে প্রবেশ করুন</span>
                       </div>
                     )}
@@ -645,8 +645,8 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                 </form>
               </div>
 
-              {/* Verified Badge */}
-              <div className="bg-white px-3.5 py-2.5 rounded-2xl border border-slate-200/60 flex items-center justify-between text-[10px] text-slate-500 shadow-sm font-semibold select-none">
+              {/* Verified Badge (Slim layout for exact bottom boundary lock) */}
+              <div className="bg-white px-3 py-1.5 rounded-xl border border-slate-200/50 flex items-center justify-between text-[9px] text-slate-500 shadow-sm font-bold select-none shrink-0 mt-1">
                 <span>নিরাপদ সংযোগ কানেক্টেড</span>
                 <span>IP: <code className="text-amber-600 font-mono font-bold">{ipAddress === 'Unknown' ? 'যাচাই করা অসম্ভব' : ipAddress}</code></span>
               </div>
