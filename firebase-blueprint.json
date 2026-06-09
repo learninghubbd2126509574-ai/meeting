@@ -56,6 +56,22 @@
         "password": { "type": "string", "description": "The current password used to log in to the admin panel" }
       },
       "required": ["password"]
+    },
+    "DemoParticipant": {
+      "title": "Demo Participant",
+      "description": "A single person who joined a specific counselling session through demo mode",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Full name of the demo participant" },
+        "gmail": { "type": "string", "description": "Gmail address of the demo participant (optional)" },
+        "meetingId": { "type": "string", "description": "The ID of the meeting they joined" },
+        "ip": { "type": "string", "description": "IP Address of the participant" },
+        "deviceId": { "type": "string", "description": "Persistent browser hardware/device ID" },
+        "userAgent": { "type": "string", "description": "Browser User-Agent string of the participant" },
+        "joinedAt": { "type": "string", "format": "date-time", "description": "Timestamp of joining" },
+        "blocked": { "type": "boolean", "description": "Whether the participant is blocked" }
+      },
+      "required": ["name", "meetingId", "ip", "deviceId", "userAgent", "joinedAt", "blocked"]
     }
   },
   "firestore": {
@@ -66,6 +82,10 @@
     "/participants/{participantId}": {
       "schema": "Participant",
       "description": "Participant details such as name, joined time, and IP address"
+    },
+    "/demoParticipants/{demoPartId}": {
+      "schema": "DemoParticipant",
+      "description": "Demo participant details such as name, joined time, and IP address"
     },
     "/blockedIPs/{ip}": {
       "schema": "BlockedIP",

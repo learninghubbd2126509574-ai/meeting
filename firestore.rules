@@ -38,6 +38,14 @@ service cloud.firestore {
       allow create, get, update: if true;
     }
 
+    // Demo Participants Collection Rules
+    match /demoParticipants/{demoPartId} {
+      // Admins have full read and write access
+      allow get, list, create, update, delete: if isAdmin();
+      // Public users can register a participant entry and read/update their join status
+      allow create, get, update: if true;
+    }
+
     // Blocked IPs Collection Rules
     match /blockedIPs/{ip} {
       // Admins have full access to manage blocked IPs
