@@ -766,10 +766,11 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                     }`}
                   >
                     <span className="relative flex h-1.5 w-1.5">
-                      <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${demoModeActive ? 'bg-emerald-400' : 'bg-rose-400'}`}></span>
+                      <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${demoModeActive ? 'bg-emerald-400' : 'bg-rose-400'}`}>
+                      </span>
                       <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${demoModeActive ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
                     </span>
-                    <span>সেশন লাইভ পোর্টাল {demoModeActive ? '(ডেমো সচল)' : ''}</span>
+                    <span>সেশন লাইভ পোর্টাল</span>
                   </div>
                   
                   <h1 className="text-2xl font-black tracking-tight text-slate-900 font-sans">
