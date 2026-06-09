@@ -32,6 +32,16 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
   const [preventRepeatJoins, setPreventRepeatJoins] = useState<boolean>(true);
   const [publicLinkActive, setPublicLinkActive] = useState<boolean>(true);
 
+  // Demo flow states
+  const [demoModeActive, setDemoModeActive] = useState<boolean>(false);
+  const [demoCode, setDemoCode] = useState<string>('1234');
+  const [demoModeStep, setDemoModeStep] = useState<'enter_code' | 'enter_info' | null>(null);
+  const [demoEnteredCode, setDemoEnteredCode] = useState<string>('');
+  const [demoNameInput, setDemoNameInput] = useState<string>('');
+  const [demoGmailInput, setDemoGmailInput] = useState<string>('');
+  const [demoError, setDemoError] = useState<string | null>(null);
+  const [isDemoSubmitting, setIsDemoSubmitting] = useState<boolean>(false);
+
   // 1. Live Listeners for Meeting, Block Status, and Settings
   useEffect(() => {
     let unsubMeeting: (() => void) | null = null;
@@ -127,6 +137,8 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
             setNoticeActive(sData.noticeActive === true);
             setPreventRepeatJoins(sData.preventRepeatJoins !== false);
             setPublicLinkActive(sData.publicLinkActive !== false);
+            setDemoModeActive(sData.demoModeActive === true);
+            setDemoCode(sData.demoCode || '1234');
           }
           setIsLoading(false);
         }, (err) => {
@@ -274,6 +286,110 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
       console.error("Global join error:", err);
       setErrorMessage('সার্ভারের সাথে সংযোগ বিচ্ছিন্ন হয়েছে। অনুগ্রহ করে ইন্টারনেট চেক করে আবার চেষ্টা করুন।');
       setIsSubmitting(false);
+    }
+  }
+
+  // 2.2. Submit demo 4-digit code
+  function handleDemoCodeVerify(e: React.FormEvent) {
+    e.preventDefault();
+    setDemoError(null);
+    if (demoEnteredCode === demoCode) {
+      setDemoModeStep('enter_info');
+    } else {
+      setDemoError("ভুল ডেমো কোড! অনুগ্রহ করে আপনার অ্যাডমিন কর্তৃক সেট করা কোডটি সঠিকভাবে দিন।");
+    }
+  }
+
+  // 2.3. Submit demo user info and join
+  async function handleDemoJoin(e: React.FormEvent) {
+    e.preventDefault();
+    if (!demoNameInput.trim() || !demoGmailInput.trim()) {
+      setDemoError("আপনার নাম এবং জিমেইল উভয় ফিল্ডই পূরণ করা আবশ্যক।");
+      return;
+    }
+
+    if (!ipAddress || ipAddress === 'যাচাই হচ্ছে...') {
+      setDemoError("নিরাপত্তা ব্যবস্থা যাচাই করা হচ্ছে। অনুগ্রহ করে একটু অপেক্ষা করুন।");
+      return;
+    }
+
+    try {
+      setIsDemoSubmitting(true);
+      setDemoError(null);
+
+      // 1. Direct block list checks
+      if (isBlocked) {
+        setIsDemoSubmitting(false);
+        setDemoError("দুঃখিত, আইপি বা ডিভাইস ব্লক থাকার কারণে আপনি জয়েন করতে পারছেন না।");
+        return;
+      }
+
+      if (ipAddress && ipAddress !== 'Unknown') {
+        const blockSnap = await getDoc(doc(db, 'blockedIPs', ipAddress));
+        if (blockSnap.exists()) {
+          setIsIpBlocked(true);
+          setIsDemoSubmitting(false);
+          setDemoError("দুঃখিত, আপনার আইপিটি ব্লকড করা হয়েছে।");
+          return;
+        }
+      }
+
+      if (deviceId && deviceId !== 'Unknown') {
+        const deviceSnap = await getDoc(doc(db, 'blockedDevices', deviceId));
+        if (deviceSnap.exists()) {
+          setIsDeviceBlocked(true);
+          setIsDemoSubmitting(false);
+          setDemoError("দুঃখিত, আপনার ডিভাইসটি ব্লকড করা হয়েছে।");
+          return;
+        }
+      }
+
+      // 2. Save to demoParticipants collection
+      const demoPartId = `dm_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const demoRef = doc(db, 'demoParticipants', demoPartId);
+
+      const demoPayload = {
+        name: demoNameInput.trim(),
+        gmail: demoGmailInput.trim(),
+        meetingId: meetingId,
+        ip: ipAddress || 'Unknown',
+        deviceId: deviceId || 'Unknown',
+        userAgent: navigator.userAgent || 'Unknown Browser',
+        joinedAt: serverTimestamp(),
+        blocked: false
+      };
+
+      try {
+        await setDoc(demoRef, demoPayload);
+      } catch (err) {
+        console.warn("Failed to write to demoParticipants, redirecting anyway", err);
+      }
+
+      // 3. Meet active checking
+      if (!meetingActive) {
+        setDemoError("এই কাউন্সেলিং সেশনটি বৰ্তমানে নিষ্ক্রিয় বা সম্পন্ন করা হয়েছে।");
+        setIsDemoSubmitting(false);
+        return;
+      }
+
+      if (!googleMeetLink) {
+        setDemoError("গুগল মিট (Google Meet) লিংকটি এখনও সেশনে যুক্ত করা হয়নি।");
+        setIsDemoSubmitting(false);
+        return;
+      }
+
+      // 4. Redirect
+      let redirectUrl = googleMeetLink.trim();
+      if (!/^https?:\/\//i.test(redirectUrl)) {
+        redirectUrl = 'https://' + redirectUrl;
+      }
+
+      window.location.assign(redirectUrl);
+
+    } catch (err: any) {
+      console.error("Demo registration error:", err);
+      setDemoError("সার্ভারের সাথে সংযোগ বিচ্ছিন্ন হয়েছে। আবার চেষ্টা করুন।");
+      setIsDemoSubmitting(false);
     }
   }
 
@@ -476,6 +592,128 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
         {!isLoading && !isBlocked && publicLinkActive && (
           <div className="flex-1 overflow-y-auto pt-6 md:pt-14 pb-8 flex flex-col bg-slate-50 relative animate-fade-in">
             
+            {/* --- DEMO MODE OVERLAY / CARD MODAL --- */}
+            {demoModeStep !== null && (
+              <div 
+                className="absolute inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex items-center justify-center p-5 font-sans"
+              >
+                <div 
+                  className="w-full max-w-sm bg-white rounded-3xl border border-slate-100 shadow-2xl p-6 relative overflow-hidden space-y-4 animate-scale-up"
+                >
+                  {/* Decorative colors Accent */}
+                  <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-emerald-400 via-teal-500 to-emerald-500"></div>
+
+                  {/* Close Button */}
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      setDemoModeStep(null);
+                      setDemoEnteredCode('');
+                      setDemoNameInput('');
+                      setDemoGmailInput('');
+                      setDemoError(null);
+                    }}
+                    className="absolute top-4 right-4 text-slate-400 hover:text-slate-650 font-bold bg-slate-100 h-6 w-6 rounded-full flex items-center justify-center text-xs cursor-pointer"
+                  >
+                    ✕
+                  </button>
+
+                  <div className="text-center space-y-1 pt-1">
+                    <span className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full text-[10px] font-black text-emerald-800 shadow-xs uppercase">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                      ডেমো ইউজার পোর্টাল
+                    </span>
+                    <h3 className="text-lg font-black text-slate-900 leading-tight">ইউনিক ডেমো সাইন-ইন</h3>
+                    <p className="text-[10px] text-slate-500 font-extrabold leading-relaxed">
+                      অ্যাডমিন প্যানেল কর্তৃক নির্ধারিত কোড দিয়ে প্রবেশ করুন।
+                    </p>
+                  </div>
+
+                  {demoError && (
+                    <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-red-800 font-bold text-[10px] leading-relaxed text-center">
+                      ⚠️ {demoError}
+                    </div>
+                  )}
+
+                  {/* STEP 1: Enter Code */}
+                  {demoModeStep === 'enter_code' && (
+                    <form onSubmit={handleDemoCodeVerify} className="space-y-4">
+                      <div className="space-y-1.5 text-center">
+                        <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">৪ সংখ্যার কোড টাইপ করুন</label>
+                        <input
+                          type="text"
+                          required
+                          maxLength={4}
+                          pattern="[0-9]{4}"
+                          placeholder="••••"
+                          value={demoEnteredCode}
+                          onChange={(e) => setDemoEnteredCode(e.target.value.replace(/\D/g, ''))}
+                          className="w-32 mx-auto text-center px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 font-mono font-black text-2xl tracking-[0.5em] focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 focus:bg-white transition-all shadow-inner"
+                        />
+                        <p className="text-[9px] text-slate-400 font-semibold">অ্যাডমিন আইডি থেকে সেট করা ৪ সংখ্যার কোডটি দিন।</p>
+                      </div>
+
+                      <button
+                        type="submit"
+                        className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-2xl shadow-[0_4px_12px_rgba(16,185,129,0.25)] transition duration-155 text-[12px] cursor-pointer"
+                      >
+                        কোড ভেরিফাই করুন
+                      </button>
+                    </form>
+                  )}
+
+                  {/* STEP 2: Enter Student Name and Gmail */}
+                  {demoModeStep === 'enter_info' && (
+                    <form onSubmit={handleDemoJoin} className="space-y-4">
+                      <div className="space-y-3">
+                         <div className="space-y-1">
+                           <label className="text-[10px] font-black text-slate-700 block uppercase">আপনার সম্পূর্ণ নাম</label>
+                           <input
+                             type="text"
+                             required
+                             placeholder="যেমন: মোঃ সাকিব হাসান"
+                             value={demoNameInput}
+                             onChange={(e) => setDemoNameInput(e.target.value)}
+                             className="w-full px-4.5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                           />
+                         </div>
+
+                         <div className="space-y-1">
+                           <label className="text-[10px] font-black text-slate-700 block uppercase">জিমেইল অ্যাড্রেস</label>
+                           <input
+                             type="email"
+                             required
+                             placeholder="যেমন: sakib@gmail.com"
+                             value={demoGmailInput}
+                             onChange={(e) => setDemoGmailInput(e.target.value)}
+                             className="w-full px-4.5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                           />
+                         </div>
+                       </div>
+
+                       <button
+                         type="submit"
+                         disabled={isDemoSubmitting}
+                         className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-2xl shadow-[0_4px_12px_rgba(16,185,129,0.25)] transition duration-155 text-[12px] cursor-pointer flex items-center justify-center gap-2"
+                       >
+                         {isDemoSubmitting ? (
+                           <>
+                             <Loader2 className="h-4 w-4 animate-spin text-white" />
+                             <span>মিটিংয়ে রেফার করা হচ্ছে...</span>
+                           </>
+                         ) : (
+                           <>
+                             <CheckCircle className="h-4 w-4 text-white" />
+                             <span>মিটিংয়ে প্রবেশ করুন (ডেমো)</span>
+                           </>
+                         )}
+                       </button>
+                    </form>
+                  )}
+                </div>
+              </div>
+            )}
+            
             {/* Thin Scrolling Notice Bar */}
             {noticeActive && noticeText.trim() && (
               <div className="w-full bg-[#10b981] text-white py-2.5 px-3.5 overflow-hidden flex items-center gap-2 select-none shrink-0 sticky top-0 z-40 shadow-md">
@@ -511,12 +749,27 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                 <div className="absolute -bottom-12 -left-12 w-28 h-28 bg-indigo-500/[0.03] rounded-full blur-xl pointer-events-none"></div>
 
                 <div className="space-y-2">
-                  <div className="inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200/60 px-3 py-1 rounded-full text-[10px] font-extrabold text-amber-800 shadow-sm uppercase tracking-wide">
+                  <div 
+                    onClick={() => {
+                      if (demoModeActive) {
+                        setDemoModeStep('enter_code');
+                        setDemoEnteredCode('');
+                        setDemoNameInput('');
+                        setDemoGmailInput('');
+                        setDemoError(null);
+                      }
+                    }}
+                    className={`inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200/60 px-3 py-1 rounded-full text-[10px] font-extrabold text-amber-800 shadow-sm uppercase tracking-wide select-none ${
+                      demoModeActive 
+                        ? 'cursor-pointer hover:bg-amber-100 hover:border-amber-300 transition duration-150 active:scale-95 border-emerald-400 bg-emerald-50 text-emerald-800' 
+                        : ''
+                    }`}
+                  >
                     <span className="relative flex h-1.5 w-1.5">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                      <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${demoModeActive ? 'bg-emerald-400' : 'bg-rose-400'}`}></span>
+                      <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${demoModeActive ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
                     </span>
-                    <span>সেশন লাইভ পোর্টাল</span>
+                    <span>সেশন লাইভ পোর্টাল {demoModeActive ? '(ডেমো সচল)' : ''}</span>
                   </div>
                   
                   <h1 className="text-2xl font-black tracking-tight text-slate-900 font-sans">

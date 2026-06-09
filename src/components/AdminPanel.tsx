@@ -19,6 +19,7 @@ import {
   Lock, 
   Link as LinkIcon, 
   Users, 
+  UserCheck,
   Ban, 
   Settings as SettingsIcon, 
   LogOut, 
@@ -129,7 +130,7 @@ function getTodayDateString() {
 
 export default function AdminPanel() {
   // Navigation & Authentication
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'meeting' | 'data' | 'blocked' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'meeting' | 'data' | 'demo' | 'blocked' | 'settings'>('dashboard');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authMethod, setAuthMethod] = useState<'password' | 'google' | null>(null);
   
@@ -147,9 +148,16 @@ export default function AdminPanel() {
   const [isUpdatingNotice, setIsUpdatingNotice] = useState(false);
   const [noticeMessage, setNoticeMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // Demo settings states
+  const [demoModeActive, setDemoModeActive] = useState(false);
+  const [demoCode, setDemoCode] = useState('1234');
+  const [isUpdatingDemoCode, setIsUpdatingDemoCode] = useState(false);
+  const [demoCodeMessage, setDemoCodeMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   // Real-time Data
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [participants, setParticipants] = useState<Participant[]>([]);
+  const [demoParticipants, setDemoParticipants] = useState<any[]>([]);
   const [blockedIPs, setBlockedIPs] = useState<BlockedIP[]>([]);
   const [isDataLoading, setIsDataLoading] = useState(true);
 
@@ -166,6 +174,8 @@ export default function AdminPanel() {
   const [blockedSearchQuery, setBlockedSearchQuery] = useState('');
   const [blockedDateFilter, setBlockedDateFilter] = useState('');
   const [meetingsDateFilter, setMeetingsDateFilter] = useState(getTodayDateString);
+  const [demoSearchQuery, setDemoSearchQuery] = useState('');
+  const [demoDateFilter, setDemoDateFilter] = useState(getTodayDateString);
 
   // --- BULK ACTION STATES ---
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);
@@ -218,14 +228,18 @@ export default function AdminPanel() {
           setPublicLinkActive(data.publicLinkActive !== false);
           setNoticeText(data.noticeText || '');
           setNoticeActive(data.noticeActive === true);
+          setDemoModeActive(data.demoModeActive === true);
+          setDemoCode(data.demoCode || '1234');
         } else {
           // Initialize settings collection
-          await setDoc(docRef, { password: '212650', preventRepeatJoins: true, publicLinkActive: true, noticeText: '', noticeActive: false });
+          await setDoc(docRef, { password: '212650', preventRepeatJoins: true, publicLinkActive: true, noticeText: '', noticeActive: false, demoModeActive: false, demoCode: '1234' });
           setSavedPassword('212650');
           setPreventRepeatJoins(true);
           setPublicLinkActive(true);
           setNoticeText('');
           setNoticeActive(false);
+          setDemoModeActive(false);
+          setDemoCode('1234');
         }
       } catch (err) {
         console.warn('Settings lookup restricted before auth, using fallback.', err);
@@ -292,12 +306,27 @@ export default function AdminPanel() {
         setPublicLinkActive(data.publicLinkActive !== false);
         setNoticeText(data.noticeText || '');
         setNoticeActive(data.noticeActive === true);
+        setDemoModeActive(data.demoModeActive === true);
+        setDemoCode(data.demoCode || '1234');
       }
+    });
+
+    // Real-time Demo Participants Listener
+    const qDemoParticipants = query(collection(db, 'demoParticipants'), orderBy('joinedAt', 'desc'));
+    const unsubDemoParticipants = onSnapshot(qDemoParticipants, (snap) => {
+      const list: any[] = [];
+      snap.forEach((doc) => {
+        list.push({ id: doc.id, ...doc.data() });
+      });
+      setDemoParticipants(list);
+    }, (error) => {
+      console.warn("Failed to stream demoParticipants:", error);
     });
 
     return () => {
       unsubMeetings();
       unsubParticipants();
+      unsubDemoParticipants();
       unsubBlocked();
       unsubSettings();
     };
@@ -563,6 +592,77 @@ export default function AdminPanel() {
     return true;
   }
 
+  // --- DEMO MODE HELPERS ---
+
+  async function toggleDemoMode() {
+    try {
+      const nextVal = !demoModeActive;
+      setDemoModeActive(nextVal);
+      const docRef = doc(db, 'adminSettings', 'settings');
+      await setDoc(docRef, { demoModeActive: nextVal }, { merge: true });
+    } catch (err) {
+      console.error('Failed to update demo mode status:', err);
+    }
+  }
+
+  async function handleUpdateDemoCode(e: React.FormEvent) {
+    e.preventDefault();
+    setDemoCodeMessage(null);
+    if (!/^\d{4}$/.test(demoCode)) {
+      setDemoCodeMessage({ type: 'error', text: 'কোডটি অবশ্যই ৪ সংখ্যার হতে হবে!' });
+      return;
+    }
+    try {
+      setIsUpdatingDemoCode(true);
+      const docRef = doc(db, 'adminSettings', 'settings');
+      await setDoc(docRef, { demoCode: demoCode }, { merge: true });
+      setDemoCodeMessage({ type: 'success', text: 'ডেমো সিক্রেট কোড সফলভাবে আপডেট হয়েছে!' });
+    } catch (err) {
+      setDemoCodeMessage({ type: 'error', text: 'কোড আপডেট করতে ব্যর্থ হয়েছে।' });
+    } finally {
+      setIsUpdatingDemoCode(false);
+    }
+  }
+
+  async function handleBlockDemoUser(demoUser: any) {
+    if (!window.confirm(`আপনি কি নিশ্চিতভাবে "${demoUser.name}"-কে ব্লক করতে চান?`)) return;
+    try {
+      // Block IP
+      const blockRef = doc(db, 'blockedIPs', demoUser.ip);
+      await setDoc(blockRef, {
+        ip: demoUser.ip,
+        deviceId: demoUser.deviceId || 'Unknown',
+        blockedAt: serverTimestamp(),
+        name: demoUser.name + ' (Demo)'
+      });
+
+      // Block DeviceId
+      if (demoUser.deviceId && demoUser.deviceId !== 'Unknown') {
+        const deviceRef = doc(db, 'blockedDevices', demoUser.deviceId);
+        await setDoc(deviceRef, {
+          deviceId: demoUser.deviceId,
+          blockedAt: serverTimestamp(),
+          name: demoUser.name + ' (Demo)'
+        });
+      }
+
+      // Mark demo participant doc as blocked
+      const demoRef = doc(db, 'demoParticipants', demoUser.id);
+      await setDoc(demoRef, { blocked: true }, { merge: true });
+    } catch (err) {
+      console.error('Failed to block demo user:', err);
+    }
+  }
+
+  async function handleDeleteDemoLog(id: string) {
+    if (!window.confirm('আপনি কি নিশ্চিতভাবে এই ডেমো লগটি মুছে ফেলতে চান?')) return;
+    try {
+      await deleteDoc(doc(db, 'demoParticipants', id));
+    } catch (err) {
+      console.error('Failed to delete demo log:', err);
+    }
+  }
+
   // 9. Block user (adds IP to blockedIPs and flags participant as blocked)
   async function handleBlockUser(participant: Participant) {
     try {
@@ -754,6 +854,17 @@ export default function AdminPanel() {
     return matchesSearch && matchesDate;
   });
 
+  // Filtering demo participants log list
+  const filteredDemoParticipants = demoParticipants.filter(p => {
+    const matchesSearch = p.name.toLowerCase().includes(demoSearchQuery.toLowerCase()) || 
+                          p.gmail.toLowerCase().includes(demoSearchQuery.toLowerCase()) || 
+                          p.ip.includes(demoSearchQuery);
+    // If demoDateFilter is empty, default to today's date so we never show "all" of history at once
+    const activeFilterDate = demoDateFilter || getTodayDateString();
+    const matchesDate = isSameDay(p.joinedAt, activeFilterDate);
+    return matchesSearch && matchesDate;
+  });
+
   // Filtering meetings log list by date
   const filteredMeetings = meetings.filter((m) => {
     const activeFilterDate = meetingsDateFilter || getTodayDateString();
@@ -908,6 +1019,7 @@ export default function AdminPanel() {
                   {activeTab === 'dashboard' && 'ড্যাশবোর্ড ওভারভিউ'}
                   {activeTab === 'meeting' && 'মিটিং লিংক তৈরি'}
                   {activeTab === 'data' && 'ইউজার লগ অ্যান্ড সেটিংস'}
+                  {activeTab === 'demo' && 'ডেমো জয়েনার্স লগ'}
                   {activeTab === 'blocked' && 'ডিভাইস ব্লকড লিস্ট'}
                   {activeTab === 'settings' && 'সিস্টেম সেটিংস'}
                 </p>
@@ -1580,6 +1692,121 @@ export default function AdminPanel() {
                 </div>
               )}
 
+              {/* --- TAB 3.5: DEMO LIST --- */}
+              {activeTab === 'demo' && (
+                <div className="space-y-4">
+                  {/* Filter and Search segment */}
+                  <div className="space-y-2 bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
+                    <div className="relative">
+                      <span className="absolute inset-y-0 left-0 pl-2.5 flex items-center text-slate-400">
+                        <Search className="h-4 w-4" />
+                      </span>
+                      <input
+                        type="text"
+                        placeholder="শিক্ষার্থীর নাম, জিমেইল বা আইপি দিয়ে খুজুন..."
+                        value={demoSearchQuery}
+                        onChange={(e) => setDemoSearchQuery(e.target.value)}
+                        className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-[11px] focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2 border-t pt-2 mt-2">
+                      <span className="text-[9px] text-slate-500 font-bold">তারিখ দিয়ে ফিল্টার:</span>
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="date"
+                          value={demoDateFilter}
+                          onChange={(e) => setDemoDateFilter(e.target.value)}
+                          className="bg-slate-50 border border-slate-200 rounded p-1 text-[9px] focus:outline-none"
+                        />
+                        {demoDateFilter && demoDateFilter !== getTodayDateString() && (
+                          <button
+                            onClick={() => setDemoDateFilter(getTodayDateString())}
+                            className="text-[9px] border border-red-200 bg-red-50 text-red-600 px-1.5 py-1 rounded hover:bg-red-500 hover:text-white transition cursor-pointer font-bold"
+                          >
+                            আজকের তারিখ
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Demo participants table layout for phone */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xs font-extrabold text-slate-800">ডেমো ব্যবহারকারী লগ ({filteredDemoParticipants.length})</h3>
+                      <button
+                        onClick={() => {
+                          const currentFilter = demoDateFilter;
+                          setDemoDateFilter('');
+                          setTimeout(() => setDemoDateFilter(currentFilter), 10);
+                        }}
+                        className="text-[9px] font-black text-emerald-600 bg-emerald-50 border border-emerald-100 hover:bg-emerald-100 px-2 py-1 rounded-lg cursor-pointer"
+                      >
+                        রিফ্রেশ করুন ↻
+                      </button>
+                    </div>
+
+                    <div className="space-y-2">
+                      {filteredDemoParticipants.length === 0 ? (
+                        <p className="text-[10px] text-slate-450 italic text-center py-4">কোনো ডেমো জয়েনিং লগ পাওয়া যায়নি।</p>
+                      ) : (
+                        filteredDemoParticipants.map((p) => {
+                          return (
+                            <div 
+                              key={p.id} 
+                              className={`border rounded-xl p-3 shadow-xs space-y-2 text-xs transition ${
+                                p.blocked 
+                                  ? 'bg-slate-50/60 border-slate-200 opacity-80' 
+                                  : 'bg-white border-slate-200'
+                              }`}
+                            >
+                              <div className="flex justify-between items-start gap-2">
+                                <div>
+                                  <h4 className="font-extrabold text-slate-900 flex items-center gap-1.5">
+                                    <span className={`h-2 w-2 rounded-full shrink-0 ${p.blocked ? 'bg-red-500 animate-pulse' : 'bg-emerald-500'}`}></span>
+                                    {p.name}
+                                  </h4>
+                                  <p className="text-[10px] text-emerald-600 font-extrabold">{p.gmail}</p>
+                                  <div className="flex flex-col gap-0.5 mt-1 font-mono text-[9px] text-slate-550 leading-relaxed">
+                                    <span>IP: <strong className="text-slate-800">{p.ip || 'N/A'}</strong></span>
+                                    <span>ডিভাইস আইডি: <strong className="text-slate-800">{p.deviceId ? p.deviceId.substring(0, 16) + '...' : 'Unknown'}</strong></span>
+                                    <span>জয়েন টাইম: <strong className="text-slate-850">{p.joinedAt ? new Date(p.joinedAt.seconds * 1000).toLocaleString('bn-BD', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true }) : 'N/A'}</strong></span>
+                                  </div>
+                                </div>
+
+                                <div className="flex flex-col gap-1.5 items-end justify-between self-stretch shrink-0">
+                                  <button
+                                    onClick={() => handleDeleteDemoLog(p.id)}
+                                    title="লগ ডিলিট"
+                                    className="p-1 border border-slate-100 hover:bg-rose-50 rounded text-slate-400 hover:text-red-500 hover:border-red-200 transition cursor-pointer"
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </button>
+
+                                  {!p.blocked ? (
+                                    <button
+                                      onClick={() => handleBlockDemoUser(p)}
+                                      className="px-2 py-1 bg-red-50 border border-red-200 text-red-600 hover:bg-red-650 hover:text-white rounded-[7px] text-[8.5px] font-black transition cursor-pointer"
+                                    >
+                                      ব্লক করুন
+                                    </button>
+                                  ) : (
+                                    <span className="px-2 py-0.5 bg-red-100 text-red-700 font-extrabold text-[8px] rounded border border-red-200">
+                                      ব্লকড
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* --- TAB 4: BLOCKED LIST --- */}
               {activeTab === 'blocked' && (() => {
                 const filteredBlockedIPs = blockedIPs.filter((b) => {
@@ -1854,6 +2081,73 @@ export default function AdminPanel() {
                     </form>
                   </div>
 
+                  {/* Demo Mode settings system */}
+                  <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3 font-sans">
+                    <h3 className="text-xs font-black text-slate-900 uppercase flex items-center gap-1.5">
+                      <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                      ডেমো মোড সেটিংস
+                    </h3>
+
+                    <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
+                      <div className="max-w-[200px]">
+                        <p className="text-[10px] font-black text-slate-800">ডেমো মোড সক্রিয় করুন</p>
+                        <p className="text-[9px] text-slate-500 leading-normal mt-0.5 animate-pulse">চালু থাকলে সেশন লাইভ পোর্টাল পিলটি রিঅ্যাক্টিভ হবে এবং ৪ ডিজিটের সিক্রেট কোড দিয়ে মিটিংয়ে জয়েন করা যাবে।</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={toggleDemoMode}
+                        className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          demoModeActive ? 'bg-emerald-550 bg-emerald-500' : 'bg-slate-300'
+                        }`}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                            demoModeActive ? 'translate-x-5' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    {demoModeActive && (
+                      <div className="space-y-3 pt-3 border-t border-dashed border-slate-205 border-slate-200">
+                        {demoCodeMessage && (
+                          <p className={`p-2 rounded-lg border text-[10px] font-bold ${
+                            demoCodeMessage.type === 'success' 
+                              ? 'bg-emerald-50 border-emerald-250 text-emerald-800' 
+                              : 'bg-red-50 border-red-250 text-red-800'
+                          }`}>
+                            {demoCodeMessage.text}
+                          </p>
+                        )}
+
+                        <form onSubmit={handleUpdateDemoCode} className="space-y-3">
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-slate-700 block">ডেমো এক্সেস কোড (৪ সংখ্যার সংখ্যা)</label>
+                            <input
+                              type="text"
+                              maxLength={4}
+                              pattern="[0-9]{4}"
+                              required
+                              placeholder="যেমন: ১২৩৪"
+                              value={demoCode}
+                              onChange={(e) => setDemoCode(e.target.value.replace(/\D/g, ''))}
+                              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono font-black text-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                            />
+                            <p className="text-[8px] text-slate-400">এই ৪ সংখ্যার সিক্রেট কোডটি দিয়ে সাধারণ ব্যবহারকারীরা ডেমো মোডে জয়েন করবে।</p>
+                          </div>
+
+                          <button
+                            type="submit"
+                            disabled={isUpdatingDemoCode}
+                            className="w-full py-2 bg-[#0f172a] text-emerald-400 font-bold text-[10px] rounded-lg hover:bg-slate-850 transition cursor-pointer"
+                          >
+                            {isUpdatingDemoCode ? 'সংরক্ষণ করা হচ্ছে...' : 'ডেমো কোড আপডেট করুন'}
+                          </button>
+                        </form>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Password modifier */}
                   <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3">
                     <h3 className="text-xs font-black text-slate-900 uppercase">পাসওয়ার্ড পরিবর্তন করুন</h3>
@@ -1940,6 +2234,21 @@ export default function AdminPanel() {
                 {participants.length > 0 && (
                   <span className="absolute -top-1 -right-1 px-1 py-0.5 bg-amber-500 text-slate-950 font-black rounded-full text-[6px]">
                     {participants.length}
+                  </span>
+                )}
+              </button>
+
+              <button
+                onClick={() => setActiveTab('demo')}
+                className={`flex flex-col items-center justify-center p-1 cursor-pointer transition relative ${
+                  activeTab === 'demo' ? 'text-amber-500 scale-105' : 'text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                <UserCheck className="h-4.5 w-4.5 mb-0.5" />
+                <span className="text-[8px] font-black">ডেমো লগ</span>
+                {demoParticipants.length > 0 && (
+                  <span className="absolute -top-1 -right-1 px-1 py-0.5 bg-amber-500 text-slate-950 font-black rounded-full text-[6px]">
+                    {demoParticipants.length}
                   </span>
                 )}
               </button>

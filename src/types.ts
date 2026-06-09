@@ -34,4 +34,18 @@ export interface BlockedDevice {
 
 export interface AdminSettings {
   password?: string;
+  demoModeActive?: boolean;
+  demoCode?: string;
+}
+
+export interface DemoParticipant {
+  id: string;
+  name: string;
+  gmail: string;
+  meetingId: string;
+  ip: string;
+  deviceId: string;
+  userAgent: string;
+  joinedAt: any;
+  blocked?: boolean;
 }
