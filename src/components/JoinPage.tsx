@@ -303,8 +303,8 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
   // 2.3. Submit demo user info and join
   async function handleDemoJoin(e: React.FormEvent) {
     e.preventDefault();
-    if (!demoNameInput.trim() || !demoGmailInput.trim()) {
-      setDemoError("আপনার নাম এবং জিমেইল উভয় ফিল্ডই পূরণ করা আবশ্যক।");
+    if (!demoNameInput.trim()) {
+      setDemoError("আপনার সম্পূর্ণ নামটি দেওয়া আবশ্যক।");
       return;
     }
 
@@ -350,7 +350,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
 
       const demoPayload = {
         name: demoNameInput.trim(),
-        gmail: demoGmailInput.trim(),
+        gmail: demoGmailInput.trim() || '',
         meetingId: meetingId,
         ip: ipAddress || 'Unknown',
         deviceId: deviceId || 'Unknown',
@@ -662,7 +662,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                     </form>
                   )}
 
-                  {/* STEP 2: Enter Student Name and Gmail */}
+                  {/* STEP 2: Enter Student Name */}
                   {demoModeStep === 'enter_info' && (
                     <form onSubmit={handleDemoJoin} className="space-y-4">
                       <div className="space-y-3">
@@ -675,18 +675,6 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                              value={demoNameInput}
                              onChange={(e) => setDemoNameInput(e.target.value)}
                              className="w-full px-4.5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                           />
-                         </div>
-
-                         <div className="space-y-1">
-                           <label className="text-[10px] font-black text-slate-700 block uppercase">জিমেইল অ্যাড্রেস</label>
-                           <input
-                             type="email"
-                             required
-                             placeholder="যেমন: sakib@gmail.com"
-                             value={demoGmailInput}
-                             onChange={(e) => setDemoGmailInput(e.target.value)}
-                             className="w-full px-4.5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                            />
                          </div>
                        </div>

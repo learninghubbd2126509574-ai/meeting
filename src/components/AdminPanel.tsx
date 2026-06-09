@@ -857,7 +857,7 @@ export default function AdminPanel() {
   // Filtering demo participants log list
   const filteredDemoParticipants = demoParticipants.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(demoSearchQuery.toLowerCase()) || 
-                          p.gmail.toLowerCase().includes(demoSearchQuery.toLowerCase()) || 
+                          (p.gmail || '').toLowerCase().includes(demoSearchQuery.toLowerCase()) || 
                           p.ip.includes(demoSearchQuery);
     // If demoDateFilter is empty, default to today's date so we never show "all" of history at once
     const activeFilterDate = demoDateFilter || getTodayDateString();
@@ -1767,7 +1767,7 @@ export default function AdminPanel() {
                                     <span className={`h-2 w-2 rounded-full shrink-0 ${p.blocked ? 'bg-red-500 animate-pulse' : 'bg-emerald-500'}`}></span>
                                     {p.name}
                                   </h4>
-                                  <p className="text-[10px] text-emerald-600 font-extrabold">{p.gmail}</p>
+                                  {p.gmail && <p className="text-[10px] text-emerald-600 font-extrabold">{p.gmail}</p>}
                                   <div className="flex flex-col gap-0.5 mt-1 font-mono text-[9px] text-slate-550 leading-relaxed">
                                     <span>IP: <strong className="text-slate-800">{p.ip || 'N/A'}</strong></span>
                                     <span>ডিভাইস আইডি: <strong className="text-slate-800">{p.deviceId ? p.deviceId.substring(0, 16) + '...' : 'Unknown'}</strong></span>
