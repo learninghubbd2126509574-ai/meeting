@@ -358,8 +358,13 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
 
       try {
         await setDoc(demoRef, demoPayload);
-      } catch (err) {
-        console.warn("Failed to write to demoParticipants:", err);
+        // Introduce a tiny 200ms delay to enable network socket batching to transmit the doc write before redirect unloads the page
+        await new Promise(resolve => setTimeout(resolve, 200));
+      } catch (err: any) {
+        console.error("Failed to write to demoParticipants:", err);
+        setDemoError(`সার্ভার সিস্টেমে আপনার তথ্য ট্র্যাকিং করা সম্ভব হয়নি। অনুগ্রহ করে ইন্টারনেট সংযোগ চেক করে আবার চেষ্টা করুন। (${err.message || 'Error'})`);
+        setIsDemoSubmitting(false);
+        return;
       }
 
       // 3. Meet active checking
@@ -480,6 +485,116 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
           </div>
         </div>
 
+        {/* --- DEMO MODE OVERLAY / CARD MODAL --- */}
+        {demoModeStep !== null && (
+          <div 
+            className="absolute inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-5 font-sans animate-fade-in"
+          >
+            <div 
+              className="w-full max-w-sm bg-white rounded-3xl border border-slate-100 shadow-2xl p-6 relative overflow-hidden space-y-4 animate-scale-up"
+            >
+              {/* Decorative colors Accent */}
+              <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-emerald-400 via-teal-500 to-emerald-500"></div>
+
+              {/* Close Button */}
+              <button 
+                type="button"
+                onClick={() => {
+                  setDemoModeStep(null);
+                  setDemoEnteredCode('');
+                  setDemoNameInput('');
+                  setDemoGmailInput('');
+                  setDemoError(null);
+                }}
+                className="absolute top-4 right-4 text-slate-400 hover:text-slate-650 font-bold bg-slate-100 h-6 w-6 rounded-full flex items-center justify-center text-xs cursor-pointer"
+              >
+                ✕
+              </button>
+
+              <div className="text-center space-y-1 pt-1">
+                <span className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full text-[10px] font-black text-emerald-800 shadow-xs uppercase">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  ডেমো ইউজার পোর্টাল
+                </span>
+                <h3 className="text-lg font-black text-slate-900 leading-tight">ইউনিক ডেমো সাইন-ইন</h3>
+                <p className="text-[10px] text-slate-500 font-extrabold leading-relaxed">
+                  অ্যাডমিন প্যানেল কর্তৃক নির্ধারিত কোড দিয়ে প্রবেশ করুন।
+                </p>
+              </div>
+
+              {demoError && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-red-800 font-bold text-[10px] leading-relaxed text-center">
+                  ⚠️ {demoError}
+                </div>
+              )}
+
+              {/* STEP 1: Enter Code */}
+              {demoModeStep === 'enter_code' && (
+                <form onSubmit={handleDemoCodeVerify} className="space-y-4">
+                  <div className="space-y-1.5 text-center">
+                    <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">৪ সংখ্যার কোড টাইপ করুন</label>
+                    <input
+                      type="text"
+                      required
+                      maxLength={4}
+                      pattern="[0-9]{4}"
+                      placeholder="••••"
+                      value={demoEnteredCode}
+                      onChange={(e) => setDemoEnteredCode(e.target.value.replace(/\D/g, ''))}
+                      className="w-32 mx-auto text-center px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 font-mono font-black text-2xl tracking-[0.5em] focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 focus:bg-white transition-all shadow-inner"
+                    />
+                    <p className="text-[9px] text-slate-400 font-semibold">অ্যাডমিন আইডি থেকে সেট করা ৪ সংখ্যার কোডটি দিন।</p>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-2xl shadow-[0_4px_12px_rgba(16,185,129,0.25)] transition duration-155 text-[12px] cursor-pointer"
+                  >
+                    কোড ভেরিফাই করুন
+                  </button>
+                </form>
+              )}
+
+              {/* STEP 2: Enter Student Name */}
+              {demoModeStep === 'enter_info' && (
+                <form onSubmit={handleDemoJoin} className="space-y-4">
+                  <div className="space-y-3">
+                     <div className="space-y-1">
+                       <label className="text-[10px] font-black text-slate-700 block uppercase">আপনার সম্পূর্ণ নাম</label>
+                       <input
+                         type="text"
+                         required
+                         placeholder="যেমন: মোঃ সাকিব হাসান"
+                         value={demoNameInput}
+                         onChange={(e) => setDemoNameInput(e.target.value)}
+                         className="w-full px-4.5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                       />
+                     </div>
+                   </div>
+
+                   <button
+                     type="submit"
+                     disabled={isDemoSubmitting}
+                     className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-2xl shadow-[0_4px_12px_rgba(16,185,129,0.25)] transition duration-155 text-[12px] cursor-pointer flex items-center justify-center gap-2"
+                   >
+                     {isDemoSubmitting ? (
+                       <>
+                         <Loader2 className="h-4 w-4 animate-spin text-white" />
+                         <span>মিটিংয়ে রেফার করা হচ্ছে...</span>
+                       </>
+                     ) : (
+                       <>
+                         <CheckCircle className="h-4 w-4 text-white" />
+                         <span>মিটিংয়ে প্রবেশ করুন (ডেমো)</span>
+                       </>
+                     )}
+                   </button>
+                </form>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* LOADING STATE - Centered inside mobile frame */}
         {isLoading && (
           <div className="flex-1 flex flex-col items-center justify-center p-6 bg-slate-50 space-y-4 pt-14 text-center">
@@ -524,181 +639,12 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                    <p className="pt-1 flex justify-between"><span>DEVICE ID:</span> <span className="text-slate-600">{deviceId ? `${deviceId.substring(0, 12)}...` : 'Unknown'}</span></p>
                 </div>
               </div>
-              
-              <div className="bg-amber-500/10 p-4.5 rounded-2xl border border-amber-500/15 text-[11px] text-amber-900 font-medium text-left leading-normal">
-                যদি আপনার মনে হয় এটি যান্ত্রিক ভুল অথবা অসাবধানতাবশত হয়ে থাকে, তবে আপনার ইউনিটি আর্নিং (<strong className="text-amber-800">Unity Earning</strong>) অ্যাডমিন বা সুপিরিয়র লিডারকে সরাসরি জানান।
-              </div>
             </motion.div>
-            
-            <div className="text-center text-[9px] text-slate-400 font-mono py-2 font-semibold">
-              SECURITY BLOCKER BY UNITY EARNING V2
-            </div>
           </div>
         )}
-
-        {/* PUBLIC LINK DISABLED / TIMER OFF SCREEN (FULL SYSTEM ERROR WEB GATE) */}
-        {!isLoading && !isBlocked && !publicLinkActive && (
-          <div className="flex-1 flex flex-col justify-between p-6 bg-slate-50 pt-16 font-sans">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.3 }}
-              className="space-y-6 text-center pt-8"
-            >
-              <div className="h-20 w-20 bg-rose-50 rounded-3xl shadow-inner flex items-center justify-center mx-auto border-2 border-rose-200">
-                <ShieldAlert className="h-11 w-11 text-rose-600 animate-bounce" />
-              </div>
-              
-              <div className="space-y-3">
-                <div className="inline-flex items-center gap-1.5 bg-rose-100 border border-rose-200 px-3 py-1 rounded-full text-[10px] font-black text-rose-850 shadow-sm uppercase tracking-wide">
-                  <span>ERROR: 403_ACCESS_DISABLED</span>
-                </div>
-                
-                <h1 className="text-2xl font-black text-slate-900 tracking-tight leading-tight">
-                  সিস্টেম লিংক নিষ্ক্রিয় করা হয়েছে!
-                </h1>
-                
-                <p className="text-slate-600 text-[12px] leading-relaxed px-2 font-bold select-none">
-                  দুঃখিত, এই ওয়েবসাইটের জয়েনিং লিঙ্ক সাময়িকভাবে বন্ধ বা অফ করে দেওয়া হয়েছে। সিস্টেম সুরক্ষার স্বার্থে বর্তমানে নতুন কোনো মেম্বার এই মিটিংয়ে যুক্ত হতে পারবেন না।
-                </p>
-              </div>
-
-              <div className="bg-rose-50/70 border border-rose-150 rounded-2xl p-4.5 flex flex-col gap-1.5 text-left shadow-sm">
-                <p className="text-[11.5px] text-rose-800 font-extrabold uppercase tracking-wider flex items-center gap-1.5 border-b border-rose-200/50 pb-1.5 mb-1">
-                  <AlertCircle className="h-4.5 w-4.5 text-rose-600 animate-pulse" />
-                  গুরুত্বপূর্ণ নির্দেশাবলী:
-                </p>
-                <p className="text-[12px] text-slate-700 leading-normal font-bold">
-                  যদি আপনি সেশনে অংশগ্রহণ করতে ইচ্ছুক হন অথবা মনে করেন এটি অনাকাঙ্ক্ষিত কোনো যান্ত্রিক ত্রুটি, তবে এখনই আপনার ইউনিটি আর্নিং (<span className="text-red-700">Unity Earning</span>) কাউন্সেলর বা সুপিরিয়র লিডারের সাথে সরাসরি যোগাযোগ করুন।
-                </p>
-              </div>
-
-              <div className="bg-slate-200/50 border border-slate-300/45 px-3.5 py-2.5 rounded-xl font-mono text-[10px] text-slate-500 font-bold space-y-0.5 text-left">
-                <p className="flex justify-between"><span>LINK STATUS:</span> <span className="text-rose-600 font-black">OFFLINE</span></p>
-                <p className="flex justify-between"><span>SECURITY LEVEL:</span> <span className="text-slate-700 font-black">STRICT_ACTIVE</span></p>
-              </div>
-            </motion.div>
-            
-            <div className="text-center text-[9px] text-slate-400 font-mono py-2 font-semibold select-none">
-              SYSTEM BLOCKED BY UNITY EARNING V2
-            </div>
-          </div>
-        )}
-
-        {/* STUDENT SIGN IN / MEETING JOIN FORM SCREEN */}
-        {!isLoading && !isBlocked && publicLinkActive && (
+        
+        {!isLoading && !isBlocked && (
           <div className="flex-1 overflow-y-auto pt-6 md:pt-14 pb-8 flex flex-col bg-slate-50 relative animate-fade-in">
-            
-            {/* --- DEMO MODE OVERLAY / CARD MODAL --- */}
-            {demoModeStep !== null && (
-              <div 
-                className="absolute inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex items-center justify-center p-5 font-sans"
-              >
-                <div 
-                  className="w-full max-w-sm bg-white rounded-3xl border border-slate-100 shadow-2xl p-6 relative overflow-hidden space-y-4 animate-scale-up"
-                >
-                  {/* Decorative colors Accent */}
-                  <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-emerald-400 via-teal-500 to-emerald-500"></div>
-
-                  {/* Close Button */}
-                  <button 
-                    type="button"
-                    onClick={() => {
-                      setDemoModeStep(null);
-                      setDemoEnteredCode('');
-                      setDemoNameInput('');
-                      setDemoGmailInput('');
-                      setDemoError(null);
-                    }}
-                    className="absolute top-4 right-4 text-slate-400 hover:text-slate-650 font-bold bg-slate-100 h-6 w-6 rounded-full flex items-center justify-center text-xs cursor-pointer"
-                  >
-                    ✕
-                  </button>
-
-                  <div className="text-center space-y-1 pt-1">
-                    <span className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full text-[10px] font-black text-emerald-800 shadow-xs uppercase">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                      ডেমো ইউজার পোর্টাল
-                    </span>
-                    <h3 className="text-lg font-black text-slate-900 leading-tight">ইউনিক ডেমো সাইন-ইন</h3>
-                    <p className="text-[10px] text-slate-500 font-extrabold leading-relaxed">
-                      অ্যাডমিন প্যানেল কর্তৃক নির্ধারিত কোড দিয়ে প্রবেশ করুন।
-                    </p>
-                  </div>
-
-                  {demoError && (
-                    <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-red-800 font-bold text-[10px] leading-relaxed text-center">
-                      ⚠️ {demoError}
-                    </div>
-                  )}
-
-                  {/* STEP 1: Enter Code */}
-                  {demoModeStep === 'enter_code' && (
-                    <form onSubmit={handleDemoCodeVerify} className="space-y-4">
-                      <div className="space-y-1.5 text-center">
-                        <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">৪ সংখ্যার কোড টাইপ করুন</label>
-                        <input
-                          type="text"
-                          required
-                          maxLength={4}
-                          pattern="[0-9]{4}"
-                          placeholder="••••"
-                          value={demoEnteredCode}
-                          onChange={(e) => setDemoEnteredCode(e.target.value.replace(/\D/g, ''))}
-                          className="w-32 mx-auto text-center px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 font-mono font-black text-2xl tracking-[0.5em] focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 focus:bg-white transition-all shadow-inner"
-                        />
-                        <p className="text-[9px] text-slate-400 font-semibold">অ্যাডমিন আইডি থেকে সেট করা ৪ সংখ্যার কোডটি দিন।</p>
-                      </div>
-
-                      <button
-                        type="submit"
-                        className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-2xl shadow-[0_4px_12px_rgba(16,185,129,0.25)] transition duration-155 text-[12px] cursor-pointer"
-                      >
-                        কোড ভেরিফাই করুন
-                      </button>
-                    </form>
-                  )}
-
-                  {/* STEP 2: Enter Student Name */}
-                  {demoModeStep === 'enter_info' && (
-                    <form onSubmit={handleDemoJoin} className="space-y-4">
-                      <div className="space-y-3">
-                         <div className="space-y-1">
-                           <label className="text-[10px] font-black text-slate-700 block uppercase">আপনার সম্পূর্ণ নাম</label>
-                           <input
-                             type="text"
-                             required
-                             placeholder="যেমন: মোঃ সাকিব হাসান"
-                             value={demoNameInput}
-                             onChange={(e) => setDemoNameInput(e.target.value)}
-                             className="w-full px-4.5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                           />
-                         </div>
-                       </div>
-
-                       <button
-                         type="submit"
-                         disabled={isDemoSubmitting}
-                         className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-2xl shadow-[0_4px_12px_rgba(16,185,129,0.25)] transition duration-155 text-[12px] cursor-pointer flex items-center justify-center gap-2"
-                       >
-                         {isDemoSubmitting ? (
-                           <>
-                             <Loader2 className="h-4 w-4 animate-spin text-white" />
-                             <span>মিটিংয়ে রেফার করা হচ্ছে...</span>
-                           </>
-                         ) : (
-                           <>
-                             <CheckCircle className="h-4 w-4 text-white" />
-                             <span>মিটিংয়ে প্রবেশ করুন (ডেমো)</span>
-                           </>
-                         )}
-                       </button>
-                    </form>
-                  )}
-                </div>
-              </div>
-            )}
-            
             {/* Thin Scrolling Notice Bar */}
             {noticeActive && noticeText.trim() && (
               <div className="w-full bg-[#10b981] text-white py-2.5 px-3.5 overflow-hidden flex items-center gap-2 select-none shrink-0 sticky top-0 z-40 shadow-md">
@@ -720,12 +666,8 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
               </div>
             )}
 
-            <motion.div 
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
-              className="flex-1 flex flex-col justify-between space-y-6 px-5 mt-4"
-            >
+
+
               {/* Premium Luxury Header Banner (Redesigned) */}
               <div className="bg-white rounded-3xl p-6 border border-slate-150 shadow-[0_8px_30px_rgb(0,0,0,0.03)] space-y-4 shrink-0 relative overflow-hidden text-center">
                 {/* Decorative Amber Elegant Accents */}
@@ -887,7 +829,6 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                 <span>নিরাপদ সংযোগ কানেক্টেড</span>
                 <span>IP: <code className="text-amber-600 font-mono font-bold">{ipAddress === 'Unknown' ? 'যাচাই করা অসম্ভব' : ipAddress}</code></span>
               </div>
-            </motion.div>
           </div>
         )}
 

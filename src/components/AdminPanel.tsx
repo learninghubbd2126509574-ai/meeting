@@ -856,17 +856,21 @@ export default function AdminPanel() {
 
   // Filtering participants log list
   const filteredParticipants = participants.filter(p => {
-    const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          p.ip.includes(searchQuery);
+    const nameStr = (p.name || '').toLowerCase();
+    const ipStr = p.ip || '';
+    const qStr = (searchQuery || '').toLowerCase();
+    const matchesSearch = nameStr.includes(qStr) || ipStr.includes(searchQuery);
     const matchesDate = dateFilter ? isSameDay(p.joinedAt, dateFilter) : true;
     return matchesSearch && matchesDate;
   });
 
   // Filtering demo participants log list
   const filteredDemoParticipants = demoParticipants.filter(p => {
-    const matchesSearch = p.name.toLowerCase().includes(demoSearchQuery.toLowerCase()) || 
-                          (p.gmail || '').toLowerCase().includes(demoSearchQuery.toLowerCase()) || 
-                          p.ip.includes(demoSearchQuery);
+    const nameStr = (p.name || '').toLowerCase();
+    const gmailStr = (p.gmail || '').toLowerCase();
+    const ipStr = p.ip || '';
+    const qStr = (demoSearchQuery || '').toLowerCase();
+    const matchesSearch = nameStr.includes(qStr) || gmailStr.includes(qStr) || ipStr.includes(demoSearchQuery);
     const matchesDate = demoDateFilter ? isSameDay(p.joinedAt, demoDateFilter) : true;
     return matchesSearch && matchesDate;
   });
