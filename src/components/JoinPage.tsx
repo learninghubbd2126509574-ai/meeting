@@ -167,6 +167,10 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
   async function handleJoin(e: React.FormEvent) {
     e.preventDefault();
     if (!fullName.trim()) return;
+    if (!publicLinkActive) {
+      setErrorMessage("দুঃখিত, সাধারণ লিংকের মাধ্যমে জয়েন করা বর্তমানে বন্ধ রাখা হয়েছে।");
+      return;
+    }
     if (!ipAddress || ipAddress === 'যাচাই হচ্ছে...') {
       setErrorMessage("আপনার নিরাপত্তা ব্যবস্থা যাচাই করা হচ্ছে। অনুগ্রহ করে একটু অপেক্ষা করুন।");
       return;
@@ -732,48 +736,78 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                   </div>
                 )}
 
+                {!publicLinkActive && (
+                  <div className="bg-rose-50 border border-rose-200 rounded-2xl p-3.5 flex items-start gap-2.5 shadow-sm">
+                    <ShieldAlert className="h-5 w-5 text-rose-500 shrink-0 mt-0.5 animate-pulse" />
+                    <p className="text-xs text-rose-850 font-black leading-normal">
+                      দুঃখিত, অ্যাডমিন কর্তৃক বর্তমানে সাধারণ লিংকের মাধ্যমে জয়েন অপশনটি বন্ধ রাখা হয়েছে। আপনি এখন নাম লিখে জয়েন করতে পারবেন না।
+                    </p>
+                  </div>
+                )}
+
                 {/* Form Elements with Redesigned Name Input & Submission wrapper */}
                 <form onSubmit={handleJoin} className="space-y-6">
                   
                   {/* 1. Name Input Box with brilliant flashing glowing halo (লাইট জ্বলবে নিবে) */}
                   <div className="relative">
                     {/* Double-layer ambient animating pulsing golden halo */}
-                    <div className="absolute -inset-1.5 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 rounded-[28px] blur-md opacity-85 animate-pulse pointer-events-none"></div>
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-amber-400 via-yellow-250 to-amber-400 rounded-[26px] opacity-65 animate-pulse pointer-events-none"></div>
+                    {publicLinkActive && (
+                      <>
+                        <div className="absolute -inset-1.5 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 rounded-[28px] blur-md opacity-85 animate-pulse pointer-events-none"></div>
+                        <div className="absolute -inset-0.5 bg-gradient-to-r from-amber-400 via-yellow-250 to-amber-400 rounded-[26px] opacity-65 animate-pulse pointer-events-none"></div>
+                      </>
+                    )}
                     
-                    <div className="relative bg-white rounded-3xl p-5 border-2 border-amber-450 shadow-[0_12px_40px_rgba(245,158,11,0.28)] space-y-4 z-10">
+                    <div className={`relative bg-white rounded-3xl p-5 border-2 ${publicLinkActive ? 'border-amber-450 shadow-[0_12px_40px_rgba(245,158,11,0.28)]' : 'border-slate-300 opacity-75 shadow-none'} space-y-4 z-10 transition-all duration-300`}>
                       <div className="flex items-center justify-between px-0.5">
                         <label className="block text-[11.5px] font-black text-slate-950 uppercase tracking-widest flex items-center gap-1.5 select-none">
                           <span className="relative flex h-2.5 w-2.5">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-90"></span>
-                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-600"></span>
+                            {publicLinkActive ? (
+                              <>
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-90"></span>
+                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-600"></span>
+                              </>
+                            ) : (
+                              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-slate-400"></span>
+                            )}
                           </span>
-                          <span className="animate-pulse flex items-center gap-1 text-[11px]">আপনার সঠিক নাম টাইপ করুন</span>
+                          <span className={publicLinkActive ? "animate-pulse flex items-center gap-1 text-[11px]" : "flex items-center gap-1 text-[11px] text-slate-500 font-bold"}>
+                            {publicLinkActive ? "আপনার সঠিক নাম টাইপ করুন" : "জয়েন অপশন বন্ধ রয়েছে"}
+                          </span>
                         </label>
-                        <span className="text-[8.5px] bg-emerald-50 text-emerald-700 border border-emerald-255 px-2 py-0.5 rounded-lg font-black uppercase tracking-wider animate-pulse select-none">ভেরিফাইড লিংক</span>
+                        {publicLinkActive ? (
+                          <span className="text-[8.5px] bg-emerald-50 text-emerald-700 border border-emerald-255 px-2 py-0.5 rounded-lg font-black uppercase tracking-wider animate-pulse select-none">ভেরিফাইড লিংক</span>
+                        ) : (
+                          <span className="text-[8.5px] bg-slate-100 text-slate-600 border border-slate-200 px-2 py-0.5 rounded-lg font-black uppercase tracking-wider select-none">নিষ্ক্রিয় লিংক</span>
+                        )}
                       </div>
                       
                       <div className="relative group">
-                        <div className="absolute -inset-1 bg-gradient-to-r from-amber-500 to-amber-400 rounded-2xl blur opacity-30 group-focus-within:opacity-60 transition duration-300"></div>
+                        {publicLinkActive && (
+                          <div className="absolute -inset-1 bg-gradient-to-r from-amber-500 to-amber-400 rounded-2xl blur opacity-30 group-focus-within:opacity-60 transition duration-300"></div>
+                        )}
                         
                         <div className="relative">
                           <span className="absolute inset-y-0 left-0 pl-4.5 flex items-center text-amber-600">
-                            <User className="h-5 w-5 animate-bounce" />
+                            <User className={`h-5 w-5 ${publicLinkActive ? 'animate-bounce' : 'text-slate-400'}`} />
                           </span>
                           <input
                             type="text"
                             required
-                            placeholder="আপনার নাম এখানে লিখুন..."
+                            disabled={!publicLinkActive}
+                            placeholder={publicLinkActive ? "আপনার নাম এখানে লিখুন..." : "অ্যাডমিন সাধারণ জয়েন অফ রেখেছেন"}
                             value={fullName}
                             onChange={(e) => setFullName(e.target.value)}
-                            className="w-full pl-12.5 pr-4 py-4 bg-amber-50/20 border-2 border-amber-300 rounded-2xl text-slate-950 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-amber-500/20 focus:border-amber-500 focus:bg-white text-[15.5px] font-black transition-all shadow-inner animate-pulse"
+                            className={`w-full pl-12.5 pr-4 py-4 ${publicLinkActive ? 'bg-amber-50/20 border-2 border-amber-300 focus:bg-white text-slate-950 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/20 animate-pulse' : 'bg-slate-50 border-2 border-slate-200 text-slate-450 cursor-not-allowed'} rounded-2xl text-[15.5px] font-black transition-all shadow-inner`}
                           />
                         </div>
                       </div>
                       
-                      <div className="bg-rose-50 px-3 py-2 rounded-xl border border-rose-200 text-center select-none">
-                        <p className="text-[10px] text-rose-600 font-extrabold animate-pulse">
-                          ⚠️ নাম ভুল হলে মিটিং থেকে সরাসরি বের করে দেয়া হতে পারে।
+                      <div className={`${publicLinkActive ? 'bg-rose-50 border-rose-200' : 'bg-slate-100 border-slate-200'} px-3 py-2 rounded-xl border text-center select-none`}>
+                        <p className={`text-[10px] ${publicLinkActive ? 'text-rose-600 animate-pulse font-extrabold' : 'text-slate-550 font-semibold'}`}>
+                          {publicLinkActive 
+                            ? '⚠️ নাম ভুল হলে মিটিং থেকে সরাসরি বের করে দেয়া হতে পারে।' 
+                            : 'অ্যাডমিন জয়েনিং লিংক পুনরায় চালু করলে এখানে নাম লিখতে পারবেন।'}
                         </p>
                       </div>
                     </div>
@@ -783,8 +817,12 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                   <div className="relative">
                     <button
                       type="submit"
-                      disabled={isSubmitting || !fullName.trim() || ipAddress === 'যাচাই হচ্ছে...'}
-                      className="w-full py-5 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 hover:from-amber-600 hover:to-amber-500 text-slate-950 font-black rounded-2xl shadow-[0_10px_25px_-5px_rgba(245,158,11,0.4)] hover:shadow-[0_12px_30px_-5px_rgba(245,158,11,0.55)] transition-all duration-300 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2 text-[14.5px] border border-amber-350/50 cursor-pointer text-center"
+                      disabled={isSubmitting || !fullName.trim() || ipAddress === 'যাচাই হচ্ছে...' || !publicLinkActive}
+                      className={`w-full py-5 text-slate-950 font-black rounded-2xl transition-all duration-305 transition-colors cursor-pointer text-center flex items-center justify-center gap-2 text-[14.5px] border ${
+                        publicLinkActive 
+                          ? 'bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 hover:from-amber-600 hover:to-amber-500 shadow-[0_10px_25px_-5px_rgba(245,158,11,0.4)] hover:shadow-[0_12px_30px_-5px_rgba(245,158,11,0.55)] border-amber-350/50 active:scale-[0.98] disabled:opacity-50' 
+                          : 'bg-slate-200 text-slate-400 border-slate-300 cursor-not-allowed opacity-80 shadow-none'
+                      }`}
                     >
                       {ipAddress === 'যাচাই হচ্ছে...' ? (
                         <div className="flex items-center justify-center gap-2">
@@ -795,6 +833,11 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                         <div className="flex flex-col items-center gap-1 py-0.5">
                           <Loader2 className="h-5 w-5 animate-spin text-slate-950" />
                           <span className="text-[10px] font-bold animate-pulse">লিঙ্ক রিকোয়েস্ট হচ্ছে, অপেক্ষা করুন...</span>
+                        </div>
+                      ) : !publicLinkActive ? (
+                        <div className="flex items-center justify-center gap-2 px-1">
+                          <AlertCircle className="h-5 w-5 text-slate-400" />
+                          <span>জয়েন করার অপশন বন্ধ রয়েছে</span>
                         </div>
                       ) : (
                         <div className="flex items-center justify-center gap-2 px-1">
