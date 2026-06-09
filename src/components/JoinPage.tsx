@@ -314,8 +314,8 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
       setIsDemoSubmitting(true);
       setDemoError(null);
 
-      // 1. Direct block list checks
-      if (isBlocked) {
+      // 1. Direct block list checks (Bypass VPN restriction for demo users who verified passcode)
+      if (isIpBlocked || isDeviceBlocked) {
         setIsDemoSubmitting(false);
         setDemoError("দুঃখিত, আইপি বা ডিভাইস ব্লক থাকার কারণে আপনি জয়েন করতে পারছেন না।");
         return;

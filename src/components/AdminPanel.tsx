@@ -275,11 +275,16 @@ export default function AdminPanel() {
       handleFirestoreError(error, OperationType.LIST, 'meetings');
     });
 
-    const qParticipants = query(collection(db, 'participants'), orderBy('joinedAt', 'desc'));
-    const unsubParticipants = onSnapshot(qParticipants, (snap) => {
+    const unsubParticipants = onSnapshot(collection(db, 'participants'), (snap) => {
       const list: Participant[] = [];
       snap.forEach((doc) => {
         list.push({ id: doc.id, ...doc.data() } as Participant);
+      });
+      // Sort in-memory descending by joinedAt safely to avoid potential Firestore index query bugs
+      list.sort((a, b) => {
+        const tA = a.joinedAt?.toDate ? a.joinedAt.toDate().getTime() : (a.joinedAt ? new Date(a.joinedAt).getTime() : 0);
+        const tB = b.joinedAt?.toDate ? b.joinedAt.toDate().getTime() : (b.joinedAt ? new Date(b.joinedAt).getTime() : 0);
+        return tB - tA;
       });
       setParticipants(list);
     }, (error) => {
@@ -312,11 +317,16 @@ export default function AdminPanel() {
     });
 
     // Real-time Demo Participants Listener
-    const qDemoParticipants = query(collection(db, 'demoParticipants'), orderBy('joinedAt', 'desc'));
-    const unsubDemoParticipants = onSnapshot(qDemoParticipants, (snap) => {
+    const unsubDemoParticipants = onSnapshot(collection(db, 'demoParticipants'), (snap) => {
       const list: any[] = [];
       snap.forEach((doc) => {
         list.push({ id: doc.id, ...doc.data() });
+      });
+      // Sort in-memory descending by joinedAt to prevent query error of index or missing field exclusions
+      list.sort((a, b) => {
+        const tA = a.joinedAt?.toDate ? a.joinedAt.toDate().getTime() : (a.joinedAt ? new Date(a.joinedAt).getTime() : 0);
+        const tB = b.joinedAt?.toDate ? b.joinedAt.toDate().getTime() : (b.joinedAt ? new Date(b.joinedAt).getTime() : 0);
+        return tB - tA;
       });
       setDemoParticipants(list);
     }, (error) => {
@@ -848,9 +858,7 @@ export default function AdminPanel() {
   const filteredParticipants = participants.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           p.ip.includes(searchQuery);
-    // If dateFilter is empty, default to today's date so we never show "all" of history at once
-    const activeFilterDate = dateFilter || getTodayDateString();
-    const matchesDate = isSameDay(p.joinedAt, activeFilterDate);
+    const matchesDate = dateFilter ? isSameDay(p.joinedAt, dateFilter) : true;
     return matchesSearch && matchesDate;
   });
 
@@ -859,9 +867,7 @@ export default function AdminPanel() {
     const matchesSearch = p.name.toLowerCase().includes(demoSearchQuery.toLowerCase()) || 
                           (p.gmail || '').toLowerCase().includes(demoSearchQuery.toLowerCase()) || 
                           p.ip.includes(demoSearchQuery);
-    // If demoDateFilter is empty, default to today's date so we never show "all" of history at once
-    const activeFilterDate = demoDateFilter || getTodayDateString();
-    const matchesDate = isSameDay(p.joinedAt, activeFilterDate);
+    const matchesDate = demoDateFilter ? isSameDay(p.joinedAt, demoDateFilter) : true;
     return matchesSearch && matchesDate;
   });
 
@@ -1480,12 +1486,20 @@ export default function AdminPanel() {
                           onChange={(e) => setDateFilter(e.target.value)}
                           className="bg-slate-50 border border-slate-200 rounded p-1 text-[9px] focus:outline-none"
                         />
-                        {dateFilter && dateFilter !== getTodayDateString() && (
+                        {dateFilter ? (
+                          <button
+                            onClick={() => setDateFilter('')}
+                            className="text-[9px] border border-sky-200 bg-sky-50 text-sky-700 px-1.5 py-1 rounded hover:bg-sky-500 hover:text-white transition cursor-pointer font-bold shrink-0"
+                          >
+                            সকল দিন
+                          </button>
+                        ) : null}
+                        {dateFilter !== getTodayDateString() && (
                           <button
                             onClick={() => setDateFilter(getTodayDateString())}
-                            className="text-[9px] border border-red-200 bg-red-50 text-red-600 px-1.5 py-1 rounded hover:bg-red-500 hover:text-white transition cursor-pointer font-bold"
+                            className="text-[9px] border border-amber-200 bg-amber-50 text-amber-700 px-1.5 py-1 rounded hover:bg-amber-500 hover:text-white transition cursor-pointer font-bold shrink-0"
                           >
-                            আজকের তারিখ
+                            আজকে
                           </button>
                         )}
                       </div>
@@ -1719,12 +1733,20 @@ export default function AdminPanel() {
                           onChange={(e) => setDemoDateFilter(e.target.value)}
                           className="bg-slate-50 border border-slate-200 rounded p-1 text-[9px] focus:outline-none"
                         />
-                        {demoDateFilter && demoDateFilter !== getTodayDateString() && (
+                        {demoDateFilter ? (
+                          <button
+                            onClick={() => setDemoDateFilter('')}
+                            className="text-[9px] border border-sky-200 bg-sky-50 text-sky-700 px-1.5 py-1 rounded hover:bg-sky-500 hover:text-white transition cursor-pointer font-bold shrink-0"
+                          >
+                            সকল দিন
+                          </button>
+                        ) : null}
+                        {demoDateFilter !== getTodayDateString() && (
                           <button
                             onClick={() => setDemoDateFilter(getTodayDateString())}
-                            className="text-[9px] border border-red-200 bg-red-50 text-red-600 px-1.5 py-1 rounded hover:bg-red-500 hover:text-white transition cursor-pointer font-bold"
+                            className="text-[9px] border border-emerald-200 bg-emerald-50 text-emerald-700 px-1.5 py-1 rounded hover:bg-emerald-555 hover:text-white transition cursor-pointer font-bold shrink-0"
                           >
-                            আজকের তারিখ
+                            আজকে
                           </button>
                         )}
                       </div>
