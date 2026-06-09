@@ -362,26 +362,6 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
         console.warn("Failed to write to demoParticipants:", err);
       }
 
-      // 2.5 Also save to regular participants collection as '(ডেমো)' so they appear in both listings
-      const regularPartId = `part_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-      const regularRef = doc(db, 'participants', regularPartId);
-
-      const regularPayload = {
-        name: demoNameInput.trim() + ' (ডেমো)',
-        meetingId: meetingId,
-        ip: finalIp,
-        deviceId: deviceId || 'Unknown',
-        userAgent: navigator.userAgent || 'Unknown Browser',
-        joinedAt: serverTimestamp(),
-        blocked: false
-      };
-
-      try {
-        await setDoc(regularRef, regularPayload);
-      } catch (err) {
-        console.warn("Failed to write to regular participants collection:", err);
-      }
-
       // 3. Meet active checking
       if (!meetingActive) {
         setDemoError("এই কাউন্সেলিং সেশনটি বৰ্তমানে নিষ্ক্রিয় বা সম্পন্ন করা হয়েছে।");
