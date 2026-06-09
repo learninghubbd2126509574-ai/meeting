@@ -761,14 +761,13 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                     }}
                     className={`inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200/60 px-3 py-1 rounded-full text-[10px] font-extrabold text-amber-800 shadow-sm uppercase tracking-wide select-none ${
                       demoModeActive 
-                        ? 'cursor-pointer hover:bg-amber-100 hover:border-amber-300 transition duration-150 active:scale-95 border-emerald-400 bg-emerald-50 text-emerald-800' 
+                        ? 'cursor-pointer hover:bg-amber-100 hover:border-amber-300 transition duration-150 active:scale-95' 
                         : ''
                     }`}
                   >
                     <span className="relative flex h-1.5 w-1.5">
-                      <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${demoModeActive ? 'bg-emerald-400' : 'bg-rose-400'}`}>
-                      </span>
-                      <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${demoModeActive ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
                     </span>
                     <span>সেশন লাইভ পোর্টাল</span>
                   </div>
