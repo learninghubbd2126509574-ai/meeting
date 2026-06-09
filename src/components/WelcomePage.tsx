@@ -121,6 +121,14 @@ export default function WelcomePage({ onNavigateToAdmin, onNavigateToJoin }: Wel
 
             {/* Trust and Actions */}
             <div className="space-y-4 pt-2">
+              <button
+                onClick={onNavigateToAdmin}
+                className="w-full px-4 py-3 bg-white hover:bg-slate-50 hover:text-slate-900 transition text-slate-600 font-bold text-xs rounded-xl border border-slate-200 shadow-sm flex items-center justify-center gap-2 group cursor-pointer"
+              >
+                <LogIn className="h-4 w-4 text-slate-400 group-hover:text-amber-500 transition" />
+                <span>ম্যানেজমেন্ট লগইন (অ্যাডমিন)</span>
+              </button>
+
               <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-200">
                 <div className="h-8 w-8 bg-blue-50 border border-blue-100 rounded-lg flex items-center justify-center shrink-0">
                   <ShieldCheck className="h-4.5 w-4.5 text-blue-600" />
@@ -130,14 +138,6 @@ export default function WelcomePage({ onNavigateToAdmin, onNavigateToJoin }: Wel
                   <p className="text-[10px] text-slate-500 mt-0.5">যেকোনো অনাকাঙ্ক্ষিত অ্যাক্সেস প্রতিহত করা হয়</p>
                 </div>
               </div>
-
-              <button
-                onClick={onNavigateToAdmin}
-                className="w-full px-4 py-3 bg-white hover:bg-slate-50 hover:text-slate-900 transition text-slate-600 font-bold text-xs rounded-xl border border-slate-200 shadow-sm flex items-center justify-center gap-2 group cursor-pointer"
-              >
-                <LogIn className="h-4 w-4 text-slate-400 group-hover:text-amber-500 transition" />
-                <span>ম্যানেজমেন্ট লগইন (অ্যাডমিন)</span>
-              </button>
             </div>
 
           </motion.div>

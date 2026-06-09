@@ -308,10 +308,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
       return;
     }
 
-    if (!ipAddress || ipAddress === 'যাচাই হচ্ছে...') {
-      setDemoError("নিরাপত্তা ব্যবস্থা যাচাই করা হচ্ছে। অনুগ্রহ করে একটু অপেক্ষা করুন।");
-      return;
-    }
+    const finalIp = (!ipAddress || ipAddress === 'যাচাই হচ্ছে...') ? 'Unknown' : ipAddress;
 
     try {
       setIsDemoSubmitting(true);
@@ -324,8 +321,8 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
         return;
       }
 
-      if (ipAddress && ipAddress !== 'Unknown') {
-        const blockSnap = await getDoc(doc(db, 'blockedIPs', ipAddress));
+      if (finalIp && finalIp !== 'Unknown') {
+        const blockSnap = await getDoc(doc(db, 'blockedIPs', finalIp));
         if (blockSnap.exists()) {
           setIsIpBlocked(true);
           setIsDemoSubmitting(false);
@@ -352,7 +349,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
         name: demoNameInput.trim(),
         gmail: demoGmailInput.trim() || '',
         meetingId: meetingId,
-        ip: ipAddress || 'Unknown',
+        ip: finalIp,
         deviceId: deviceId || 'Unknown',
         userAgent: navigator.userAgent || 'Unknown Browser',
         joinedAt: serverTimestamp(),
@@ -362,7 +359,27 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
       try {
         await setDoc(demoRef, demoPayload);
       } catch (err) {
-        console.warn("Failed to write to demoParticipants, redirecting anyway", err);
+        console.warn("Failed to write to demoParticipants:", err);
+      }
+
+      // 2.5 Also save to regular participants collection as '(ডেমো)' so they appear in both listings
+      const regularPartId = `part_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const regularRef = doc(db, 'participants', regularPartId);
+
+      const regularPayload = {
+        name: demoNameInput.trim() + ' (ডেমো)',
+        meetingId: meetingId,
+        ip: finalIp,
+        deviceId: deviceId || 'Unknown',
+        userAgent: navigator.userAgent || 'Unknown Browser',
+        joinedAt: serverTimestamp(),
+        blocked: false
+      };
+
+      try {
+        await setDoc(regularRef, regularPayload);
+      } catch (err) {
+        console.warn("Failed to write to regular participants collection:", err);
       }
 
       // 3. Meet active checking
