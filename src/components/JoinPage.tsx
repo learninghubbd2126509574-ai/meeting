@@ -45,16 +45,82 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
   // 1. Live Listeners for Meeting, Block Status, and Settings
   useEffect(() => {
     let unsubMeeting: (() => void) | null = null;
-    let unsubBlockIP: (() => void) | null = null;
     let unsubBlockDevice: (() => void) | null = null;
     let unsubSettings: (() => void) | null = null;
+
+    // Fast parallel IP fetching with timeout to guarantee responsiveness under slow connections
+    async function getIpWithTimeout(): Promise<string> {
+      const endpoints = [
+        'https://api.ipify.org?format=json',
+        'https://api64.ipify.org?format=json',
+        'https://ipapi.co/json/'
+      ];
+
+      const fetchWithTimeout = (url: string, ms: number): Promise<string> => {
+        return new Promise((resolve, reject) => {
+          const timeoutId = setTimeout(() => reject(new Error('Timeout')), ms);
+          fetch(url)
+            .then(res => {
+              if (res.ok) return res.json();
+              throw new Error('Network error');
+            })
+            .then(data => {
+              clearTimeout(timeoutId);
+              if (data && data.ip) {
+                resolve(data.ip);
+              } else {
+                reject(new Error('No IP JSON'));
+              }
+            })
+            .catch(err => {
+              clearTimeout(timeoutId);
+              reject(err);
+            });
+        });
+      };
+
+      const promises = endpoints.map(url => fetchWithTimeout(url, 2500));
+
+      try {
+        if (typeof Promise.any === 'function') {
+          return await Promise.any(promises);
+        } else {
+          return await new Promise<string>((resolve) => {
+            let resolved = false;
+            let rejectCount = 0;
+            promises.forEach(p => {
+              p.then(ip => {
+                if (!resolved) {
+                  resolved = true;
+                  resolve(ip);
+                }
+              }).catch(() => {
+                rejectCount++;
+                if (rejectCount === promises.length) {
+                  resolve('Unknown');
+                }
+              });
+            });
+            setTimeout(() => {
+              if (!resolved) {
+                resolved = true;
+                resolve('Unknown');
+              }
+            }, 3000);
+          });
+        }
+      } catch (err) {
+        console.warn("Resilient IP fetch failed, using fallback.", err);
+        return 'Unknown';
+      }
+    }
 
     async function setupListeners() {
       try {
         setIsLoading(true);
         setErrorMessage(null);
 
-        // A. Persistent Device ID (Hardware Fingerprint Substitute)
+        // A. Persistent Device ID
         let dId = localStorage.getItem('unity_device_id');
         if (!dId) {
           dId = `dev_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
@@ -62,32 +128,11 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
         }
         setDeviceId(dId);
 
-        // B. Fetch IP (with robust fallbacks to ensure verification)
-        let detectedIp = 'Unknown';
-        const ipEndpoints = [
-          'https://api.ipify.org?format=json',
-          'https://api64.ipify.org?format=json',
-          'https://ipapi.co/json/'
-        ];
-
-        for (const url of ipEndpoints) {
-          try {
-            const res = await fetch(url);
-            if (res.ok) {
-              const data = await res.json();
-              if (data.ip) {
-                detectedIp = data.ip;
-                break;
-              }
-            }
-          } catch (e) {
-            console.warn(`Fetch IP from ${url} failed:`, e);
-          }
-        }
+        // B. Fetch IP (With parallel race & swift fallback for slower internet)
+        const detectedIp = await getIpWithTimeout();
         setIpAddress(detectedIp);
 
-        // Security Check (Async)
-        // Only run detailed metadata if a valid IP was successfully resolved
+        // Security Check (Async & Non-blocking)
         if (detectedIp !== 'Unknown' && detectedIp !== 'যাচাই হচ্ছে...') {
           fetch(`https://ipapi.co/${detectedIp}/json/`)
             .then(res => res.json())
@@ -101,11 +146,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
             }).catch(() => {});
         }
 
-        // C. Real-time Block Listeners (Active tracking)
-        unsubBlockIP = onSnapshot(doc(db, 'blockedIPs', (detectedIp === 'Unknown' || detectedIp === 'যাচাই হচ্ছে...') ? 'temp' : detectedIp), (snap) => {
-          setIsIpBlocked(snap.exists());
-        });
-
+        // C. Live Device Block Listener
         if (dId) {
           unsubBlockDevice = onSnapshot(doc(db, 'blockedDevices', dId), (snap) => {
             setIsDeviceBlocked(snap.exists());
@@ -153,15 +194,41 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
       }
     }
 
+    // Safety fallback timer for slow internet (releases overlay spinner after 4 seconds on high latency)
+    const fallbackTimer = setTimeout(() => {
+      setIsLoading(current => {
+        if (current) {
+          console.warn("Safety trigger: Slow network connection detected. Loading screen bypassed.");
+          return false;
+        }
+        return current;
+      });
+    }, 4000);
+
     setupListeners();
 
     return () => {
+      clearTimeout(fallbackTimer);
       if (unsubMeeting) unsubMeeting();
-      if (unsubBlockIP) unsubBlockIP();
       if (unsubBlockDevice) unsubBlockDevice();
       if (unsubSettings) unsubSettings();
     };
   }, [meetingId]);
+
+  // 1.2. Reactively listen for IP block status once IP address successfully resolves
+  useEffect(() => {
+    if (!ipAddress || ipAddress === 'যাচাই হচ্ছে...' || ipAddress === 'Unknown') {
+      return;
+    }
+
+    const unsubBlockIP = onSnapshot(doc(db, 'blockedIPs', ipAddress), (snap) => {
+      setIsIpBlocked(snap.exists());
+    });
+
+    return () => {
+      unsubBlockIP();
+    };
+  }, [ipAddress]);
 
   // 2. Submit join request
   async function handleJoin(e: React.FormEvent) {
@@ -737,11 +804,29 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                 )}
 
                 {!publicLinkActive && (
-                  <div className="bg-rose-50 border border-rose-200 rounded-2xl p-3.5 flex items-start gap-2.5 shadow-sm">
-                    <ShieldAlert className="h-5 w-5 text-rose-500 shrink-0 mt-0.5 animate-pulse" />
-                    <p className="text-xs text-rose-850 font-black leading-normal">
-                      দুঃখিত, অ্যাডমিন কর্তৃক বর্তমানে সাধারণ লিংকের মাধ্যমে জয়েন অপশনটি বন্ধ রাখা হয়েছে। আপনি এখন নাম লিখে জয়েন করতে পারবেন না।
-                    </p>
+                  <div className="bg-[#fff1f2]/90 border-2 border-dashed border-[#f43f5e]/40 rounded-3xl p-5 shadow-sm text-center space-y-3.5 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-20 h-20 bg-[#f43f5e]/[0.02] rounded-full blur-xl pointer-events-none"></div>
+                    
+                    <div className="mx-auto w-12 h-12 bg-[#ffe4e6] rounded-full flex items-center justify-center animate-pulse">
+                      <ShieldAlert className="h-6 w-6 text-[#e11d48]" />
+                    </div>
+                    
+                    <div className="space-y-1.5">
+                      <h3 className="font-sans font-black text-[13.5px] text-[#9f1239] uppercase tracking-wide">
+                        ⚠️ জয়েনিং অপশন বর্তমানে বন্ধ রয়েছে
+                      </h3>
+                      <p className="text-[11.5px] text-[#be123c] font-black leading-relaxed px-1">
+                         সম্মানিত এডমিন বর্তমানে সাধারণ লিংকের মাধ্যমে নাম লিখে জয়েন করার অপশনটি বন্ধ (অফ) করে রেখেছেন। 
+                      </p>
+                      <p className="text-[10px] text-slate-500 font-bold leading-normal px-2">
+                        এডমিন জয়েন করার অপশন অন করার সাথে সাথে নাম টাইপ করার বক্সটি এখানে সচল হবে। অনুগ্রহ করে লাইভ সেশনের জন্য অপেক্ষা করুন।
+                      </p>
+                    </div>
+
+                    <div className="bg-white border border-[#ffe4e6] rounded-2xl py-2 px-4 shadow-inner text-[10px] font-black text-[#be123c] inline-flex items-center gap-1.5 select-none hover:scale-101 transition duration-155">
+                      <Clock className="h-3.5 w-3.5 text-[#e11d48] animate-spin" />
+                      <span>স্ট্যাটাস: অ্যাডমিন কর্তৃক সাধারণ জয়েন নিষ্ক্রিয়</span>
+                    </div>
                   </div>
                 )}
 
@@ -749,69 +834,50 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                 <form onSubmit={handleJoin} className="space-y-6">
                   
                   {/* 1. Name Input Box with brilliant flashing glowing halo (লাইট জ্বলবে নিবে) */}
-                  <div className="relative">
-                    {/* Double-layer ambient animating pulsing golden halo */}
-                    {publicLinkActive && (
-                      <>
-                        <div className="absolute -inset-1.5 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 rounded-[28px] blur-md opacity-85 animate-pulse pointer-events-none"></div>
-                        <div className="absolute -inset-0.5 bg-gradient-to-r from-amber-400 via-yellow-250 to-amber-400 rounded-[26px] opacity-65 animate-pulse pointer-events-none"></div>
-                      </>
-                    )}
-                    
-                    <div className={`relative bg-white rounded-3xl p-5 border-2 ${publicLinkActive ? 'border-amber-450 shadow-[0_12px_40px_rgba(245,158,11,0.28)]' : 'border-slate-300 opacity-75 shadow-none'} space-y-4 z-10 transition-all duration-300`}>
-                      <div className="flex items-center justify-between px-0.5">
-                        <label className="block text-[11.5px] font-black text-slate-950 uppercase tracking-widest flex items-center gap-1.5 select-none">
-                          <span className="relative flex h-2.5 w-2.5">
-                            {publicLinkActive ? (
-                              <>
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-90"></span>
-                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-600"></span>
-                              </>
-                            ) : (
-                              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-slate-400"></span>
-                            )}
-                          </span>
-                          <span className={publicLinkActive ? "animate-pulse flex items-center gap-1 text-[11px]" : "flex items-center gap-1 text-[11px] text-slate-500 font-bold"}>
-                            {publicLinkActive ? "আপনার সঠিক নাম টাইপ করুন" : "জয়েন অপশন বন্ধ রয়েছে"}
-                          </span>
-                        </label>
-                        {publicLinkActive ? (
-                          <span className="text-[8.5px] bg-emerald-50 text-emerald-700 border border-emerald-255 px-2 py-0.5 rounded-lg font-black uppercase tracking-wider animate-pulse select-none">ভেরিফাইড লিংক</span>
-                        ) : (
-                          <span className="text-[8.5px] bg-slate-100 text-slate-600 border border-slate-200 px-2 py-0.5 rounded-lg font-black uppercase tracking-wider select-none">নিষ্ক্রিয় লিংক</span>
-                        )}
-                      </div>
+                  {publicLinkActive && (
+                    <div className="relative">
+                      {/* Double-layer ambient animating pulsing golden halo */}
+                      <div className="absolute -inset-1.5 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 rounded-[28px] blur-md opacity-85 animate-pulse pointer-events-none"></div>
+                      <div className="absolute -inset-0.5 bg-gradient-to-r from-amber-400 via-yellow-250 to-amber-400 rounded-[26px] opacity-65 animate-pulse pointer-events-none"></div>
                       
-                      <div className="relative group">
-                        {publicLinkActive && (
-                          <div className="absolute -inset-1 bg-gradient-to-r from-amber-500 to-amber-400 rounded-2xl blur opacity-30 group-focus-within:opacity-60 transition duration-300"></div>
-                        )}
+                      <div className="relative bg-white rounded-3xl p-5 border-2 border-amber-450 shadow-[0_12px_40px_rgba(245,158,11,0.28)] space-y-4 z-10 transition-all duration-300">
+                        <div className="flex items-center justify-between px-0.5">
+                          <label className="block text-[11.5px] font-black text-slate-950 uppercase tracking-widest flex items-center gap-1.5 select-none">
+                            <span className="relative flex h-2.5 w-2.5">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-90"></span>
+                              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-600"></span>
+                            </span>
+                            <span className="animate-pulse flex items-center gap-1 text-[11px]">আপনার সঠিক নাম টাইপ করুন</span>
+                          </label>
+                          <span className="text-[8.5px] bg-emerald-50 text-emerald-700 border border-emerald-255 px-2 py-0.5 rounded-lg font-black uppercase tracking-wider animate-pulse select-none">ভেরিফাইড লিংক</span>
+                        </div>
                         
-                        <div className="relative">
-                          <span className="absolute inset-y-0 left-0 pl-4.5 flex items-center text-amber-600">
-                            <User className={`h-5 w-5 ${publicLinkActive ? 'animate-bounce' : 'text-slate-400'}`} />
-                          </span>
-                          <input
-                            type="text"
-                            required
-                            disabled={!publicLinkActive}
-                            placeholder={publicLinkActive ? "আপনার নাম এখানে লিখুন..." : "অ্যাডমিন সাধারণ জয়েন অফ রেখেছেন"}
-                            value={fullName}
-                            onChange={(e) => setFullName(e.target.value)}
-                            className={`w-full pl-12.5 pr-4 py-4 ${publicLinkActive ? 'bg-amber-50/20 border-2 border-amber-300 focus:bg-white text-slate-950 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/20 animate-pulse' : 'bg-slate-50 border-2 border-slate-200 text-slate-450 cursor-not-allowed'} rounded-2xl text-[15.5px] font-black transition-all shadow-inner`}
-                          />
+                        <div className="relative group">
+                          <div className="absolute -inset-1 bg-gradient-to-r from-amber-500 to-amber-400 rounded-2xl blur opacity-30 group-focus-within:opacity-60 transition duration-300"></div>
+                          
+                          <div className="relative">
+                            <span className="absolute inset-y-0 left-0 pl-4.5 flex items-center text-amber-600">
+                              <User className="h-5 w-5 animate-bounce" />
+                            </span>
+                            <input
+                              type="text"
+                              required
+                              placeholder="আপনার নাম এখানে লিখুন..."
+                              value={fullName}
+                              onChange={(e) => setFullName(e.target.value)}
+                              className="w-full pl-12.5 pr-4 py-4 bg-amber-50/20 border-2 border-amber-300 focus:bg-white text-slate-950 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/20 animate-pulse rounded-2xl text-[15.5px] font-black transition-all shadow-inner"
+                            />
+                          </div>
+                        </div>
+                        
+                        <div className="bg-rose-50 border border-rose-200 px-3 py-2 rounded-xl text-center select-none">
+                          <p className="text-[10px] text-rose-600 animate-pulse font-extrabold">
+                            ⚠️ নাম ভুল হলে মিটিং থেকে সরাসরি বের করে দেয়া হতে পারে।
+                          </p>
                         </div>
                       </div>
-                      
-                      <div className={`${publicLinkActive ? 'bg-rose-50 border-rose-200' : 'bg-slate-100 border-slate-200'} px-3 py-2 rounded-xl border text-center select-none`}>
-                        <p className={`text-[10px] ${publicLinkActive ? 'text-rose-600 animate-pulse font-extrabold' : 'text-slate-550 font-semibold'}`}>
-                          {publicLinkActive 
-                            ? '⚠️ নাম ভুল হলে মিটিং থেকে সরাসরি বের করে দেয়া হতে পারে।' 
-                            : 'অ্যাডমিন জয়েনিং লিংক পুনরায় চালু করলে এখানে নাম লিখতে পারবেন।'}
-                        </p>
-                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* 2. Redesigned Premium Submit Trigger (Placed right under Name Input) */}
                   <div className="relative">
@@ -821,7 +887,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                       className={`w-full py-5 text-slate-950 font-black rounded-2xl transition-all duration-305 transition-colors cursor-pointer text-center flex items-center justify-center gap-2 text-[14.5px] border ${
                         publicLinkActive 
                           ? 'bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 hover:from-amber-600 hover:to-amber-500 shadow-[0_10px_25px_-5px_rgba(245,158,11,0.4)] hover:shadow-[0_12px_30px_-5px_rgba(245,158,11,0.55)] border-amber-350/50 active:scale-[0.98] disabled:opacity-50' 
-                          : 'bg-slate-200 text-slate-400 border-slate-300 cursor-not-allowed opacity-80 shadow-none'
+                          : 'bg-slate-205 text-slate-400 border-slate-300 cursor-not-allowed opacity-65 shadow-none'
                       }`}
                     >
                       {ipAddress === 'যাচাই হচ্ছে...' ? (
@@ -836,8 +902,8 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                         </div>
                       ) : !publicLinkActive ? (
                         <div className="flex items-center justify-center gap-2 px-1">
-                          <AlertCircle className="h-5 w-5 text-slate-400" />
-                          <span>জয়েন করার অপশন বন্ধ রয়েছে</span>
+                          <AlertCircle className="h-5 w-5 text-rose-600 animate-pulse" />
+                          <span className="text-slate-500">জয়েনিং সেশন অ্যাডমিন কর্তৃক নিষ্ক্রিয় (অফ)</span>
                         </div>
                       ) : (
                         <div className="flex items-center justify-center gap-2 px-1">
