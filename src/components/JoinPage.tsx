@@ -630,7 +630,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                   </p>
                 ) : (
                   <p className="text-slate-600 text-xs leading-relaxed px-2 font-medium">
-                    দুঃখিত, আমাদের সিকিউরিটি ফিল্টার আপনার <span className="font-extrabold text-rose-650">ডিভাইস আইপি অথবা হার্ডওয়্যার আইডি</span> ব্লক করেছে। আপনি আর এই মিটিং সেশনে প্রবেশ করতে পারবেন না।
+                    দুঃখিত, আমাদের সিকিউরিটি ফিল্টার আপনার <span className="font-extrabold text-rose-650">ডিভাইস আইপি অথবা হার্ডওয়্যার আইডি</span> ব্লক করেছে। আপনি আর এই মিটিং সেশনের জন্য অ্যাক্সেস পাবেন না।
                   </p>
                 )}
                 
@@ -653,7 +653,6 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                   <span>ঘোষণা</span>
                 </span>
                 
-                {/* Scrolling Text marquee - scrolling Right to Left natural read flow */}
                 <div className="flex-1 overflow-hidden flex items-center">
                   <Marquee 
                     scrollamount="3" 
@@ -666,8 +665,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
               </div>
             )}
 
-
-
+            <div className="flex-1 flex flex-col justify-between space-y-6 px-5 mt-4">
               {/* Premium Luxury Header Banner (Redesigned) */}
               <div className="bg-white rounded-3xl p-6 border border-slate-150 shadow-[0_8px_30px_rgb(0,0,0,0.03)] space-y-4 shrink-0 relative overflow-hidden text-center">
                 {/* Decorative Amber Elegant Accents */}
@@ -701,7 +699,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                   
                   <h1 className="text-2xl font-black tracking-tight text-slate-900 font-sans">
                     <span className="bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 bg-clip-text text-transparent">UNITY</span>
-                    <span className="bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 bg-clip-text text-transparent ml-1.5">EARNING</span>
+                    <span className="bg-gradient-to-r from-amber-600 via-amber-505 to-amber-600 bg-clip-text text-transparent ml-1.5">EARNING</span>
                   </h1>
                   <p className="text-[12px] font-bold text-slate-500 tracking-wide">
                     অফিসিয়াল সেশন জয়েনিং পোর্টাল
@@ -735,42 +733,80 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                 )}
 
                 {/* Form Elements with Redesigned Name Input & Submission wrapper */}
-                <form onSubmit={handleJoin} className="space-y-5">
-                  <div className="bg-white rounded-3xl p-5 border border-slate-150 shadow-[0_10px_45px_rgb(0,0,0,0.03)] space-y-4">
-                    <div className="flex items-center justify-between px-0.5">
-                      <label className="block text-[11px] font-black text-slate-800 uppercase tracking-widest">
-                        আপনার সঠিক নাম টাইপ করুন
-                      </label>
-                      <span className="text-[8.5px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-lg font-black uppercase tracking-wider">ভেরিফাইড লিংক</span>
-                    </div>
+                <form onSubmit={handleJoin} className="space-y-6">
+                  
+                  {/* 1. Name Input Box with brilliant flashing glowing halo (লাইট জ্বলবে নিবে) */}
+                  <div className="relative">
+                    {/* Double-layer ambient animating pulsing golden halo */}
+                    <div className="absolute -inset-1.5 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 rounded-[28px] blur-md opacity-85 animate-pulse pointer-events-none"></div>
+                    <div className="absolute -inset-0.5 bg-gradient-to-r from-amber-400 via-yellow-250 to-amber-400 rounded-[26px] opacity-65 animate-pulse pointer-events-none"></div>
                     
-                    <div className="relative group">
-                      <div className="absolute -inset-0.5 bg-gradient-to-r from-amber-500 to-amber-400 rounded-2xl blur opacity-10 group-focus-within:opacity-30 transition duration-300"></div>
-                      
-                      <div className="relative">
-                        <span className="absolute inset-y-0 left-0 pl-4.5 flex items-center text-amber-500">
-                          <User className="h-5 w-5" />
-                        </span>
-                        <input
-                          type="text"
-                          required
-                          placeholder="আপনার নাম এখানে লিখুন..."
-                          value={fullName}
-                          onChange={(e) => setFullName(e.target.value)}
-                          className="w-full pl-12.5 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 placeholder-slate-405 focus:outline-none focus:ring-4 focus:ring-amber-500/10 focus:border-amber-500 focus:bg-white text-[15px] font-bold transition-all shadow-inner"
-                        />
+                    <div className="relative bg-white rounded-3xl p-5 border-2 border-amber-450 shadow-[0_12px_40px_rgba(245,158,11,0.28)] space-y-4 z-10">
+                      <div className="flex items-center justify-between px-0.5">
+                        <label className="block text-[11.5px] font-black text-slate-950 uppercase tracking-widest flex items-center gap-1.5 select-none">
+                          <span className="relative flex h-2.5 w-2.5">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-90"></span>
+                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-600"></span>
+                          </span>
+                          <span className="animate-pulse flex items-center gap-1 text-[11px]">আপনার সঠিক নাম টাইপ করুন</span>
+                        </label>
+                        <span className="text-[8.5px] bg-emerald-50 text-emerald-700 border border-emerald-255 px-2 py-0.5 rounded-lg font-black uppercase tracking-wider animate-pulse select-none">ভেরিফাইড লিংক</span>
                       </div>
-                    </div>
-                    
-                    <div className="bg-rose-50/60 px-3 py-2 rounded-xl border border-rose-150/70 text-center">
-                      <p className="text-[10px] text-rose-600 font-black">
-                        ⚠️ নাম ভুল হলে মিটিং থেকে সরাসরি বের করে দেয়া হতে পারে।
-                      </p>
+                      
+                      <div className="relative group">
+                        <div className="absolute -inset-1 bg-gradient-to-r from-amber-500 to-amber-400 rounded-2xl blur opacity-30 group-focus-within:opacity-60 transition duration-300"></div>
+                        
+                        <div className="relative">
+                          <span className="absolute inset-y-0 left-0 pl-4.5 flex items-center text-amber-600">
+                            <User className="h-5 w-5 animate-bounce" />
+                          </span>
+                          <input
+                            type="text"
+                            required
+                            placeholder="আপনার নাম এখানে লিখুন..."
+                            value={fullName}
+                            onChange={(e) => setFullName(e.target.value)}
+                            className="w-full pl-12.5 pr-4 py-4 bg-amber-50/20 border-2 border-amber-300 rounded-2xl text-slate-950 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-amber-500/20 focus:border-amber-500 focus:bg-white text-[15.5px] font-black transition-all shadow-inner animate-pulse"
+                          />
+                        </div>
+                      </div>
+                      
+                      <div className="bg-rose-50 px-3 py-2 rounded-xl border border-rose-200 text-center select-none">
+                        <p className="text-[10px] text-rose-600 font-extrabold animate-pulse">
+                          ⚠️ নাম ভুল হলে মিটিং থেকে সরাসরি বের করে দেয়া হতে পারে।
+                        </p>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Rules Container (Redesigned with larger text and beautiful bullet badges) */}
-                  <div className="bg-gradient-to-br from-[#fffdf5] to-[#fffcf3] border border-amber-200 rounded-3xl p-5.5 space-y-4 shadow-sm relative overflow-hidden">
+                  {/* 2. Redesigned Premium Submit Trigger (Placed right under Name Input) */}
+                  <div className="relative">
+                    <button
+                      type="submit"
+                      disabled={isSubmitting || !fullName.trim() || ipAddress === 'যাচাই হচ্ছে...'}
+                      className="w-full py-5 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 hover:from-amber-600 hover:to-amber-500 text-slate-950 font-black rounded-2xl shadow-[0_10px_25px_-5px_rgba(245,158,11,0.4)] hover:shadow-[0_12px_30px_-5px_rgba(245,158,11,0.55)] transition-all duration-300 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2 text-[14.5px] border border-amber-350/50 cursor-pointer text-center"
+                    >
+                      {ipAddress === 'যাচাই হচ্ছে...' ? (
+                        <div className="flex items-center justify-center gap-2">
+                          <Loader2 className="h-5 w-5 animate-spin text-slate-950" />
+                          <span>নিরাপত্তা ভেরিফাই করা হচ্ছে...</span>
+                        </div>
+                      ) : isSubmitting ? (
+                        <div className="flex flex-col items-center gap-1 py-0.5">
+                          <Loader2 className="h-5 w-5 animate-spin text-slate-950" />
+                          <span className="text-[10px] font-bold animate-pulse">লিঙ্ক রিকোয়েস্ট হচ্ছে, অপেক্ষা করুন...</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center gap-2 px-1">
+                          <CheckCircle className="h-5 w-5 text-slate-950 animate-pulse" strokeWidth={2.5} />
+                          <span>মিটিংয়ে প্রবেশ করুন</span>
+                        </div>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* 3. Rules Container (Successfully relocated to the bottom of the form block) */}
+                  <div className="bg-gradient-to-br from-[#fffdf5] to-[#fffcf3] border border-amber-250 rounded-3xl p-5.5 space-y-4 shadow-sm relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/[0.02] rounded-full blur-xl pointer-events-none"></div>
                     
                     <div className="flex items-center gap-2 font-black text-sm text-[#92400e] border-b border-amber-200/60 pb-2.5">
@@ -797,30 +833,6 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                       </li>
                     </ul>
                   </div>
-
-                  {/* Redesigned Premium Submit Trigger */}
-                  <button
-                    type="submit"
-                    disabled={isSubmitting || !fullName.trim() || ipAddress === 'যাচাই হচ্ছে...'}
-                    className="w-full py-4.5 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-600 hover:to-amber-500 text-slate-950 font-black rounded-2xl shadow-[0_10px_25px_-5px_rgba(245,158,11,0.4)] hover:shadow-[0_12px_30px_-5px_rgba(245,158,11,0.55)] transition-all duration-300 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2 text-[14px] border border-amber-300/40 cursor-pointer text-center"
-                  >
-                    {ipAddress === 'যাচাই হচ্ছে...' ? (
-                      <div className="flex items-center justify-center gap-2">
-                        <Loader2 className="h-5 w-5 animate-spin text-slate-950" />
-                        <span>নিরাপত্তা ভেরিফাই করা হচ্ছে...</span>
-                      </div>
-                    ) : isSubmitting ? (
-                      <div className="flex flex-col items-center gap-1 py-0.5">
-                        <Loader2 className="h-5 w-5 animate-spin text-slate-950" />
-                        <span className="text-[10px] font-bold animate-pulse">লিঙ্ক রিকোয়েস্ট হচ্ছে, অপেক্ষা করুন...</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-center gap-2 px-1">
-                        <CheckCircle className="h-5 w-5 text-slate-950" strokeWidth={2.5} />
-                        <span>মিটিংয়ে প্রবেশ করুন</span>
-                      </div>
-                    )}
-                  </button>
                 </form>
               </div>
 
@@ -829,6 +841,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                 <span>নিরাপদ সংযোগ কানেক্টেড</span>
                 <span>IP: <code className="text-amber-600 font-mono font-bold">{ipAddress === 'Unknown' ? 'যাচাই করা অসম্ভব' : ipAddress}</code></span>
               </div>
+            </div>
           </div>
         )}
 
