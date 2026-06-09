@@ -167,6 +167,11 @@ export default function AdminPanel() {
   const [blockedDateFilter, setBlockedDateFilter] = useState('');
   const [meetingsDateFilter, setMeetingsDateFilter] = useState(getTodayDateString);
 
+  // --- BULK ACTION STATES ---
+  const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);
+  const [isBulkBlocking, setIsBulkBlocking] = useState(false);
+  const [allBlockTip, setAllBlockTip] = useState(false);
+
   // Meeting schedule state
   const [meetingDateInput, setMeetingDateInput] = useState(() => {
     const today = new Date();
@@ -594,6 +599,64 @@ export default function AdminPanel() {
     }
   }
 
+  // 9.2. Bulk block selected participants in a single operation
+  async function handleBulkBlock() {
+    if (selectedParticipantIds.length === 0) return;
+    try {
+      setIsBulkBlocking(true);
+
+      // Find unblocked participant entities to block
+      const selectedParts = participants.filter(p => selectedParticipantIds.includes(p.id) && !p.blocked);
+      if (selectedParts.length === 0) {
+        setSelectedParticipantIds([]);
+        return;
+      }
+
+      // Gather unique attributes
+      const uniqueIPs = Array.from(new Set(selectedParts.map(p => p.ip).filter(Boolean))) as string[];
+      const uniqueDevices = Array.from(new Set(selectedParts.map(p => p.deviceId).filter(d => d && d !== 'Unknown'))) as string[];
+
+      // A: Add IP to blocklist
+      for (const ip of uniqueIPs) {
+        const part = selectedParts.find(p => p.ip === ip);
+        const blockRef = doc(db, 'blockedIPs', ip);
+        await setDoc(blockRef, {
+          ip: ip,
+          deviceId: part?.deviceId || 'Unknown',
+          blockedAt: serverTimestamp(),
+          name: part?.name || 'Bulk Blocked'
+        });
+      }
+
+      // B: Add Device ID to blocklist (optional bypass logic)
+      for (const devId of uniqueDevices) {
+        const deviceRef = doc(db, 'blockedDevices', devId);
+        await setDoc(deviceRef, {
+          deviceId: devId,
+          blockedAt: serverTimestamp()
+        });
+      }
+
+      // C: Update blocked status for all matching participants in local view context
+      const matchedAll = participants.filter(p => 
+        uniqueIPs.includes(p.ip) || 
+        (p.deviceId !== 'Unknown' && uniqueDevices.includes(p.deviceId))
+      );
+
+      for (const p of matchedAll) {
+        const pRef = doc(db, 'participants', p.id);
+        await updateDoc(pRef, { blocked: true });
+      }
+
+      // Reset selection
+      setSelectedParticipantIds([]);
+    } catch (err: any) {
+      handleFirestoreError(err, OperationType.WRITE, 'blocks/bulk');
+    } finally {
+      setIsBulkBlocking(false);
+    }
+  }
+
   // 10. Unblock user (removes IP from blockedIPs and updates participant flags)
   async function handleUnblockUser(targetIP: string, targetDeviceId?: string) {
     try {
@@ -833,7 +896,7 @@ export default function AdminPanel() {
         ) : (
           
           // 2. MAIN LOGGED-IN ADMIN PANEL (Phone Layout)
-          <div className="flex-1 flex flex-col justify-between bg-slate-50 pt-0 md:pt-9 relative h-full min-h-0 overflow-hidden">
+          <div className="flex-1 flex flex-col bg-slate-50 pt-0 md:pt-9 relative min-h-0 overflow-hidden w-full">
             
             {/* INNER HEADER ACCENTS */}
             <header className="px-4 py-3 bg-[#0f172a] text-white flex justify-between items-center shrink-0 border-b-2 border-amber-500 shadow-sm z-30">
@@ -888,7 +951,7 @@ export default function AdminPanel() {
             </header>
 
             {/* CHASSIS SCROLLABLE PANEL BODY */}
-            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+            <div className="flex-1 overflow-y-auto px-4 pt-4 pb-28 space-y-4 custom-scrollbar">
               
               {/* --- TAB 1: DASHBOARD --- */}
               {activeTab === 'dashboard' && (
@@ -1197,7 +1260,7 @@ export default function AdminPanel() {
                       </div>
                     </div>
 
-                    <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1 custom-scrollbar">
+                    <div className="space-y-2">
                       {(() => {
                         if (filteredMeetings.length === 0) {
                           return (
@@ -1321,78 +1384,196 @@ export default function AdminPanel() {
                   <div className="space-y-3">
                     <h3 className="text-xs font-extrabold text-slate-800">অংশগ্রহণকারীদের বিবরণ ({filteredParticipants.length})</h3>
                     
-                    <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1 custom-scrollbar">
+                    {/* BULK SELECTION CONTROLS (All Block / Select All) */}
+                    {filteredParticipants.length > 0 && (
+                      <div className="bg-red-50/70 border border-red-200 rounded-2xl p-4.5 space-y-3 shadow-xs">
+                        {/* Title accent for All Block Option */}
+                        <div className="flex items-center gap-2 border-b border-red-100 pb-2">
+                          <Ban className="h-4 w-4 text-red-600 shrink-0" />
+                          <div>
+                            <h4 className="text-xs font-black text-red-900 uppercase tracking-tight">অল ব্লক অপশন (All Block Engine)</h4>
+                            <p className="text-[9px] text-slate-550 leading-none mt-0.5">সবাইকে টিক দিয়ে একসাথে স্থায়ী ব্লক করতে এই প্যানেলটি ব্যবহার করুন।</p>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+                          {/* Checked Select All */}
+                          <div className="flex items-center gap-2 bg-white/90 border border-red-100 py-2 px-3 rounded-xl shadow-xs transition hover:bg-white shrink-0">
+                            <input
+                              type="checkbox"
+                              id="selectAllParticipants"
+                              checked={
+                                filteredParticipants.filter(p => !p.blocked).length > 0 && 
+                                filteredParticipants.filter(p => !p.blocked).every(p => selectedParticipantIds.includes(p.id))
+                              }
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  // Select all unblocked
+                                  const unblockedIds = filteredParticipants.filter(p => !p.blocked).map(p => p.id);
+                                  setSelectedParticipantIds(unblockedIds);
+                                } else {
+                                  setSelectedParticipantIds([]);
+                                }
+                              }}
+                              className="h-4.5 w-4.5 rounded border-slate-350 text-red-650 focus:ring-red-500 cursor-pointer"
+                            />
+                            <label htmlFor="selectAllParticipants" className="text-[10px] font-black text-slate-800 cursor-pointer select-none">
+                              সবাইকে সিলেক্ট করুন ({filteredParticipants.filter(p => !p.blocked).length} জন)
+                            </label>
+                          </div>
+
+                          {/* All Block Trigger Button (always visible, interactive depending on selection) */}
+                          <div className="flex flex-col gap-1 w-full sm:w-auto">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (selectedParticipantIds.length === 0) {
+                                  setAllBlockTip(true);
+                                  setTimeout(() => setAllBlockTip(false), 5000);
+                                } else {
+                                  handleBulkBlock();
+                                }
+                              }}
+                              disabled={isBulkBlocking}
+                              className={`w-full sm:w-auto px-4 py-2.5 text-white font-black text-[10.5px] rounded-xl shadow-md transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer ${
+                                selectedParticipantIds.length > 0 
+                                  ? 'bg-red-650 hover:bg-red-700 hover:scale-[1.01] border border-red-550' 
+                                  : 'bg-slate-400 hover:bg-slate-450 border border-slate-350'
+                              }`}
+                            >
+                              {isBulkBlocking ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  <span>ব্লক করা হচ্ছে...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Ban className="h-4 w-4" />
+                                  <span>অল ব্লক করুন {selectedParticipantIds.length > 0 ? `(${selectedParticipantIds.length} জন)` : ''}</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Interactive Dynamic Warning Tip */}
+                        {allBlockTip && (
+                          <motion.p 
+                            initial={{ opacity: 0, y: -4 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="text-[9.5px] text-red-700 font-extrabold bg-white border border-red-200 py-1.5 px-3 rounded-lg text-center animate-fadeIn"
+                          >
+                            ⚠️ কোনো শিক্ষার্থী সিলেক্ট করা নেই! নিচে শিক্ষার্থীদের নামের বামদিকের বাক্সে টিক দিয়ে সিলেক্ট করুন, অথবা "সবাইকে সিলেক্ট করুন" বক্সে টিক দিয়ে "অল ব্লক" এ ক্লিক করুন।
+                          </motion.p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Participant logs listing (No max-h to display fully and utilize outer scrolling) */}
+                    <div className="space-y-2">
                       {filteredParticipants.length === 0 ? (
                         <p className="text-[10px] text-slate-450 italic text-center py-4">কোনো জয়েনিং লগ পাওয়া যায়নি।</p>
                       ) : (
-                        filteredParticipants.map((p) => (
-                          <div key={p.id} className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm space-y-2 text-xs">
-                            <div className="flex justify-between items-start gap-2">
-                              <div>
-                                <h4 className="font-extrabold text-slate-900 flex items-center gap-1.5">
-                                  <span className={`h-2 w-2 rounded-full shrink-0 ${p.blocked ? 'bg-red-500 animate-pulse' : 'bg-emerald-500'}`}></span>
-                                  {p.name}
-                                </h4>
-                                <div className="flex flex-col gap-0.5 mt-0.5">
-                                  <span className="font-mono text-[9px] text-slate-400 block">IP: <strong className="text-amber-700">{p.ip}</strong></span>
-                                  <span className="font-mono text-[9px] text-slate-400 block">UID: <strong className="text-slate-600">{p.deviceId?.substring(p.deviceId.length - 8) || 'N/A'}</strong></span>
+                        filteredParticipants.map((p) => {
+                          const isSelected = selectedParticipantIds.includes(p.id);
+                          return (
+                            <div 
+                              key={p.id} 
+                              className={`border rounded-xl p-3 shadow-xs space-y-2 text-xs transition ${
+                                isSelected 
+                                  ? 'bg-amber-50/55 border-amber-300 ring-1 ring-amber-300' 
+                                  : p.blocked 
+                                    ? 'bg-slate-50/60 border-slate-200 opacity-80' 
+                                    : 'bg-white border-slate-200'
+                              }`}
+                            >
+                              <div className="flex justify-between items-start gap-2">
+                                <div className="flex items-start gap-2.5">
+                                  {/* Checkbox wrapper - only allow selecting if not yet blocked */}
+                                  {!p.blocked && (
+                                    <div className="pt-0.5 shrink-0">
+                                      <input
+                                        type="checkbox"
+                                        checked={isSelected}
+                                        onChange={() => {
+                                          if (isSelected) {
+                                            setSelectedParticipantIds(prev => prev.filter(id => id !== p.id));
+                                          } else {
+                                            setSelectedParticipantIds(prev => [...prev, p.id]);
+                                          }
+                                        }}
+                                        className="h-4 w-4 rounded border-slate-300 text-amber-500 focus:ring-amber-500 cursor-pointer"
+                                      />
+                                    </div>
+                                  )}
+                                  
+                                  <div>
+                                    <h4 className="font-extrabold text-slate-900 flex items-center gap-1.5">
+                                      <span className={`h-2 w-2 rounded-full shrink-0 ${p.blocked ? 'bg-red-500 animate-pulse' : 'bg-emerald-500'}`}></span>
+                                      {p.name}
+                                    </h4>
+                                    <div className="flex flex-col gap-0.5 mt-0.5">
+                                      <span className="font-mono text-[9px] text-slate-400 block">IP: <strong className="text-amber-700">{p.ip}</strong></span>
+                                      <span className="font-mono text-[9px] text-slate-400 block">UID: <strong className="text-slate-600">{p.deviceId?.substring(p.deviceId.length - 8) || 'N/A'}</strong></span>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex gap-1 shrink-0 items-center">
+                                  {deletingParticipantId === p.id ? (
+                                    <div className="flex items-center gap-1 bg-[#fff5f5] p-1 rounded border border-red-200 animate-fadeIn text-[8px]">
+                                      <span className="text-[8px] text-red-700 font-extrabold shrink-0">ডিলিট?</span>
+                                      <button
+                                        onClick={() => handleDeleteParticipant(p.id)}
+                                        className="px-1.5 py-0.5 bg-red-600 text-white font-black text-[8px] rounded hover:bg-red-700 cursor-pointer"
+                                      >
+                                        হ্যাঁ
+                                      </button>
+                                      <button
+                                        onClick={() => setDeletingParticipantId(null)}
+                                        className="px-1.5 py-0.5 bg-slate-200 text-slate-700 font-black text-[8px] rounded hover:bg-slate-300 cursor-pointer"
+                                      >
+                                        না
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      onClick={() => setDeletingParticipantId(p.id)}
+                                      title="লগ ডিলিট"
+                                      className="p-1.5 border border-red-100 hover:bg-red-50 rounded text-red-500 hover:border-red-300 transition cursor-pointer"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </button>
+                                  )}
                                 </div>
                               </div>
-                              <div className="flex gap-1 shrink-0 items-center">
-                                {deletingParticipantId === p.id ? (
-                                  <div className="flex items-center gap-1 bg-[#fff5f5] p-1 rounded border border-red-200 animate-fadeIn text-[8px]">
-                                    <span className="text-[8px] text-red-700 font-extrabold shrink-0">ডিলিট?</span>
-                                    <button
-                                      onClick={() => handleDeleteParticipant(p.id)}
-                                      className="px-1.5 py-0.5 bg-red-600 text-white font-black text-[8px] rounded hover:bg-red-700 cursor-pointer"
-                                    >
-                                      হ্যাঁ
-                                    </button>
-                                    <button
-                                      onClick={() => setDeletingParticipantId(null)}
-                                      className="px-1.5 py-0.5 bg-slate-200 text-slate-700 font-black text-[8px] rounded hover:bg-slate-300 cursor-pointer"
-                                    >
-                                      না
-                                    </button>
-                                  </div>
+
+                              <div className="flex justify-between items-center bg-slate-50 p-1.5 rounded border border-slate-100 text-[9px] text-slate-500">
+                                <span className="flex items-center gap-1">
+                                  <Clock className="h-3 w-3 shrink-0" />
+                                  {formatTime(p.joinedAt)}
+                                </span>
+                              </div>
+
+                              <div className="flex justify-end pt-1">
+                                {p.blocked ? (
+                                  <button
+                                    onClick={() => handleUnblockUser(p.ip, p.deviceId)}
+                                    className="px-2.5 py-1 border border-emerald-250 bg-emerald-50 text-emerald-800 hover:bg-[#d1fae5] font-bold rounded text-[9px] transition cursor-pointer"
+                                  >
+                                    আনব্লক করুন
+                                  </button>
                                 ) : (
                                   <button
-                                    onClick={() => setDeletingParticipantId(p.id)}
-                                    title="লগ ডিলিট"
-                                    className="p-1.5 border border-red-100 hover:bg-red-50 rounded text-red-500 hover:border-red-300 transition cursor-pointer"
+                                    onClick={() => handleBlockUser(p)}
+                                    className="px-2.5 py-1 border border-red-200 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white font-bold rounded text-[9px] transition cursor-pointer"
                                   >
-                                    <Trash2 className="h-3.5 w-3.5" />
+                                    স্থায়ী ব্লক করুন
                                   </button>
                                 )}
                               </div>
                             </div>
-
-                            <div className="flex justify-between items-center bg-slate-50 p-1.5 rounded border border-slate-100 text-[9px] text-slate-500">
-                              <span className="flex items-center gap-1">
-                                <Clock className="h-3 w-3 shrink-0" />
-                                {formatTime(p.joinedAt)}
-                              </span>
-                            </div>
-
-                            <div className="flex justify-end pt-1">
-                              {p.blocked ? (
-                                <button
-                                  onClick={() => handleUnblockUser(p.ip, p.deviceId)}
-                                  className="px-2.5 py-1 border border-emerald-250 bg-emerald-50 text-emerald-800 hover:bg-[#d1fae5] font-bold rounded text-[9px] transition cursor-pointer"
-                                >
-                                  আনব্লক করুন
-                                </button>
-                              ) : (
-                                <button
-                                  onClick={() => handleBlockUser(p)}
-                                  className="px-2.5 py-1 border border-red-200 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white font-bold rounded text-[9px] transition cursor-pointer"
-                                >
-                                  স্থায়ী ব্লক করুন
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        ))
+                          );
+                        })
                       )}
                     </div>
                   </div>
@@ -1530,7 +1711,7 @@ export default function AdminPanel() {
                       </div>
                     </div>
 
-                    <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1 custom-scrollbar">
+                    <div className="space-y-2">
                       {filteredBlockedIPs.length === 0 ? (
                         <div className="bg-slate-50 border border-slate-200 rounded-xl p-6 text-center">
                           <p className="text-[10px] text-slate-400 italic font-medium">কোনো ব্লকড আইপি রেকর্ড পাওয়া যায়নি।</p>
