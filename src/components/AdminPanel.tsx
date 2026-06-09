@@ -165,7 +165,7 @@ export default function AdminPanel() {
   const [dateFilter, setDateFilter] = useState(getTodayDateString);
   const [blockedSearchQuery, setBlockedSearchQuery] = useState('');
   const [blockedDateFilter, setBlockedDateFilter] = useState('');
-  const [meetingsDateFilter, setMeetingsDateFilter] = useState('');
+  const [meetingsDateFilter, setMeetingsDateFilter] = useState(getTodayDateString);
 
   // Meeting schedule state
   const [meetingDateInput, setMeetingDateInput] = useState(() => {
@@ -691,6 +691,15 @@ export default function AdminPanel() {
     return matchesSearch && matchesDate;
   });
 
+  // Filtering meetings log list by date
+  const filteredMeetings = meetings.filter((m) => {
+    const activeFilterDate = meetingsDateFilter || getTodayDateString();
+    if (m.meetingDate) {
+      return m.meetingDate === activeFilterDate;
+    }
+    return isSameDay(m.createdAt, activeFilterDate);
+  });
+
   // Calculate public sharing link vs local dev test link
   const { publicLink, testLink } = (() => {
     if (!generatedLink) return { publicLink: '', testLink: '' };
@@ -709,10 +718,10 @@ export default function AdminPanel() {
 
   // --- RENDERING CHASSIS ---
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-900 flex flex-col justify-center items-center p-0 md:p-6 select-text overflow-x-hidden">
+    <div className="h-[100dvh] md:min-h-screen bg-slate-950 text-slate-900 flex flex-col justify-center items-center p-0 md:p-6 select-text overflow-x-hidden">
       
       {/* PHONE FRAME CHASSIS (Desktop Only) */}
-      <div className="w-full min-h-screen md:min-h-[820px] md:max-w-[400px] md:h-[820px] md:border-[12px] md:border-slate-850 md:rounded-[48px] md:shadow-2xl bg-slate-50 flex flex-col relative overflow-hidden">
+      <div className="w-full h-[100dvh] md:h-[820px] md:min-h-[820px] md:max-w-[400px] md:border-[12px] md:border-slate-850 md:rounded-[48px] md:shadow-2xl bg-slate-50 flex flex-col relative overflow-hidden">
         
         {/* PHONE NOTCH / STATUS BAR (Desktop Only) */}
         <div className="hidden md:flex absolute top-0 inset-x-0 h-9 bg-slate-900 justify-between items-center px-6 z-50 text-[10px] text-slate-400 font-mono select-none">
@@ -824,7 +833,7 @@ export default function AdminPanel() {
         ) : (
           
           // 2. MAIN LOGGED-IN ADMIN PANEL (Phone Layout)
-          <div className="flex-1 flex flex-col justify-between bg-slate-50 pt-0 md:pt-9 relative h-full">
+          <div className="flex-1 flex flex-col justify-between bg-slate-50 pt-0 md:pt-9 relative h-full min-h-0 overflow-hidden">
             
             {/* INNER HEADER ACCENTS */}
             <header className="px-4 py-3 bg-[#0f172a] text-white flex justify-between items-center shrink-0 border-b-2 border-amber-500 shadow-sm z-30">
@@ -1163,7 +1172,7 @@ export default function AdminPanel() {
                   {/* Sessions logs preview */}
                   <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-2 border-b border-slate-100">
-                      <h3 className="text-xs font-black text-slate-900 uppercase">পূর্বে তৈরি করা সেশন লগস</h3>
+                      <h3 className="text-xs font-black text-slate-900 uppercase">পূর্বে তৈরি করা সেশন লগস ({filteredMeetings.length})</h3>
                       
                       {/* Interactive Meeting date filter requested at top */}
                       <div className="flex items-center gap-1.5">
@@ -1177,24 +1186,19 @@ export default function AdminPanel() {
                           onChange={(e) => setMeetingsDateFilter(e.target.value)}
                           className="text-[9px] p-1 border border-slate-200 rounded bg-slate-50 font-bold focus:outline-none"
                         />
-                        {meetingsDateFilter && (
+                        {meetingsDateFilter && meetingsDateFilter !== getTodayDateString() && (
                           <button
-                            onClick={() => setMeetingsDateFilter('')}
+                            onClick={() => setMeetingsDateFilter(getTodayDateString())}
                             className="text-[8px] bg-rose-50 text-rose-600 hover:bg-rose-100 px-1.5 py-0.5 rounded border border-rose-200 font-bold cursor-pointer"
                           >
-                            মুছুন
+                            আজকের তারিখ
                           </button>
                         )}
                       </div>
                     </div>
 
-                    <div className="space-y-2 pr-0.5">
+                    <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1 custom-scrollbar">
                       {(() => {
-                        const filteredMeetings = meetings.filter((m) => {
-                          if (!meetingsDateFilter) return true;
-                          return m.meetingDate === meetingsDateFilter;
-                        });
-
                         if (filteredMeetings.length === 0) {
                           return (
                             <p className="text-[10px] text-slate-400 italic text-center py-4">
@@ -1317,7 +1321,7 @@ export default function AdminPanel() {
                   <div className="space-y-3">
                     <h3 className="text-xs font-extrabold text-slate-800">অংশগ্রহণকারীদের বিবরণ ({filteredParticipants.length})</h3>
                     
-                    <div className="space-y-2 pr-0.5">
+                    <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1 custom-scrollbar">
                       {filteredParticipants.length === 0 ? (
                         <p className="text-[10px] text-slate-450 italic text-center py-4">কোনো জয়েনিং লগ পাওয়া যায়নি।</p>
                       ) : (
@@ -1526,7 +1530,7 @@ export default function AdminPanel() {
                       </div>
                     </div>
 
-                    <div className="space-y-2 pr-0.5">
+                    <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1 custom-scrollbar">
                       {filteredBlockedIPs.length === 0 ? (
                         <div className="bg-slate-50 border border-slate-200 rounded-xl p-6 text-center">
                           <p className="text-[10px] text-slate-400 italic font-medium">কোনো ব্লকড আইপি রেকর্ড পাওয়া যায়নি।</p>
