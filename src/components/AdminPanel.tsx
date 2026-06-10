@@ -135,6 +135,7 @@ export default function AdminPanel() {
   const [authMethod, setAuthMethod] = useState<'password' | 'google' | null>(null);
   
   // Login input
+  const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -384,6 +385,7 @@ export default function AdminPanel() {
         setIsAuthenticated(true);
         setAuthMethod('password');
         setPasswordInput('');
+        setEmailInput(''); // Reset email as well
       } else {
         setLoginError('ভুল পাসওয়ার্ড। দয়া করে সঠিক পাসওয়ার্ড দিন। (পাসওয়ার্ড: 212650)');
       }
@@ -837,7 +839,8 @@ export default function AdminPanel() {
   }
 
   function isSameDay(timestamp: any, filterDateStr: string) {
-    if (!timestamp || !filterDateStr) return true;
+    if (!filterDateStr) return true;
+    if (!timestamp) return false;
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
     
     // Parse YYYY-MM-DD manually to prevent UTC timezone offset discrepancies in JavaScript parsing
@@ -860,7 +863,8 @@ export default function AdminPanel() {
     const ipStr = p.ip || '';
     const qStr = (searchQuery || '').toLowerCase();
     const matchesSearch = nameStr.includes(qStr) || ipStr.includes(searchQuery);
-    const matchesDate = dateFilter ? isSameDay(p.joinedAt, dateFilter) : true;
+    const activeDate = dateFilter || getTodayDateString();
+    const matchesDate = isSameDay(p.joinedAt, activeDate);
     return matchesSearch && matchesDate;
   });
 
@@ -871,9 +875,19 @@ export default function AdminPanel() {
     const ipStr = p.ip || '';
     const qStr = (demoSearchQuery || '').toLowerCase();
     const matchesSearch = nameStr.includes(qStr) || gmailStr.includes(qStr) || ipStr.includes(demoSearchQuery);
-    const matchesDate = demoDateFilter ? isSameDay(p.joinedAt, demoDateFilter) : true;
+    const activeDate = demoDateFilter || getTodayDateString();
+    const matchesDate = isSameDay(p.joinedAt, activeDate);
     return matchesSearch && matchesDate;
   });
+
+  // Get counts for "today" specifically to support daily reset counters
+  const todayDateStr = getTodayDateString();
+  const todayParticipantsCount = participants.filter(p => isSameDay(p.joinedAt, todayDateStr)).length;
+  const todayDemoParticipantsCount = demoParticipants.filter(p => isSameDay(p.joinedAt, todayDateStr)).length;
+
+  // Badge calculations showing active dynamic counts (matched active day count)
+  const displayUserCount = filteredParticipants.length;
+  const displayDemoCount = filteredDemoParticipants.length;
 
   // Filtering meetings log list by date
   const filteredMeetings = meetings.filter((m) => {
@@ -949,22 +963,25 @@ export default function AdminPanel() {
               )}
 
               <form onSubmit={handlePasswordLogin} className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-bold text-slate-700">
-                    অ্যাডমিন সিকিউরিটি পাসওয়ার্ড
-                  </label>
-                  <div className="relative">
-                    <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400">
-                      <Lock className="h-4.5 w-4.5" />
-                    </span>
-                    <input
-                      type="password"
-                      required
-                      placeholder="অ্যাডমিন পাসওয়ার্ড টাইপ করুন"
-                      value={passwordInput}
-                      onChange={(e) => setPasswordInput(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-sm transition"
-                    />
+                <div className="space-y-4 flex flex-col items-center">
+                  {/* Password Field */}
+                  <div className="space-y-1.5 w-full">
+                    <label className="block text-xs font-bold text-slate-700 text-center">
+                      অ্যাডমিন পাসওয়ার্ড
+                    </label>
+                    <div className="relative">
+                      <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400">
+                        <Lock className="h-4.5 w-4.5" />
+                      </span>
+                      <input
+                        type="password"
+                        required
+                        placeholder="পাসওয়ার্ড টাইপ করুন"
+                        value={passwordInput}
+                        onChange={(e) => setPasswordInput(e.target.value)}
+                        className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-sm transition text-center"
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -976,7 +993,7 @@ export default function AdminPanel() {
                   {isLoggingIn ? (
                     <Loader2 className="h-4 w-4 animate-spin text-amber-500" />
                   ) : (
-                    <span>পাসওয়ার্ড দিয়ে প্রবেশ করুন</span>
+                    <span>লগইন করুন</span>
                   )}
                 </button>
               </form>
@@ -1167,8 +1184,8 @@ export default function AdminPanel() {
                       className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm select-none hover:border-amber-400 transition cursor-pointer"
                     >
                       <Users className="h-5 w-5 text-amber-500 mb-1" />
-                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">মোট জয়েন লগ</p>
-                      <h3 className="text-xl font-black text-slate-900">{participants.length} জন</h3>
+                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">আজকের জয়েনিং</p>
+                      <h3 className="text-xl font-black text-slate-900">{todayParticipantsCount} জন</h3>
                     </div>
 
                     <div 
@@ -1490,14 +1507,6 @@ export default function AdminPanel() {
                           onChange={(e) => setDateFilter(e.target.value)}
                           className="bg-slate-50 border border-slate-200 rounded p-1 text-[9px] focus:outline-none"
                         />
-                        {dateFilter ? (
-                          <button
-                            onClick={() => setDateFilter('')}
-                            className="text-[9px] border border-sky-200 bg-sky-50 text-sky-700 px-1.5 py-1 rounded hover:bg-sky-500 hover:text-white transition cursor-pointer font-bold shrink-0"
-                          >
-                            সকল দিন
-                          </button>
-                        ) : null}
                         {dateFilter !== getTodayDateString() && (
                           <button
                             onClick={() => setDateFilter(getTodayDateString())}
@@ -1737,18 +1746,10 @@ export default function AdminPanel() {
                           onChange={(e) => setDemoDateFilter(e.target.value)}
                           className="bg-slate-50 border border-slate-200 rounded p-1 text-[9px] focus:outline-none"
                         />
-                        {demoDateFilter ? (
-                          <button
-                            onClick={() => setDemoDateFilter('')}
-                            className="text-[9px] border border-sky-200 bg-sky-50 text-sky-700 px-1.5 py-1 rounded hover:bg-sky-500 hover:text-white transition cursor-pointer font-bold shrink-0"
-                          >
-                            সকল দিন
-                          </button>
-                        ) : null}
                         {demoDateFilter !== getTodayDateString() && (
                           <button
                             onClick={() => setDemoDateFilter(getTodayDateString())}
-                            className="text-[9px] border border-emerald-200 bg-emerald-50 text-emerald-700 px-1.5 py-1 rounded hover:bg-emerald-555 hover:text-white transition cursor-pointer font-bold shrink-0"
+                            className="text-[9px] border border-emerald-200 bg-emerald-50 text-emerald-700 px-1.5 py-1 rounded hover:bg-emerald-600 hover:text-white transition cursor-pointer font-bold shrink-0"
                           >
                             আজকে
                           </button>
@@ -2257,9 +2258,9 @@ export default function AdminPanel() {
               >
                 <Users className="h-4.5 w-4.5 mb-0.5" />
                 <span className="text-[8px] font-black">ইউজার লগ</span>
-                {participants.length > 0 && (
+                {displayUserCount > 0 && (
                   <span className="absolute -top-1 -right-1 px-1 py-0.5 bg-amber-500 text-slate-950 font-black rounded-full text-[6px]">
-                    {participants.length}
+                    {displayUserCount}
                   </span>
                 )}
               </button>
@@ -2272,9 +2273,9 @@ export default function AdminPanel() {
               >
                 <UserCheck className="h-4.5 w-4.5 mb-0.5" />
                 <span className="text-[8px] font-black">ডেমো লগ</span>
-                {demoParticipants.length > 0 && (
+                {displayDemoCount > 0 && (
                   <span className="absolute -top-1 -right-1 px-1 py-0.5 bg-amber-500 text-slate-950 font-black rounded-full text-[6px]">
-                    {demoParticipants.length}
+                    {displayDemoCount}
                   </span>
                 )}
               </button>
