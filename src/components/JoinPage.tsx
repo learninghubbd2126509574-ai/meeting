@@ -24,6 +24,8 @@ import {
 } from "lucide-react";
 import { motion } from "motion/react";
 
+const Marquee = "marquee" as any;
+
 function getBrowserFingerprint(): string {
   const parts = [
     navigator.userAgent,
@@ -1080,23 +1082,27 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
           </div>
         )}
 
-        {!isLoading && !isBlocked && (
-          <div className="flex-1 overflow-y-auto pt-6 md:pt-14 pb-8 flex flex-col bg-slate-50 relative animate-fade-in">
-            {/* Thin Scrolling Notice Bar */}
-            {noticeActive && noticeText.trim() && (
-              <div className="w-full bg-gradient-to-r from-[#02b396] to-[#1b6ffc] text-white py-2 px-3.5 overflow-hidden flex items-center gap-2 select-none shrink-0 sticky md:top-10 top-0 z-40 shadow-md">
-                <span className="inline-flex items-center gap-1.5 bg-white text-[#02b396] px-2 py-0.5 rounded-md text-[9px] font-black shrink-0 tracking-wide uppercase leading-none shadow-sm">
-                  <Bell className="h-3 w-3 text-[#02b396] shrink-0 font-bold" />
-                  <span>ঘোষণা</span>
-                </span>
+        {!isLoading && !isBlocked && noticeActive && noticeText.trim() && (
+          <div className="w-full bg-gradient-to-r from-[#02b396] to-[#1b6ffc] text-white py-2 px-3.5 overflow-hidden flex items-center gap-2 select-none shrink-0 z-40 shadow-md md:mt-10 mt-0">
+            <span className="inline-flex items-center gap-1.5 bg-white text-[#02b396] px-2 py-0.5 rounded-md text-[9px] font-black shrink-0 tracking-wide uppercase leading-none shadow-sm">
+              <Bell className="h-3 w-3 text-[#02b396] shrink-0 font-bold" />
+              <span>ঘোষণা</span>
+            </span>
 
-                <div className="flex-1 overflow-hidden relative h-5 flex items-center">
-                  <div className="absolute whitespace-nowrap animate-marquee text-[11px] font-extrabold font-sans text-white">
-                    {noticeText} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ★ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {noticeText} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ★ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {noticeText}
-                  </div>
-                </div>
-              </div>
-            )}
+            <div className="flex-1 overflow-hidden flex items-center h-5">
+              <Marquee
+                scrollamount="3"
+                direction="left"
+                className="text-[11px] font-extrabold font-sans whitespace-nowrap text-white w-full"
+              >
+                {noticeText} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ★ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {noticeText} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ★ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {noticeText}
+              </Marquee>
+            </div>
+          </div>
+        )}
+
+        {!isLoading && !isBlocked && (
+          <div className="flex-1 overflow-y-auto pt-4 pb-8 flex flex-col bg-slate-50 relative animate-fade-in">
 
             <div className="flex-1 flex flex-col justify-between space-y-6 px-5 mt-4">
               {/* Premium Luxury Header Banner (Redesigned) */}

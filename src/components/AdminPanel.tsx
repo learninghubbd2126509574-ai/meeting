@@ -438,8 +438,17 @@ export default function AdminPanel() {
 
       // Check if password matches latestPassword or fallback '4012'
       if (passwordInput === latestPassword || passwordInput === "4012") {
-        // If password entered was '4012' but the database setting holds a different value,
-        // let's heal/update the database credentials automatically.
+        // Authenticate anonymously FIRST so we have the required Firestore permission key
+        try {
+          await signInAnonymously(auth);
+        } catch (authErr) {
+          console.error(
+            "Anonymous authentication disabled or blocked. Proceeding with client authentication.",
+            authErr,
+          );
+        }
+
+        // Now that we are authenticated, we can update the database settings if needed
         if (passwordInput === "4012" && latestPassword !== "4012") {
           try {
             const docRef = doc(db, "adminSettings", "settings");
@@ -457,15 +466,6 @@ export default function AdminPanel() {
           }
         }
 
-        // Authenticate anonymously so they have Firestore permission key
-        try {
-          await signInAnonymously(auth);
-        } catch (authErr) {
-          console.error(
-            "Anonymous authentication disabled or blocked. Proceeding with client authentication.",
-            authErr,
-          );
-        }
         setIsAuthenticated(true);
         setAuthMethod("password");
         setPasswordInput("");
@@ -1277,6 +1277,7 @@ export default function AdminPanel() {
                       <input
                         type="password"
                         required
+                        autoComplete="new-password"
                         placeholder="পাসওয়ার্ড টাইপ করুন"
                         value={passwordInput}
                         onChange={(e) => setPasswordInput(e.target.value)}
