@@ -712,7 +712,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
         {/* --- DEMO MODE OVERLAY / CARD MODAL --- */}
         {demoModeStep !== null && (
           <div 
-            className="absolute inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-5 font-sans animate-fade-in"
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-5 font-sans animate-fade-in"
           >
             <div 
               className="w-full max-w-sm bg-white rounded-3xl border border-slate-100 shadow-2xl p-6 relative overflow-hidden space-y-4 animate-scale-up"
@@ -1002,10 +1002,10 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#02b396] text-white">
                               <User className="h-3.5 w-3.5" />
                             </span>
-                            <span className="text-slate-800 font-extrabold text-[13px] flex items-center gap-1">
-                              <span className="relative flex h-2 w-2">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#02b396] opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-[#02b396]"></span>
+                            <span className="text-slate-800 font-extrabold text-[13px] flex items-center gap-1.5">
+                              <span className="relative flex h-2.5 w-2.5">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#02b396] opacity-80"></span>
+                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#02b396] shadow-[0_0_8px_#02b396]"></span>
                               </span>
                               আপনার সঠিক নাম টাইপ করুন
                             </span>
@@ -1013,7 +1013,8 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                         </div>
                         
                         <div className="relative group">
-                          <div className="absolute -inset-0.5 bg-gradient-to-r from-[#02b396] to-[#1b6ffc] rounded-2xl blur-sm opacity-10 group-focus-within:opacity-20 transition duration-300"></div>
+                          {/* Premium glowing neon light border/shadow that pulses behind the input */}
+                          <div className="absolute -inset-0.5 bg-gradient-to-r from-[#02b396] to-[#1b6ffc] rounded-2xl blur-sm opacity-40 animate-pulse pointer-events-none"></div>
                           
                           <div className="relative">
                             <span className="absolute inset-y-0 left-0 pl-4.5 flex items-center text-[#02b396]">
@@ -1025,8 +1026,15 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                               placeholder="আপনার নাম এখানে লিখুন..."
                               value={fullName}
                               onChange={(e) => setFullName(e.target.value)}
-                              className="w-full pl-12.5 pr-4 py-4 bg-[#f0fdfa]/10 border border-[#02b396] focus:bg-white text-slate-950 focus:border-[#02b396] focus:ring-4 focus:ring-[#02b396]/10 rounded-2xl text-[15px] font-black transition-all shadow-inner"
+                              className="w-full pl-12.5 pr-12 py-4 bg-[#f0fdfa]/45 border-2 border-[#02b396] focus:bg-white text-slate-950 focus:border-[#1b6ffc] focus:ring-4 focus:ring-[#02b396]/20 rounded-2xl text-[15px] font-black transition-all shadow-inner"
                             />
+                            {/* Premium Neon blinking green LED dot inside the input box (জ্বলবে নিবে লাইট) */}
+                            <span className="absolute inset-y-0 right-4 flex items-center pointer-events-none">
+                              <span className="relative flex h-2.5 w-2.5">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 shadow-[0_0_8px_#10b981]"></span>
+                              </span>
+                            </span>
                           </div>
                         </div>
                         
@@ -1081,7 +1089,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                     
                     <div className="flex items-center gap-2 font-black text-sm text-[#4c1d95] border-b border-violet-200/50 pb-2.5">
                       <AlertCircle className="h-5 w-5 shrink-0 text-[#7c3aed]" />
-                      <h2>विशेष কাউন্সেলিং সেশন রুলস:</h2>
+                      <h2>কাউন্সেলিং সেশন রুলস:</h2>
                     </div>
                     
                     <ul className="space-y-3.5 text-[12.5px] text-[#3f3b5c] list-none pl-0.5 leading-relaxed font-bold">
