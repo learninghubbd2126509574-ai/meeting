@@ -156,7 +156,7 @@ export default function AdminPanel() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   // Firestore Saved Settings
-  const [savedPassword, setSavedPassword] = useState("212650");
+  const [savedPassword, setSavedPassword] = useState("4012");
   const [preventRepeatJoins, setPreventRepeatJoins] = useState(true);
   const [publicLinkActive, setPublicLinkActive] = useState(true);
   const [noticeText, setNoticeText] = useState("");
@@ -255,7 +255,7 @@ export default function AdminPanel() {
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           const data = docSnap.data();
-          setSavedPassword(data.password || "212650");
+          setSavedPassword(data.password || "4012");
           setPreventRepeatJoins(data.preventRepeatJoins !== false);
           setPublicLinkActive(data.publicLinkActive !== false);
           setNoticeText(data.noticeText || "");
@@ -265,7 +265,7 @@ export default function AdminPanel() {
         } else {
           // Initialize settings collection
           await setDoc(docRef, {
-            password: "212650",
+            password: "4012",
             preventRepeatJoins: true,
             publicLinkActive: true,
             noticeText: "",
@@ -273,7 +273,7 @@ export default function AdminPanel() {
             demoModeActive: false,
             demoCode: "1234",
           });
-          setSavedPassword("212650");
+          setSavedPassword("4012");
           setPreventRepeatJoins(true);
           setPublicLinkActive(true);
           setNoticeText("");
@@ -377,7 +377,7 @@ export default function AdminPanel() {
       (snap) => {
         if (snap.exists()) {
           const data = snap.data();
-          setSavedPassword(data.password || "212650");
+          setSavedPassword(data.password || "4012");
           setPreventRepeatJoins(data.preventRepeatJoins !== false);
           setPublicLinkActive(data.publicLinkActive !== false);
           setNoticeText(data.noticeText || "");
@@ -434,24 +434,24 @@ export default function AdminPanel() {
 
     try {
       // Authenticate locally against already loaded savedPassword (instantly)
-      const latestPassword = savedPassword || "212650";
+      const latestPassword = savedPassword || "4012";
 
-      // Check if password matches latestPassword or fallback '212650'
-      if (passwordInput === latestPassword || passwordInput === "212650") {
-        // If password entered was '212650' but the database setting holds a different value,
+      // Check if password matches latestPassword or fallback '4012'
+      if (passwordInput === latestPassword || passwordInput === "4012") {
+        // If password entered was '4012' but the database setting holds a different value,
         // let's heal/update the database credentials automatically.
-        if (passwordInput === "212650" && latestPassword !== "212650") {
+        if (passwordInput === "4012" && latestPassword !== "4012") {
           try {
             const docRef = doc(db, "adminSettings", "settings");
             await setDoc(
               docRef,
-              { password: "212650", preventRepeatJoins: preventRepeatJoins },
+              { password: "4012", preventRepeatJoins: preventRepeatJoins },
               { merge: true },
             );
-            setSavedPassword("212650");
+            setSavedPassword("4012");
           } catch (writeError) {
             console.error(
-              "Failed to sync Firestore settings to 212650",
+              "Failed to sync Firestore settings to 4012",
               writeError,
             );
           }
@@ -472,7 +472,7 @@ export default function AdminPanel() {
         setEmailInput(""); // Reset email as well
       } else {
         setLoginError(
-          "ভুল পাসওয়ার্ড। দয়া করে সঠিক পাসওয়ার্ড দিন। (পাসওয়ার্ড: 212650)",
+          "ভুল পাসওয়ার্ড। দয়া করে সঠিক পাসওয়ার্ড দিন।",
         );
       }
     } catch (err) {
