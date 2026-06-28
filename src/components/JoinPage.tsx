@@ -892,13 +892,13 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
 
             <div className="flex-1 flex flex-col justify-between space-y-6 px-5 mt-4">
               {/* Premium Luxury Header Banner (Redesigned) */}
-              <div className="bg-white rounded-3xl p-6 border border-slate-150 shadow-[0_8px_30px_rgb(0,0,0,0.03)] space-y-4 shrink-0 relative overflow-hidden text-center">
-                {/* Decorative Amber/Teal Elegant Accents */}
-                <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-[#02b396] to-[#1b6ffc]"></div>
-                <div className="absolute -top-12 -right-12 w-28 h-28 bg-teal-500/[0.03] rounded-full blur-xl pointer-events-none"></div>
-                <div className="absolute -bottom-12 -left-12 w-28 h-28 bg-blue-500/[0.03] rounded-full blur-xl pointer-events-none"></div>
+              <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-[0_15px_35px_rgba(0,0,0,0.03)] space-y-5 shrink-0 relative overflow-hidden text-center">
+                {/* Decorative Premium Teal-Blue Elegant Top Gradient Line */}
+                <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-[#02b396] via-[#10b981] to-[#1b6ffc]"></div>
+                <div className="absolute -top-12 -right-12 w-28 h-28 bg-teal-500/[0.02] rounded-full blur-xl pointer-events-none"></div>
+                <div className="absolute -bottom-12 -left-12 w-28 h-28 bg-blue-500/[0.02] rounded-full blur-xl pointer-events-none"></div>
 
-                <div className="space-y-2">
+                <div className="space-y-2.5">
                   <div 
                     onClick={() => {
                       if (demoModeActive) {
@@ -909,34 +909,43 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                         setDemoError(null);
                       }
                     }}
-                    className={`inline-flex items-center gap-1.5 bg-blue-50/70 border border-blue-200/60 px-3.5 py-1 rounded-full text-[10px] font-extrabold text-blue-800 shadow-sm uppercase tracking-wide select-none ${
+                    className={`inline-flex items-center gap-2 bg-gradient-to-r from-[#02b396]/5 to-[#1b6ffc]/5 border border-[#02b396]/20 px-4 py-1.5 rounded-full text-[10px] font-black text-[#02b396] shadow-[0_2px_10px_rgba(2,179,150,0.02)] uppercase tracking-widest select-none ${
                       demoModeActive 
-                        ? 'cursor-pointer hover:bg-blue-100 hover:border-blue-300 transition duration-150 active:scale-95' 
+                        ? 'cursor-pointer hover:from-[#02b396]/10 hover:to-[#1b6ffc]/10 hover:border-[#02b396]/30 transition duration-150 active:scale-95' 
                         : ''
                     }`}
                   >
-                    <span className="relative flex h-1.5 w-1.5">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" style={{ animationDuration: '2s' }}></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500 shadow-[0_0_6px_#10b981]"></span>
                     </span>
                     <span>সেশন লাইভ পোর্টাল</span>
                   </div>
                   
-                  <h1 className="text-2xl font-black tracking-tight text-slate-900 font-sans">
+                  <h1 className="text-3xl font-black tracking-widest text-slate-900 font-sans">
                     <span className="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 bg-clip-text text-transparent">UNITY</span>
-                    <span className="bg-gradient-to-r from-[#02b396] to-[#1b6ffc] bg-clip-text text-transparent ml-1.5">EARNING</span>
+                    <span className="bg-gradient-to-r from-[#02b396] to-[#1b6ffc] bg-clip-text text-transparent ml-2">EARNING</span>
                   </h1>
-                  <p className="text-[12px] font-bold text-slate-500 tracking-wide">
+                  <p className="text-[11px] font-black text-slate-400 tracking-widest uppercase flex items-center justify-center gap-1.5">
+                    <span className="h-[1px] w-4 bg-slate-200"></span>
                     অফিসিয়াল সেশন জয়েনিং পোর্টাল
+                    <span className="h-[1px] w-4 bg-slate-200"></span>
                   </p>
                 </div>
 
                 {meetingDate && (
-                  <div className="inline-flex items-center gap-2.5 bg-blue-50/60 border border-blue-200 text-blue-900 px-4 py-2.5 rounded-2xl text-[12.5px] font-black shadow-sm">
-                    <span className="flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-full bg-[#1b6ffc] text-white shadow-sm">
-                      <Calendar className="h-4 w-4" />
-                    </span>
-                    <span>সেশন সময়: <span className="text-[#1b6ffc] font-black">{formatMeetingDateTime(meetingDate, meetingTime)}</span></span>
+                  <div className="flex items-center gap-4 bg-gradient-to-br from-slate-50 to-white border border-slate-150/80 rounded-2xl p-3.5 shadow-[0_4px_20px_rgba(27,111,252,0.02)] max-w-sm mx-auto">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#1b6ffc] to-[#02b396] text-white shadow-md relative">
+                      <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75" style={{ animationDuration: '3.5s' }}></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-400 shadow-[0_0_4px_#2dd4bf]"></span>
+                      </span>
+                      <Calendar className="h-5 w-5" />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <p className="text-[9.5px] text-slate-400 font-black tracking-widest uppercase mb-0.5">সেশন সময়সূচী</p>
+                      <p className="text-slate-800 text-[13.5px] font-black tracking-tight">{formatMeetingDateTime(meetingDate, meetingTime)}</p>
+                    </div>
                   </div>
                 )}
               </div>
