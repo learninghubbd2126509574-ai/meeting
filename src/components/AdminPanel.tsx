@@ -644,6 +644,7 @@ export default function AdminPanel() {
       await setDoc(blockRef, {
         ip: demoUser.ip,
         deviceId: demoUser.deviceId || 'Unknown',
+        uid: demoUser.uid || 'Unknown',
         blockedAt: serverTimestamp(),
         name: demoUser.name + ' (Demo)'
       });
@@ -653,6 +654,19 @@ export default function AdminPanel() {
         const deviceRef = doc(db, 'blockedDevices', demoUser.deviceId);
         await setDoc(deviceRef, {
           deviceId: demoUser.deviceId,
+          browserFingerprint: demoUser.browserFingerprint || '',
+          uid: demoUser.uid || 'Unknown',
+          blockedAt: serverTimestamp(),
+          name: demoUser.name + ' (Demo)'
+        });
+      }
+
+      // Block UID
+      if (demoUser.uid && demoUser.uid !== 'Unknown') {
+        const uidRef = doc(db, 'blockedUIDs', demoUser.uid);
+        await setDoc(uidRef, {
+          uid: demoUser.uid,
+          deviceId: demoUser.deviceId || 'Unknown',
           blockedAt: serverTimestamp(),
           name: demoUser.name + ' (Demo)'
         });
@@ -675,7 +689,7 @@ export default function AdminPanel() {
     }
   }
 
-  // 9. Block user (adds IP to blockedIPs and flags participant as blocked)
+  // 9. Block user (adds IP to blockedIPs, blockedDevices, blockedUIDs and flags participant as blocked)
   async function handleBlockUser(participant: Participant) {
     try {
       // Block the IP
@@ -683,6 +697,7 @@ export default function AdminPanel() {
       await setDoc(blockRef, {
         ip: participant.ip,
         deviceId: participant.deviceId,
+        uid: participant.uid || 'Unknown',
         blockedAt: serverTimestamp(),
         name: participant.name
       });
@@ -692,14 +707,29 @@ export default function AdminPanel() {
         const deviceRef = doc(db, 'blockedDevices', participant.deviceId);
         await setDoc(deviceRef, {
           deviceId: participant.deviceId,
-          blockedAt: serverTimestamp()
+          browserFingerprint: participant.browserFingerprint || '',
+          uid: participant.uid || 'Unknown',
+          blockedAt: serverTimestamp(),
+          name: participant.name
         });
       }
 
-      // Mark all participant entries with same IP or Device ID as blocked
+      // Also block the UID
+      if (participant.uid && participant.uid !== 'Unknown') {
+        const uidRef = doc(db, 'blockedUIDs', participant.uid);
+        await setDoc(uidRef, {
+          uid: participant.uid,
+          deviceId: participant.deviceId || 'Unknown',
+          blockedAt: serverTimestamp(),
+          name: participant.name
+        });
+      }
+
+      // Mark all participant entries with same IP, Device ID or UID as blocked
       const matchedParts = participants.filter(p => 
         p.ip === participant.ip || 
-        (participant.deviceId !== 'Unknown' && p.deviceId === participant.deviceId)
+        (participant.deviceId !== 'Unknown' && p.deviceId === participant.deviceId) ||
+        (participant.uid && participant.uid !== 'Unknown' && p.uid === participant.uid)
       );
       
       for (const p of matchedParts) {
@@ -727,6 +757,7 @@ export default function AdminPanel() {
       // Gather unique attributes
       const uniqueIPs = Array.from(new Set(selectedParts.map(p => p.ip).filter(Boolean))) as string[];
       const uniqueDevices = Array.from(new Set(selectedParts.map(p => p.deviceId).filter(d => d && d !== 'Unknown'))) as string[];
+      const uniqueUIDs = Array.from(new Set(selectedParts.map(p => p.uid).filter(u => u && u !== 'Unknown'))) as string[];
 
       // A: Add IP to blocklist
       for (const ip of uniqueIPs) {
@@ -735,6 +766,7 @@ export default function AdminPanel() {
         await setDoc(blockRef, {
           ip: ip,
           deviceId: part?.deviceId || 'Unknown',
+          uid: part?.uid || 'Unknown',
           blockedAt: serverTimestamp(),
           name: part?.name || 'Bulk Blocked'
         });
@@ -742,17 +774,34 @@ export default function AdminPanel() {
 
       // B: Add Device ID to blocklist (optional bypass logic)
       for (const devId of uniqueDevices) {
+        const part = selectedParts.find(p => p.deviceId === devId);
         const deviceRef = doc(db, 'blockedDevices', devId);
         await setDoc(deviceRef, {
           deviceId: devId,
-          blockedAt: serverTimestamp()
+          browserFingerprint: part?.browserFingerprint || '',
+          uid: part?.uid || 'Unknown',
+          blockedAt: serverTimestamp(),
+          name: part?.name || 'Bulk Blocked'
         });
       }
 
-      // C: Update blocked status for all matching participants in local view context
+      // C: Add UID to blocklist
+      for (const uId of uniqueUIDs) {
+        const part = selectedParts.find(p => p.uid === uId);
+        const uidRef = doc(db, 'blockedUIDs', uId);
+        await setDoc(uidRef, {
+          uid: uId,
+          deviceId: part?.deviceId || 'Unknown',
+          blockedAt: serverTimestamp(),
+          name: part?.name || 'Bulk Blocked'
+        });
+      }
+
+      // D: Update blocked status for all matching participants in local view context
       const matchedAll = participants.filter(p => 
         uniqueIPs.includes(p.ip) || 
-        (p.deviceId !== 'Unknown' && uniqueDevices.includes(p.deviceId))
+        (p.deviceId !== 'Unknown' && uniqueDevices.includes(p.deviceId)) ||
+        (p.uid !== 'Unknown' && uniqueUIDs.includes(p.uid))
       );
 
       for (const p of matchedAll) {
@@ -769,8 +818,8 @@ export default function AdminPanel() {
     }
   }
 
-  // 10. Unblock user (removes IP from blockedIPs and updates participant flags)
-  async function handleUnblockUser(targetIP: string, targetDeviceId?: string) {
+  // 10. Unblock user (removes IP from blockedIPs, blockedDevices, blockedUIDs and updates participant flags)
+  async function handleUnblockUser(targetIP: string, targetDeviceId?: string, targetUid?: string) {
     try {
       // Unblock IP
       const blockRef = doc(db, 'blockedIPs', targetIP);
@@ -782,13 +831,25 @@ export default function AdminPanel() {
         await deleteDoc(deviceRef);
       }
 
-      // If we don't have deviceId (e.g. unblocking from list tab where only IP is shown and deviceId might be missing in older records)
-      // We try to find any deviceId in participants list that matches this IP
-      const matchedParticipants = participants.filter(p => p.ip === targetIP);
-      
+      // Unblock UID if exists
+      let finalUid = targetUid;
+      if (!finalUid) {
+        // Look up UID from participants list matching targetIP or targetDeviceId
+        const found = participants.find(p => p.ip === targetIP || (targetDeviceId && targetDeviceId !== 'Unknown' && p.deviceId === targetDeviceId));
+        if (found && found.uid) {
+          finalUid = found.uid;
+        }
+      }
+
+      if (finalUid && finalUid !== 'Unknown') {
+        const uidRef = doc(db, 'blockedUIDs', finalUid);
+        await deleteDoc(uidRef);
+      }
+
       const matchedParts = participants.filter(p => 
         p.ip === targetIP || 
-        (targetDeviceId && targetDeviceId !== 'Unknown' && p.deviceId === targetDeviceId)
+        (targetDeviceId && targetDeviceId !== 'Unknown' && p.deviceId === targetDeviceId) ||
+        (finalUid && finalUid !== 'Unknown' && p.uid === finalUid)
       );
       
       for (const p of matchedParts) {
@@ -861,11 +922,17 @@ export default function AdminPanel() {
   const filteredParticipants = participants.filter(p => {
     const nameStr = (p.name || '').toLowerCase();
     const ipStr = p.ip || '';
-    const qStr = (searchQuery || '').toLowerCase();
-    const matchesSearch = nameStr.includes(qStr) || ipStr.includes(searchQuery);
-    const activeDate = dateFilter || getTodayDateString();
-    const matchesDate = isSameDay(p.joinedAt, activeDate);
-    return matchesSearch && matchesDate;
+    const uidStr = (p.uid || p.deviceId || '').toLowerCase();
+    const qStr = (searchQuery || '').trim().toLowerCase();
+    
+    if (qStr) {
+      // If searching, ignore the date filter so they can find records on any day
+      return nameStr.includes(qStr) || ipStr.includes(qStr) || uidStr.includes(qStr);
+    } else {
+      // Normal flow: filter by selected date (defaults to today)
+      const activeDate = dateFilter || getTodayDateString();
+      return isSameDay(p.joinedAt, activeDate);
+    }
   });
 
   // Filtering demo participants log list
@@ -873,11 +940,17 @@ export default function AdminPanel() {
     const nameStr = (p.name || '').toLowerCase();
     const gmailStr = (p.gmail || '').toLowerCase();
     const ipStr = p.ip || '';
-    const qStr = (demoSearchQuery || '').toLowerCase();
-    const matchesSearch = nameStr.includes(qStr) || gmailStr.includes(qStr) || ipStr.includes(demoSearchQuery);
-    const activeDate = demoDateFilter || getTodayDateString();
-    const matchesDate = isSameDay(p.joinedAt, activeDate);
-    return matchesSearch && matchesDate;
+    const uidStr = (p.uid || p.deviceId || '').toLowerCase();
+    const qStr = (demoSearchQuery || '').trim().toLowerCase();
+    
+    if (qStr) {
+      // If searching, ignore the date filter so they can find records on any day
+      return nameStr.includes(qStr) || gmailStr.includes(qStr) || ipStr.includes(qStr) || uidStr.includes(qStr);
+    } else {
+      // Normal flow: filter by selected date (defaults to today)
+      const activeDate = demoDateFilter || getTodayDateString();
+      return isSameDay(p.joinedAt, activeDate);
+    }
   });
 
   // Get counts for "today" specifically to support daily reset counters
@@ -1653,7 +1726,7 @@ export default function AdminPanel() {
                                     </h4>
                                     <div className="flex flex-col gap-0.5 mt-0.5">
                                       <span className="font-mono text-[9px] text-slate-400 block">IP: <strong className="text-amber-700">{p.ip}</strong></span>
-                                      <span className="font-mono text-[9px] text-slate-400 block">UID: <strong className="text-slate-600">{p.deviceId?.substring(p.deviceId.length - 8) || 'N/A'}</strong></span>
+                                      <span className="font-mono text-[9px] text-slate-400 block">UID: <strong className="text-amber-700">{p.uid || p.deviceId?.substring(p.deviceId.length - 8) || 'N/A'}</strong></span>
                                     </div>
                                   </div>
                                 </div>
@@ -1696,7 +1769,7 @@ export default function AdminPanel() {
                               <div className="flex justify-end pt-1">
                                 {p.blocked ? (
                                   <button
-                                    onClick={() => handleUnblockUser(p.ip, p.deviceId)}
+                                    onClick={() => handleUnblockUser(p.ip, p.deviceId, p.uid)}
                                     className="px-2.5 py-1 border border-emerald-250 bg-emerald-50 text-emerald-800 hover:bg-[#d1fae5] font-bold rounded text-[9px] transition cursor-pointer"
                                   >
                                     আনব্লক করুন
@@ -1797,6 +1870,7 @@ export default function AdminPanel() {
                                   {p.gmail && <p className="text-[10px] text-emerald-600 font-extrabold">{p.gmail}</p>}
                                   <div className="flex flex-col gap-0.5 mt-1 font-mono text-[9px] text-slate-550 leading-relaxed">
                                     <span>IP: <strong className="text-slate-800">{p.ip || 'N/A'}</strong></span>
+                                    <span>UID: <strong className="text-amber-700">{p.uid || p.deviceId?.substring(p.deviceId.length - 8) || 'N/A'}</strong></span>
                                     <span>ডিভাইস আইডি: <strong className="text-slate-800">{p.deviceId ? p.deviceId.substring(0, 16) + '...' : 'Unknown'}</strong></span>
                                     <span>জয়েন টাইম: <strong className="text-slate-850">{p.joinedAt ? new Date(p.joinedAt.seconds * 1000).toLocaleString('bn-BD', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true }) : 'N/A'}</strong></span>
                                   </div>
@@ -1986,11 +2060,14 @@ export default function AdminPanel() {
                           <div key={b.ip} className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm flex justify-between items-center gap-4 text-xs">
                             <div className="space-y-0.5 truncate">
                               <span className="font-mono font-bold text-red-600 block truncate">{b.ip}</span>
+                              {b.uid && b.uid !== 'Unknown' && (
+                                <span className="font-mono text-[9.5px] text-amber-700 block">UID: <strong>{b.uid}</strong></span>
+                              )}
                               <span className="text-[10px] text-slate-600 font-semibold block">{b.name}</span>
                               <span className="text-[9px] text-slate-400 block">লগ করা হয়েছে: {formatTime(b.blockedAt)}</span>
                             </div>
                             <button
-                              onClick={() => handleUnblockUser(b.ip, b.deviceId)}
+                              onClick={() => handleUnblockUser(b.ip, b.deviceId, b.uid)}
                               className="px-3 py-1.5 border border-emerald-250 bg-emerald-50 text-[#047857] hover:bg-[#d1fae5] font-bold rounded-lg text-[9px] transition cursor-pointer shrink-0"
                             >
                               ব্লক বাতিল

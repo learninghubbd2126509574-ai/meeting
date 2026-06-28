@@ -6,6 +6,27 @@ import { motion } from 'motion/react';
 
 const Marquee = 'marquee' as any;
 
+function getBrowserFingerprint(): string {
+  const parts = [
+    navigator.userAgent,
+    navigator.language || 'bn',
+    screen.width,
+    screen.height,
+    screen.colorDepth,
+    new Date().getTimezoneOffset(),
+    navigator.hardwareConcurrency || 'unknown',
+    navigator.maxTouchPoints || 'unknown'
+  ];
+  const rawString = parts.join('|');
+  let hash = 0;
+  for (let i = 0; i < rawString.length; i++) {
+    const char = rawString.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return 'fp_' + Math.abs(hash).toString(16);
+}
+
 interface JoinPageProps {
   meetingId: string;
 }
@@ -14,11 +35,13 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
   const [fullName, setFullName] = useState('');
   const [ipAddress, setIpAddress] = useState<string>('যাচাই হচ্ছে...');
   const [deviceId, setDeviceId] = useState<string | null>(null);
+  const [uid, setUid] = useState<string | null>(null);
   const [isIpBlocked, setIsIpBlocked] = useState<boolean>(false);
   const [isDeviceBlocked, setIsDeviceBlocked] = useState<boolean>(false);
+  const [isUidBlocked, setIsUidBlocked] = useState<boolean>(false);
   const [isVPN, setIsVPN] = useState<boolean>(false);
 
-  const isBlocked = isIpBlocked || isDeviceBlocked || isVPN;
+  const isBlocked = isIpBlocked || isDeviceBlocked || isUidBlocked || isVPN;
   const [alreadyJoined, setAlreadyJoined] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -46,6 +69,8 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
   useEffect(() => {
     let unsubMeeting: (() => void) | null = null;
     let unsubBlockDevice: (() => void) | null = null;
+    let unsubBlockFp: (() => void) | null = null;
+    let unsubBlockUid: (() => void) | null = null;
     let unsubSettings: (() => void) | null = null;
 
     // Fast parallel IP fetching with timeout to guarantee responsiveness under slow connections
@@ -120,13 +145,44 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
         setIsLoading(true);
         setErrorMessage(null);
 
-        // A. Persistent Device ID
+        // A. Persistent Device ID (triple storage fallback for ultimate bypass protection)
         let dId = localStorage.getItem('unity_device_id');
         if (!dId) {
-          dId = `dev_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
-          localStorage.setItem('unity_device_id', dId);
+          const cookieMatch = document.cookie.match(/(?:^|; )unity_device_id=([^;]*)/);
+          if (cookieMatch) {
+            dId = decodeURIComponent(cookieMatch[1]);
+          }
         }
+        if (!dId) {
+          dId = sessionStorage.getItem('unity_device_id');
+        }
+        if (!dId) {
+          dId = `dev_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+        }
+        localStorage.setItem('unity_device_id', dId);
+        sessionStorage.setItem('unity_device_id', dId);
+        document.cookie = `unity_device_id=${encodeURIComponent(dId)}; max-age=315360000; path=/; SameSite=Lax`;
         setDeviceId(dId);
+
+        // A.2 Persistent User ID (UID) with multiple layers of fallback storage
+        let uId = localStorage.getItem('unity_uid');
+        if (!uId) {
+          const cookieMatch = document.cookie.match(/(?:^|; )unity_uid=([^;]*)/);
+          if (cookieMatch) {
+            uId = decodeURIComponent(cookieMatch[1]);
+          }
+        }
+        if (!uId) {
+          uId = sessionStorage.getItem('unity_uid');
+        }
+        if (!uId) {
+          // Generate a highly distinct readable UID (e.g. UID-582910)
+          uId = `UID-${100000 + Math.floor(Math.random() * 900000)}`;
+        }
+        localStorage.setItem('unity_uid', uId);
+        sessionStorage.setItem('unity_uid', uId);
+        document.cookie = `unity_uid=${encodeURIComponent(uId)}; max-age=315360000; path=/; SameSite=Lax`;
+        setUid(uId);
 
         // B. Fetch IP (With parallel race & swift fallback for slower internet)
         const detectedIp = await getIpWithTimeout();
@@ -149,7 +205,27 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
         // C. Live Device Block Listener
         if (dId) {
           unsubBlockDevice = onSnapshot(doc(db, 'blockedDevices', dId), (snap) => {
-            setIsDeviceBlocked(snap.exists());
+            if (snap.exists()) {
+              setIsDeviceBlocked(true);
+            }
+          });
+        }
+
+        // C.2. Fallback Browser Fingerprint Listener to prevent dynamic IP + cache clear bypasses
+        const fp = getBrowserFingerprint();
+        const qFp = query(collection(db, 'blockedDevices'), where('browserFingerprint', '==', fp));
+        unsubBlockFp = onSnapshot(qFp, (snap) => {
+          if (!snap.empty) {
+            setIsDeviceBlocked(true);
+          }
+        });
+
+        // C.3. Live UID Block Listener
+        if (uId) {
+          unsubBlockUid = onSnapshot(doc(db, 'blockedUIDs', uId), (snap) => {
+            if (snap.exists()) {
+              setIsUidBlocked(true);
+            }
           });
         }
 
@@ -194,7 +270,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
       }
     }
 
-    // Safety fallback timer for slow internet (releases overlay spinner after 4 seconds on high latency)
+    // Safety fallback timer for slow internet (releases overlay spinner after 2 seconds on high latency)
     const fallbackTimer = setTimeout(() => {
       setIsLoading(current => {
         if (current) {
@@ -203,7 +279,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
         }
         return current;
       });
-    }, 4000);
+    }, 2000);
 
     setupListeners();
 
@@ -211,6 +287,8 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
       clearTimeout(fallbackTimer);
       if (unsubMeeting) unsubMeeting();
       if (unsubBlockDevice) unsubBlockDevice();
+      if (unsubBlockFp) unsubBlockFp();
+      if (unsubBlockUid) unsubBlockUid();
       if (unsubSettings) unsubSettings();
     };
   }, [meetingId]);
@@ -230,6 +308,14 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
     };
   }, [ipAddress]);
 
+  // Helper helper to wrap promises with a timeout for slow network resilience
+  const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number, fallbackValue: T): Promise<T> => {
+    return Promise.race([
+      promise,
+      new Promise<T>((resolve) => setTimeout(() => resolve(fallbackValue), timeoutMs))
+    ]);
+  };
+
   // 2. Submit join request
   async function handleJoin(e: React.FormEvent) {
     e.preventDefault();
@@ -238,10 +324,9 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
       setErrorMessage("দুঃখিত, সাধারণ লিংকের মাধ্যমে জয়েন করা বর্তমানে বন্ধ রাখা হয়েছে।");
       return;
     }
-    if (!ipAddress || ipAddress === 'যাচাই হচ্ছে...') {
-      setErrorMessage("আপনার নিরাপত্তা ব্যবস্থা যাচাই করা হচ্ছে। অনুগ্রহ করে একটু অপেক্ষা করুন।");
-      return;
-    }
+
+    // Low-network resilience: If IP is still loading or blank, default to 'Unknown' and let them pass
+    const finalIp = (!ipAddress || ipAddress === 'যাচাই হচ্ছে...') ? 'Unknown' : ipAddress;
 
     try {
       setIsSubmitting(true);
@@ -253,45 +338,74 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
         return;
       }
 
-      // 2. Perform one final quick block check from DB
-      if (ipAddress && ipAddress !== 'Unknown') {
+      // 2. Perform one final quick block check from DB (with 1200ms timeout for slow network)
+      if (finalIp && finalIp !== 'Unknown') {
         try {
-          const blockSnap = await getDoc(doc(db, 'blockedIPs', ipAddress));
+          const blockSnap = await withTimeout(
+            getDoc(doc(db, 'blockedIPs', finalIp)),
+            1200,
+            { exists: () => false } as any
+          );
           if (blockSnap.exists()) {
             setIsIpBlocked(true);
             setIsSubmitting(false);
             return;
           }
         } catch (e) {
-          console.warn("DB block check failed, continuing join flow", e);
+          console.warn("DB IP block check timed out/failed, bypassing for safety", e);
         }
       }
 
       if (deviceId && deviceId !== 'Unknown') {
         try {
-          const deviceSnap = await getDoc(doc(db, 'blockedDevices', deviceId));
+          const deviceSnap = await withTimeout(
+            getDoc(doc(db, 'blockedDevices', deviceId)),
+            1200,
+            { exists: () => false } as any
+          );
           if (deviceSnap.exists()) {
             setIsDeviceBlocked(true);
             setIsSubmitting(false);
             return;
           }
         } catch (e) {
-          console.warn("DB device block check failed, continuing join flow", e);
+          console.warn("DB device block check timed out/failed, bypassing for safety", e);
         }
       }
 
-      // 2.5. Check for same IP duplicate prevention if enabled
-      if (preventRepeatJoins && ipAddress && ipAddress !== 'Unknown') {
+      if (uid && uid !== 'Unknown') {
+        try {
+          const uidSnap = await withTimeout(
+            getDoc(doc(db, 'blockedUIDs', uid)),
+            1200,
+            { exists: () => false } as any
+          );
+          if (uidSnap.exists()) {
+            setIsUidBlocked(true);
+            setIsSubmitting(false);
+            return;
+          }
+        } catch (e) {
+          console.warn("DB UID block check timed out/failed, bypassing for safety", e);
+        }
+      }
+
+      // 2.5. Check for same IP duplicate prevention if enabled (with 1200ms timeout for slow network)
+      if (preventRepeatJoins && finalIp && finalIp !== 'Unknown') {
         try {
           const qSameIp = query(
             collection(db, 'participants'),
             where('meetingId', '==', meetingId),
-            where('ip', '==', ipAddress)
+            where('ip', '==', finalIp)
           );
-          const snapSameIp = await getDocs(qSameIp);
+          const snapSameIp = await withTimeout(
+            getDocs(qSameIp),
+            1200,
+            { docs: [] } as any
+          );
           
           // Check if someone with a different device id is already using this IP index
-          const duplicate = snapSameIp.docs.find(docOpt => {
+          const duplicate = snapSameIp.docs.find((docOpt: any) => {
             const data = docOpt.data();
             return data.deviceId !== deviceId;
           });
@@ -302,7 +416,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
             return;
           }
         } catch (errSameIp) {
-          console.warn("Failed to check duplicate IP joins:", errSameIp);
+          console.warn("Failed or timed out checking duplicate IP, proceeding anyway", errSameIp);
         }
       }
 
@@ -313,22 +427,24 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
       const payload = {
         name: fullName.trim(),
         meetingId: meetingId,
-        ip: ipAddress || 'Unknown',
+        ip: finalIp,
         deviceId: deviceId || 'Unknown',
+        uid: uid || 'Unknown',
+        browserFingerprint: getBrowserFingerprint(),
         userAgent: navigator.userAgent || 'Unknown Browser',
         joinedAt: serverTimestamp(),
         blocked: false
       };
 
-      // Try to save participant record
-      let saveSuccessful = false;
+      // Try to save participant record (with a strict 1500ms timeout so the user isn't stuck if Firestore hangs)
       try {
-        await setDoc(pRef, payload);
-        saveSuccessful = true;
+        await withTimeout(
+          setDoc(pRef, payload),
+          1500,
+          null
+        );
       } catch (err: any) {
-        console.error("Failed to log participant:", err);
-        // If it's just a logging failure, we might still want to allow the redirect
-        // if the meeting is active and we have a link.
+        console.warn("Failed or timed out logging participant, but allowing redirect for user speed:", err);
       }
 
       // 4. Validate redirection requirements
@@ -393,22 +509,56 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
       }
 
       if (finalIp && finalIp !== 'Unknown') {
-        const blockSnap = await getDoc(doc(db, 'blockedIPs', finalIp));
-        if (blockSnap.exists()) {
-          setIsIpBlocked(true);
-          setIsDemoSubmitting(false);
-          setDemoError("দুঃখিত, আপনার আইপিটি ব্লকড করা হয়েছে।");
-          return;
+        try {
+          const blockSnap = await withTimeout(
+            getDoc(doc(db, 'blockedIPs', finalIp)),
+            1200,
+            { exists: () => false } as any
+          );
+          if (blockSnap.exists()) {
+            setIsIpBlocked(true);
+            setIsDemoSubmitting(false);
+            setDemoError("দুঃখিত, আপনার আইপিটি ব্লকড করা হয়েছে।");
+            return;
+          }
+        } catch (e) {
+          console.warn("Demo DB IP block check failed or timed out", e);
         }
       }
 
       if (deviceId && deviceId !== 'Unknown') {
-        const deviceSnap = await getDoc(doc(db, 'blockedDevices', deviceId));
-        if (deviceSnap.exists()) {
-          setIsDeviceBlocked(true);
-          setIsDemoSubmitting(false);
-          setDemoError("দুঃখিত, আপনার ডিভাইসটি ব্লকড করা হয়েছে।");
-          return;
+        try {
+          const deviceSnap = await withTimeout(
+            getDoc(doc(db, 'blockedDevices', deviceId)),
+            1200,
+            { exists: () => false } as any
+          );
+          if (deviceSnap.exists()) {
+            setIsDeviceBlocked(true);
+            setIsDemoSubmitting(false);
+            setDemoError("দুঃখিত, আপনার ডিভাইসটি ব্লকড করা হয়েছে।");
+            return;
+          }
+        } catch (e) {
+          console.warn("Demo DB device block check failed or timed out", e);
+        }
+      }
+
+      if (uid && uid !== 'Unknown') {
+        try {
+          const uidSnap = await withTimeout(
+            getDoc(doc(db, 'blockedUIDs', uid)),
+            1200,
+            { exists: () => false } as any
+          );
+          if (uidSnap.exists()) {
+            setIsUidBlocked(true);
+            setIsDemoSubmitting(false);
+            setDemoError("দুঃখিত, আপনার ইউজার আইডি (UID) ব্লকড করা হয়েছে।");
+            return;
+          }
+        } catch (e) {
+          console.warn("Demo DB UID block check failed or timed out", e);
         }
       }
 
@@ -422,20 +572,23 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
         meetingId: meetingId,
         ip: finalIp,
         deviceId: deviceId || 'Unknown',
+        uid: uid || 'Unknown',
+        browserFingerprint: getBrowserFingerprint(),
         userAgent: navigator.userAgent || 'Unknown Browser',
         joinedAt: serverTimestamp(),
         blocked: false
       };
 
       try {
-        await setDoc(demoRef, demoPayload);
-        // Introduce a tiny 200ms delay to enable network socket batching to transmit the doc write before redirect unloads the page
-        await new Promise(resolve => setTimeout(resolve, 200));
+        await withTimeout(
+          setDoc(demoRef, demoPayload),
+          1500,
+          null
+        );
+        // Introduce a tiny 100ms delay to let the network start the write before redirect unloads the page
+        await new Promise(resolve => setTimeout(resolve, 100));
       } catch (err: any) {
-        console.error("Failed to write to demoParticipants:", err);
-        setDemoError(`সার্ভার সিস্টেমে আপনার তথ্য ট্র্যাকিং করা সম্ভব হয়নি। অনুগ্রহ করে ইন্টারনেট সংযোগ চেক করে আবার চেষ্টা করুন। (${err.message || 'Error'})`);
-        setIsDemoSubmitting(false);
-        return;
+        console.warn("Failed or timed out to write to demoParticipants, but allowing redirect anyway for quick connection:", err);
       }
 
       // 3. Meet active checking
@@ -707,7 +860,8 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                 
                 <div className="bg-slate-200/80 border border-slate-300/40 px-3 py-2 rounded-2xl font-mono text-[10.5px] font-extrabold text-slate-700 mt-3 space-y-1 shadow-sm text-left">
                    <p className="border-b border-slate-300 pb-1 flex justify-between"><span>IP ADDRESS:</span> <span className="text-rose-600">{ipAddress}</span></p>
-                   <p className="pt-1 flex justify-between"><span>DEVICE ID:</span> <span className="text-slate-600">{deviceId ? `${deviceId.substring(0, 12)}...` : 'Unknown'}</span></p>
+                   <p className="border-b border-slate-300 pb-1 pt-1 flex justify-between"><span>DEVICE ID:</span> <span className="text-slate-600">{deviceId ? `${deviceId.substring(0, 12)}...` : 'Unknown'}</span></p>
+                   <p className="pt-1 flex justify-between"><span>USER ID (UID):</span> <span className="text-amber-600">{uid || 'Unknown'}</span></p>
                 </div>
               </div>
             </motion.div>
@@ -940,14 +1094,22 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                         <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 text-[10px] font-black shadow-inner">৪</span>
                         <span>মিটিং চলাকালীন ফোনের কোনো প্রকার কলে কথা বলা যাবে না।</span>
                       </li>
+                      <li className="flex items-start gap-2.5">
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 text-[10px] font-black shadow-inner">৫</span>
+                        <span>১০ মিনিট জয়নিং টাইম চলবে পুরো মিটিংটি সর্বোচ্চ ৪০ মিনিট হবে।</span>
+                      </li>
                     </ul>
                   </div>
                 </form>
               </div>
 
               {/* Verified Badge */}
-              <div className="bg-white px-3.5 py-2.5 rounded-2xl border border-slate-200/60 flex items-center justify-between text-[10px] text-slate-500 shadow-sm font-semibold select-none">
-                <span>নিরাপদ সংযোগ কানেক্টেড</span>
+              <div className="bg-white px-3.5 py-2.5 rounded-2xl border border-slate-200/60 flex flex-col sm:flex-row items-center justify-between text-[10px] text-slate-500 shadow-sm font-semibold select-none gap-2">
+                <div className="flex items-center gap-1.5">
+                  <span>নিরাপদ সংযোগ কানেক্টেড</span>
+                  <span className="text-slate-300">|</span>
+                  <span>UID: <code className="text-amber-600 font-mono font-bold">{uid || 'Unknown'}</code></span>
+                </div>
                 <span>IP: <code className="text-amber-600 font-mono font-bold">{ipAddress === 'Unknown' ? 'যাচাই করা অসম্ভব' : ipAddress}</code></span>
               </div>
             </div>

@@ -15,6 +15,8 @@ export interface Participant {
   meetingId: string;
   ip: string;
   deviceId: string;
+  uid?: string;
+  browserFingerprint?: string;
   userAgent: string;
   joinedAt: Timestamp | any;
   blocked: boolean;
@@ -23,12 +25,15 @@ export interface Participant {
 export interface BlockedIP {
   ip: string;
   deviceId?: string;
+  uid?: string;
   blockedAt: Timestamp | any;
   name: string;
 }
 
 export interface BlockedDevice {
   deviceId: string;
+  browserFingerprint?: string;
+  uid?: string;
   blockedAt: Timestamp | any;
 }
 
@@ -45,6 +50,8 @@ export interface DemoParticipant {
   meetingId: string;
   ip: string;
   deviceId: string;
+  uid?: string;
+  browserFingerprint?: string;
   userAgent: string;
   joinedAt: any;
   blocked?: boolean;
