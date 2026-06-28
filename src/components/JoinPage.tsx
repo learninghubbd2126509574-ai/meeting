@@ -712,7 +712,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
         {/* --- DEMO MODE OVERLAY / CARD MODAL --- */}
         {demoModeStep !== null && (
           <div 
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-5 font-sans animate-fade-in"
+            className="absolute inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-5 font-sans animate-fade-in"
           >
             <div 
               className="w-full max-w-sm bg-white rounded-3xl border border-slate-100 shadow-2xl p-6 relative overflow-hidden space-y-4 animate-scale-up"
@@ -992,20 +992,25 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                   {/* 1. Name Input Box with premium flashing glowing halo (লাইট জ্বলবে নিবে) */}
                   {publicLinkActive && (
                     <div className="relative">
-                      {/* Double-layer premium ambient animating pulsing teal-blue halo */}
-                      <div className="absolute -inset-1 bg-gradient-to-r from-[#02b396] via-[#10b981] to-[#1b6ffc] rounded-[28px] blur-md opacity-75 animate-pulse pointer-events-none"></div>
-                      <div className="absolute -inset-0.5 bg-gradient-to-r from-[#02b396] via-[#3b82f6] to-[#1b6ffc] rounded-[26px] opacity-55 animate-pulse pointer-events-none"></div>
+                      {/* Very gentle, soft, premium ambient glowing halo pulsing slowly (মৃদু লাইট আস্তে আস্তে জ্বলবে নিবে) */}
+                      <div 
+                        className="absolute -inset-1 bg-[#02b396] rounded-[28px] blur-md opacity-25 pointer-events-none animate-pulse" 
+                        style={{ animationDuration: '4s' }}
+                      ></div>
                       
-                      <div className="relative bg-white rounded-3xl p-5 border-2 border-[#02b396] shadow-[0_12px_40px_rgba(2,179,150,0.18)] space-y-4 z-10 transition-all duration-300">
+                      <div className="relative bg-white rounded-3xl p-5 border border-[#02b396]/60 shadow-[0_8px_30px_rgba(2,179,150,0.06)] space-y-4 z-10 transition-all duration-300">
                         <div className="flex items-center justify-between px-0.5">
                           <div className="flex items-center gap-2">
                             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#02b396] text-white">
                               <User className="h-3.5 w-3.5" />
                             </span>
-                            <span className="text-slate-800 font-extrabold text-[13px] flex items-center gap-1.5">
-                              <span className="relative flex h-2.5 w-2.5">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#02b396] opacity-80"></span>
-                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#02b396] shadow-[0_0_8px_#02b396]"></span>
+                            <span className="text-slate-800 font-extrabold text-[13px] flex items-center gap-2">
+                              <span className="relative flex h-2 w-2">
+                                <span 
+                                  className="absolute inline-flex h-full w-full rounded-full bg-[#02b396] opacity-50 animate-ping"
+                                  style={{ animationDuration: '3s' }}
+                                ></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-[#02b396] shadow-[0_0_4px_#02b396]"></span>
                               </span>
                               আপনার সঠিক নাম টাইপ করুন
                             </span>
@@ -1013,12 +1018,15 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                         </div>
                         
                         <div className="relative group">
-                          {/* Premium glowing neon light border/shadow that pulses behind the input */}
-                          <div className="absolute -inset-0.5 bg-gradient-to-r from-[#02b396] to-[#1b6ffc] rounded-2xl blur-sm opacity-40 animate-pulse pointer-events-none"></div>
+                          {/* Extremely soft and gentle pulsing halo behind the input box */}
+                          <div 
+                            className="absolute -inset-0.5 bg-[#02b396] rounded-2xl blur-sm opacity-20 pointer-events-none animate-pulse"
+                            style={{ animationDuration: '4s' }}
+                          ></div>
                           
                           <div className="relative">
                             <span className="absolute inset-y-0 left-0 pl-4.5 flex items-center text-[#02b396]">
-                              <User className="h-5 w-5 animate-pulse" />
+                              <User className="h-5 w-5 opacity-70" />
                             </span>
                             <input
                               type="text"
@@ -1026,13 +1034,16 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                               placeholder="আপনার নাম এখানে লিখুন..."
                               value={fullName}
                               onChange={(e) => setFullName(e.target.value)}
-                              className="w-full pl-12.5 pr-12 py-4 bg-[#f0fdfa]/45 border-2 border-[#02b396] focus:bg-white text-slate-950 focus:border-[#1b6ffc] focus:ring-4 focus:ring-[#02b396]/20 rounded-2xl text-[15px] font-black transition-all shadow-inner"
+                              className="w-full pl-12.5 pr-12 py-4 bg-[#f0fdfa]/30 border border-[#02b396] focus:bg-white text-slate-950 focus:border-[#1b6ffc] focus:ring-4 focus:ring-[#02b396]/15 rounded-2xl text-[15px] font-black transition-all shadow-inner"
                             />
-                            {/* Premium Neon blinking green LED dot inside the input box (জ্বলবে নিবে লাইট) */}
+                            {/* Gentle, soft breathing indicator inside the input box */}
                             <span className="absolute inset-y-0 right-4 flex items-center pointer-events-none">
-                              <span className="relative flex h-2.5 w-2.5">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 shadow-[0_0_8px_#10b981]"></span>
+                              <span className="relative flex h-2 w-2">
+                                <span 
+                                  className="absolute inline-flex h-full w-full rounded-full bg-[#02b396] opacity-40 animate-ping"
+                                  style={{ animationDuration: '3s' }}
+                                ></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-[#02b396] shadow-[0_0_6px_#02b396]"></span>
                               </span>
                             </span>
                           </div>
@@ -1111,7 +1122,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                       </li>
                       <li className="flex items-start gap-2.5">
                         <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 text-[10px] font-black shadow-inner">৫</span>
-                        <span>১০ মিনিট জয়নিং টাইম চলবে পুরো মিটিংটি সর্বোচ্চ ৪০ মিনিট হবে।</span>
+                        <span>১০ মিনিট জয়েনিং টাইম চলবে পুরো মিটিংটি সর্বোচ্চ ৪০ মিনিট হবে।</span>
                       </li>
                     </ul>
                   </div>
