@@ -989,21 +989,27 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                 {/* Form Elements with Redesigned Name Input & Submission wrapper */}
                 <form onSubmit={handleJoin} className="space-y-6">
                   
-                  {/* 1. Name Input Box */}
+                  {/* 1. Name Input Box with premium flashing glowing halo (লাইট জ্বলবে নিবে) */}
                   {publicLinkActive && (
                     <div className="relative">
-                      {/* Subtle elegant teal-blue halo */}
-                      <div className="absolute -inset-0.5 bg-gradient-to-r from-[#02b396] to-[#1b6ffc] rounded-[26px] opacity-10 pointer-events-none"></div>
+                      {/* Double-layer premium ambient animating pulsing teal-blue halo */}
+                      <div className="absolute -inset-1 bg-gradient-to-r from-[#02b396] via-[#10b981] to-[#1b6ffc] rounded-[28px] blur-md opacity-75 animate-pulse pointer-events-none"></div>
+                      <div className="absolute -inset-0.5 bg-gradient-to-r from-[#02b396] via-[#3b82f6] to-[#1b6ffc] rounded-[26px] opacity-55 animate-pulse pointer-events-none"></div>
                       
-                      <div className="relative bg-white rounded-3xl p-5 border border-[#02b396]/60 shadow-[0_8px_30px_rgba(2,179,150,0.04)] space-y-4 z-10 transition-all duration-300">
+                      <div className="relative bg-white rounded-3xl p-5 border-2 border-[#02b396] shadow-[0_12px_40px_rgba(2,179,150,0.18)] space-y-4 z-10 transition-all duration-300">
                         <div className="flex items-center justify-between px-0.5">
                           <div className="flex items-center gap-2">
                             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#02b396] text-white">
                               <User className="h-3.5 w-3.5" />
                             </span>
-                            <span className="text-slate-800 font-extrabold text-[13px]">আপনার সঠিক নাম টাইপ করুন</span>
+                            <span className="text-slate-800 font-extrabold text-[13px] flex items-center gap-1">
+                              <span className="relative flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#02b396] opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-[#02b396]"></span>
+                              </span>
+                              আপনার সঠিক নাম টাইপ করুন
+                            </span>
                           </div>
-                          <span className="text-[9px] bg-[#e6fcf5] text-[#02b396] border border-[#02b396]/40 px-2.5 py-1 rounded-lg font-bold select-none">ডেস্কটপ/স্মার্টফোন ঠিক</span>
                         </div>
                         
                         <div className="relative group">
@@ -1011,7 +1017,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                           
                           <div className="relative">
                             <span className="absolute inset-y-0 left-0 pl-4.5 flex items-center text-[#02b396]">
-                              <User className="h-5 w-5" />
+                              <User className="h-5 w-5 animate-pulse" />
                             </span>
                             <input
                               type="text"
