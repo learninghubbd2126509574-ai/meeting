@@ -24,8 +24,6 @@ import {
 } from "lucide-react";
 import { motion } from "motion/react";
 
-const Marquee = "marquee" as any;
-
 function getBrowserFingerprint(): string {
   const parts = [
     navigator.userAgent,
@@ -94,6 +92,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
   const [demoGmailInput, setDemoGmailInput] = useState<string>("");
   const [demoError, setDemoError] = useState<string | null>(null);
   const [isDemoSubmitting, setIsDemoSubmitting] = useState<boolean>(false);
+  const [isPortalModalOpen, setIsPortalModalOpen] = useState<boolean>(false);
 
   // 1. Live Listeners for Meeting, Block Status, and Settings
   useEffect(() => {
@@ -887,6 +886,96 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
           </div>
         </div>
 
+        {/* --- PORTAL OPTIONS OVERLAY / CARD MODAL --- */}
+        {isPortalModalOpen && (
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-5 font-sans animate-fade-in">
+            <div className="w-full max-w-sm bg-white rounded-3xl border border-slate-100 shadow-2xl p-6 relative overflow-hidden space-y-5 animate-scale-up">
+              {/* Decorative colors Accent */}
+              <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-[#02b396] via-[#10b981] to-[#1b6ffc]"></div>
+
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={() => setIsPortalModalOpen(false)}
+                className="absolute top-4 right-4 text-slate-400 hover:text-slate-650 font-bold bg-slate-100 h-6 w-6 rounded-full flex items-center justify-center text-xs cursor-pointer"
+              >
+                ✕
+              </button>
+
+              <div className="text-center space-y-1 pt-1">
+                <span className="inline-flex items-center gap-1.5 bg-[#02b396]/10 border border-[#02b396]/20 px-3 py-1 rounded-full text-[10px] font-black text-[#02b396] shadow-xs uppercase">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  পোর্টাল অপশন ও সেটিংস
+                </span>
+                <h3 className="text-lg font-black text-slate-900 leading-tight">
+                  সেশন লাইভ পোর্টাল
+                </h3>
+                <p className="text-[10px] text-slate-500 font-extrabold leading-relaxed">
+                  নিচের অপশনগুলো থেকে আপনার প্রয়োজনীয়টি বেছে নিন।
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                {/* Option 1: Demo Session */}
+                <div className="p-3 bg-slate-50 rounded-2xl border border-slate-150 flex flex-col space-y-2">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-800">১. ডেমো মোড জয়েনিং</h4>
+                      <p className="text-[9px] text-slate-500">বিশেষ সিক্রেট কোড সেশন</p>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${
+                      demoModeActive ? "bg-emerald-100 text-emerald-800 border border-emerald-200" : "bg-slate-200 text-slate-600 border border-slate-300"
+                    }`}>
+                      {demoModeActive ? "সক্রিয়" : "বন্ধ আছে"}
+                    </span>
+                  </div>
+                  {demoModeActive ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsPortalModalOpen(false);
+                        setDemoModeStep("enter_code");
+                        setDemoError(null);
+                      }}
+                      className="w-full py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-[10px] rounded-xl transition cursor-pointer"
+                    >
+                      ডেমো কোড দিয়ে যোগ দিন
+                    </button>
+                  ) : (
+                    <p className="text-[9px] text-slate-400 italic">
+                      বর্তমানে অফিসিয়াল ডেমো মোড অফ রাখা হয়েছে। সাধারণ সেশন ফর্ম ব্যবহার করুন।
+                    </p>
+                  )}
+                </div>
+
+                {/* Option 2: Admin Panel */}
+                <div className="p-3 bg-slate-50 rounded-2xl border border-slate-150 flex items-center justify-between">
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-800">২. অ্যাডমিন পোর্টাল</h4>
+                    <p className="text-[9px] text-slate-500">সিস্টেম কনফিগার করুন</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.location.href = "/?page=admin";
+                    }}
+                    className="px-4 py-2 bg-[#0f172a] hover:bg-slate-800 text-amber-400 font-bold text-[10px] rounded-xl transition cursor-pointer"
+                  >
+                    লগইন করুন
+                  </button>
+                </div>
+
+                {/* Option 3: Support Info */}
+                <div className="p-3 bg-blue-50/50 rounded-2xl border border-blue-100 text-center">
+                  <p className="text-[10px] text-blue-900 leading-normal font-semibold">
+                    সেশনে যোগ দিতে কোনো অসুবিধা হলে অনুগ্রহ করে আপনার ইন্টারনেট কানেকশন চেক করুন অথবা সেশন রিফ্রেশ করুন।
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* --- DEMO MODE OVERLAY / CARD MODAL --- */}
         {demoModeStep !== null && (
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-5 font-sans animate-fade-in">
@@ -1090,15 +1179,10 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                   <span>ঘোষণা</span>
                 </span>
 
-                <div className="flex-1 overflow-hidden flex items-center">
-                  <Marquee
-                    scrollamount="3"
-                    direction="left"
-                    className="text-[10.5px] font-extrabold font-sans whitespace-nowrap text-white"
-                  >
-                    {noticeText} &nbsp;&nbsp;&nbsp;&nbsp; ★
-                    &nbsp;&nbsp;&nbsp;&nbsp; {noticeText}
-                  </Marquee>
+                <div className="flex-1 overflow-hidden relative h-5 flex items-center">
+                  <div className="absolute whitespace-nowrap animate-marquee text-[11px] font-extrabold font-sans text-white">
+                    {noticeText} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ★ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {noticeText} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ★ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {noticeText}
+                  </div>
                 </div>
               </div>
             )}
@@ -1114,24 +1198,13 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                 <div className="space-y-2.5">
                   <div
                     onClick={() => {
-                      if (demoModeActive) {
-                        setDemoModeStep("enter_code");
-                        setDemoEnteredCode("");
-                        setDemoNameInput("");
-                        setDemoGmailInput("");
-                        setDemoError(null);
-                      }
+                      setIsPortalModalOpen(true);
                     }}
-                    className={`inline-flex items-center gap-2 bg-gradient-to-r from-[#02b396]/5 to-[#1b6ffc]/5 border border-[#02b396]/20 px-4 py-1.5 rounded-full text-[10px] font-black text-[#02b396] shadow-[0_2px_10px_rgba(2,179,150,0.02)] uppercase tracking-widest select-none ${
-                      demoModeActive
-                        ? "cursor-pointer hover:from-[#02b396]/10 hover:to-[#1b6ffc]/10 hover:border-[#02b396]/30 transition duration-150 active:scale-95"
-                        : ""
-                    }`}
+                    className="inline-flex items-center gap-2 bg-gradient-to-r from-[#02b396]/8 to-[#1b6ffc]/8 border border-[#02b396]/25 px-4 py-1.5 rounded-full text-[10.5px] font-black text-[#02b396] shadow-[0_2px_12px_rgba(2,179,150,0.04)] uppercase tracking-widest select-none cursor-pointer hover:from-[#02b396]/15 hover:to-[#1b6ffc]/15 hover:border-[#02b396]/40 transition duration-150 active:scale-95"
                   >
                     <span className="relative flex h-2 w-2">
                       <span
-                        className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"
-                        style={{ animationDuration: "2s" }}
+                        className="animate-custom-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"
                       ></span>
                       <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500 shadow-[0_0_6px_#10b981]"></span>
                     </span>

@@ -433,17 +433,8 @@ export default function AdminPanel() {
     setIsLoggingIn(true);
 
     try {
-      // Fetch latest password on verify attempt
-      let latestPassword = "212650";
-      try {
-        const docRef = doc(db, "adminSettings", "settings");
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          latestPassword = docSnap.data().password || "212650";
-        }
-      } catch (err) {
-        console.warn("Network read error, authenticating locally", err);
-      }
+      // Authenticate locally against already loaded savedPassword (instantly)
+      const latestPassword = savedPassword || "212650";
 
       // Check if password matches latestPassword or fallback '212650'
       if (passwordInput === latestPassword || passwordInput === "212650") {
