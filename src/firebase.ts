@@ -66,5 +66,5 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     path
   };
   console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  // We do not throw hard exceptions here to prevent background Firestore subscription failures from crashing the React runtime.
 }

@@ -440,12 +440,33 @@ export default function AdminPanel() {
       if (passwordInput === latestPassword || passwordInput === "4012") {
         // Authenticate anonymously FIRST so we have the required Firestore permission key
         try {
-          await signInAnonymously(auth);
-        } catch (authErr) {
+          // Timeout after 2500ms to prevent infinite hang on slow networks or blocked domains
+          await Promise.race([
+            signInAnonymously(auth),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 2500))
+          ]);
+        } catch (authErr: any) {
           console.error(
-            "Anonymous authentication disabled or blocked. Proceeding with client authentication.",
+            "Anonymous authentication failed or timed out:",
             authErr,
           );
+          
+          const errCode = authErr?.code || "";
+          if (errCode === "auth/operation-not-allowed" || String(authErr).includes("operation-not-allowed")) {
+            setLoginError(
+              "আপনার ফায়ারবেস প্রজেক্টে Anonymous Authentication চালু করা নেই। অনুগ্রহ করে Firebase Console > Authentication > Sign-in method-এ গিয়ে Anonymous (বেনামী লগইন) চালু করুন।"
+            );
+            setIsLoggingIn(false);
+            return;
+          }
+          
+          if (String(authErr).includes("Timeout")) {
+            setLoginError(
+              "নেটওয়ার্কের সমস্যা বা স্লো কানেকশন। অনুগ্রহ করে আপনার ইন্টারনেট সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।"
+            );
+            setIsLoggingIn(false);
+            return;
+          }
         }
 
         // Now that we are authenticated, we can update the database settings if needed

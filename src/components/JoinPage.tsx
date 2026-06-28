@@ -24,8 +24,6 @@ import {
 } from "lucide-react";
 import { motion } from "motion/react";
 
-const Marquee = "marquee" as any;
-
 function getBrowserFingerprint(): string {
   const parts = [
     navigator.userAgent,
@@ -980,14 +978,6 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                         className="w-full px-4.5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                       />
                     </div>
-
-                    {/* Tracking details below name for demo */}
-                    <div className="bg-slate-50 border border-slate-150 p-3.5 rounded-2xl flex flex-col items-center justify-center gap-1.5 text-[9.5px] font-extrabold text-slate-650 select-none mt-2 shadow-xs">
-                      <span className="flex items-center gap-1.5">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                        IP ADDRESS: <code className="text-slate-800 font-mono font-black">{ipAddress || 'Checking...'}</code>
-                      </span>
-                    </div>
                   </div>
 
                   <button
@@ -1090,13 +1080,13 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
             </span>
 
             <div className="flex-1 overflow-hidden flex items-center h-5">
-              <Marquee
+              <marquee
                 scrollamount="3"
                 direction="left"
                 className="text-[11px] font-extrabold font-sans whitespace-nowrap text-white w-full"
               >
                 {noticeText} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ★ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {noticeText} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ★ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {noticeText}
-              </Marquee>
+              </marquee>
             </div>
           </div>
         )}
