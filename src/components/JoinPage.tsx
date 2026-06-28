@@ -37,11 +37,12 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [uid, setUid] = useState<string | null>(null);
   const [isIpBlocked, setIsIpBlocked] = useState<boolean>(false);
-  const [isDeviceBlocked, setIsDeviceBlocked] = useState<boolean>(false);
+  const [isDeviceBlockedById, setIsDeviceBlockedById] = useState<boolean>(false);
+  const [isDeviceBlockedByFp, setIsDeviceBlockedByFp] = useState<boolean>(false);
   const [isUidBlocked, setIsUidBlocked] = useState<boolean>(false);
   const [isVPN, setIsVPN] = useState<boolean>(false);
 
-  const isBlocked = isIpBlocked || isDeviceBlocked || isUidBlocked || isVPN;
+  const isBlocked = isIpBlocked || isDeviceBlockedById || isDeviceBlockedByFp || isUidBlocked || isVPN;
   const [alreadyJoined, setAlreadyJoined] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -205,9 +206,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
         // C. Live Device Block Listener
         if (dId) {
           unsubBlockDevice = onSnapshot(doc(db, 'blockedDevices', dId), (snap) => {
-            if (snap.exists()) {
-              setIsDeviceBlocked(true);
-            }
+            setIsDeviceBlockedById(snap.exists());
           });
         }
 
@@ -215,17 +214,13 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
         const fp = getBrowserFingerprint();
         const qFp = query(collection(db, 'blockedDevices'), where('browserFingerprint', '==', fp));
         unsubBlockFp = onSnapshot(qFp, (snap) => {
-          if (!snap.empty) {
-            setIsDeviceBlocked(true);
-          }
+          setIsDeviceBlockedByFp(!snap.empty);
         });
 
         // C.3. Live UID Block Listener
         if (uId) {
           unsubBlockUid = onSnapshot(doc(db, 'blockedUIDs', uId), (snap) => {
-            if (snap.exists()) {
-              setIsUidBlocked(true);
-            }
+            setIsUidBlocked(snap.exists());
           });
         }
 
@@ -364,7 +359,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
             { exists: () => false } as any
           );
           if (deviceSnap.exists()) {
-            setIsDeviceBlocked(true);
+            setIsDeviceBlockedById(true);
             setIsSubmitting(false);
             return;
           }
@@ -502,7 +497,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
       setDemoError(null);
 
       // 1. Direct block list checks (Bypass VPN restriction for demo users who verified passcode)
-      if (isIpBlocked || isDeviceBlocked) {
+      if (isIpBlocked || isDeviceBlockedById || isDeviceBlockedByFp) {
         setIsDemoSubmitting(false);
         setDemoError("দুঃখিত, আইপি বা ডিভাইস ব্লক থাকার কারণে আপনি জয়েন করতে পারছেন না।");
         return;
@@ -534,7 +529,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
             { exists: () => false } as any
           );
           if (deviceSnap.exists()) {
-            setIsDeviceBlocked(true);
+            setIsDeviceBlockedById(true);
             setIsDemoSubmitting(false);
             setDemoError("দুঃখিত, আপনার ডিভাইসটি ব্লকড করা হয়েছে।");
             return;
