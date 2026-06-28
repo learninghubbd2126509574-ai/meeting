@@ -922,30 +922,21 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                     <span>সেশন লাইভ পোর্টাল</span>
                   </div>
                   
-                  <h1 className="text-3xl font-black tracking-widest text-slate-900 font-sans">
+                  <h1 className="text-2xl font-black tracking-tight text-slate-900 font-sans">
                     <span className="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 bg-clip-text text-transparent">UNITY</span>
-                    <span className="bg-gradient-to-r from-[#02b396] to-[#1b6ffc] bg-clip-text text-transparent ml-2">EARNING</span>
+                    <span className="bg-gradient-to-r from-[#02b396] to-[#1b6ffc] bg-clip-text text-transparent ml-1.5">EARNING</span>
                   </h1>
-                  <p className="text-[11px] font-black text-slate-400 tracking-widest uppercase flex items-center justify-center gap-1.5">
-                    <span className="h-[1px] w-4 bg-slate-200"></span>
+                  <p className="text-[12px] font-bold text-slate-500 tracking-wide">
                     অফিসিয়াল সেশন জয়েনিং পোর্টাল
-                    <span className="h-[1px] w-4 bg-slate-200"></span>
                   </p>
                 </div>
 
                 {meetingDate && (
-                  <div className="flex items-center gap-4 bg-gradient-to-br from-slate-50 to-white border border-slate-150/80 rounded-2xl p-3.5 shadow-[0_4px_20px_rgba(27,111,252,0.02)] max-w-sm mx-auto">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#1b6ffc] to-[#02b396] text-white shadow-md relative">
-                      <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75" style={{ animationDuration: '3.5s' }}></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-400 shadow-[0_0_4px_#2dd4bf]"></span>
-                      </span>
-                      <Calendar className="h-5 w-5" />
-                    </div>
-                    <div className="flex-1 text-left">
-                      <p className="text-[9.5px] text-slate-400 font-black tracking-widest uppercase mb-0.5">সেশন সময়সূচী</p>
-                      <p className="text-slate-800 text-[13.5px] font-black tracking-tight">{formatMeetingDateTime(meetingDate, meetingTime)}</p>
-                    </div>
+                  <div className="inline-flex items-center gap-2.5 bg-blue-50/60 border border-blue-200 text-blue-900 px-4 py-2.5 rounded-2xl text-[12.5px] font-black shadow-sm">
+                    <span className="flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-full bg-[#1b6ffc] text-white shadow-sm">
+                      <Calendar className="h-4 w-4" />
+                    </span>
+                    <span>সেশন সময়: <span className="text-[#1b6ffc] font-black">{formatMeetingDateTime(meetingDate, meetingTime)}</span></span>
                   </div>
                 )}
               </div>
