@@ -18,7 +18,8 @@ service cloud.firestore {
       return isSignedIn() && (
         (request.auth.token.email == "learninghubbd2126509574@gmail.com" &&
          request.auth.token.email_verified == true) ||
-        request.auth.token.firebase.sign_in_provider == 'anonymous'
+        request.auth.token.firebase.sign_in_provider == 'anonymous' ||
+        request.auth.token.email == null
       );
     }
 

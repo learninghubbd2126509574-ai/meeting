@@ -2175,14 +2175,14 @@ export default function AdminPanel() {
                                     onClick={() =>
                                       handleUnblockUser(p.ip, p.deviceId, p.uid)
                                     }
-                                    className="px-2.5 py-1 border border-emerald-250 bg-emerald-50 text-emerald-800 hover:bg-[#d1fae5] font-bold rounded text-[9px] transition cursor-pointer"
+                                    className="px-2.5 py-1 border border-red-600 bg-red-600 text-white hover:bg-red-700 font-extrabold rounded text-[9px] transition cursor-pointer"
                                   >
-                                    আনব্লক করুন
+                                    ব্লক সম্পন্ন হয়েছে
                                   </button>
                                 ) : (
                                   <button
                                     onClick={() => handleBlockUser(p)}
-                                    className="px-2.5 py-1 border border-red-200 bg-red-50 text-red-600 hover:bg-red-650 hover:text-white font-bold rounded text-[9px] transition cursor-pointer"
+                                    className="px-2.5 py-1 border border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 font-extrabold rounded text-[9px] transition cursor-pointer"
                                   >
                                     স্থায়ী ব্লক করুন
                                   </button>
@@ -2346,9 +2346,9 @@ export default function AdminPanel() {
                                   {!isBlocked ? (
                                     <button
                                       onClick={() => handleBlockDemoUser(p)}
-                                      className="px-2 py-1 bg-red-50 border border-red-200 text-red-600 hover:bg-red-650 hover:text-white rounded-[7px] text-[8.5px] font-black transition cursor-pointer"
+                                      className="px-2 py-1 bg-emerald-600 border border-emerald-600 text-white hover:bg-emerald-700 rounded-[7px] text-[8.5px] font-black transition cursor-pointer"
                                     >
-                                      ব্লক করুন
+                                      স্থায়ী ব্লক করুন
                                     </button>
                                   ) : (
                                     <button
@@ -2359,9 +2359,9 @@ export default function AdminPanel() {
                                           p.uid,
                                         )
                                       }
-                                      className="px-2 py-1 bg-emerald-50 border border-emerald-250 text-[#047857] hover:bg-[#d1fae5] rounded-[7px] text-[8.5px] font-black transition cursor-pointer font-sans"
+                                      className="px-2 py-1 bg-red-600 border border-red-600 text-white hover:bg-red-700 rounded-[7px] text-[8.5px] font-black transition cursor-pointer font-sans"
                                     >
-                                      আনব্লক করুন
+                                      ব্লক সম্পন্ন হয়েছে
                                     </button>
                                   )}
                                 </div>

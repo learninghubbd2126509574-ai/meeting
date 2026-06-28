@@ -952,14 +952,10 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                     </div>
 
                     {/* Tracking details below name for demo */}
-                    <div className="bg-slate-50 border border-slate-150 p-3.5 rounded-2xl flex flex-col items-start gap-1.5 text-[9.5px] font-extrabold text-slate-650 select-none mt-2 shadow-xs">
+                    <div className="bg-slate-50 border border-slate-150 p-3.5 rounded-2xl flex flex-col items-center justify-center gap-1.5 text-[9.5px] font-extrabold text-slate-650 select-none mt-2 shadow-xs">
                       <span className="flex items-center gap-1.5">
                         <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                         IP ADDRESS: <code className="text-slate-800 font-mono font-black">{ipAddress || 'Checking...'}</code>
-                      </span>
-                      <span className="flex items-center gap-1.5">
-                        <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse"></span>
-                        USER UID: <code className="text-[#1b6ffc] font-mono font-black">{uid || 'Checking...'}</code>
                       </span>
                     </div>
                   </div>
@@ -1041,20 +1037,10 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                   </p>
                 )}
 
-                <div className="bg-slate-200/80 border border-slate-300/40 px-3 py-2 rounded-2xl font-mono text-[10.5px] font-extrabold text-slate-700 mt-3 space-y-1 shadow-sm text-left">
-                  <p className="border-b border-slate-300 pb-1 flex justify-between">
+                <div className="bg-slate-200/80 border border-slate-300/40 px-4 py-2.5 rounded-2xl font-mono text-[10.5px] font-extrabold text-slate-700 mt-3 shadow-sm text-left">
+                  <p className="flex justify-between">
                     <span>IP ADDRESS:</span>{" "}
                     <span className="text-rose-600">{ipAddress}</span>
-                  </p>
-                  <p className="border-b border-slate-300 pb-1 pt-1 flex justify-between">
-                    <span>DEVICE ID:</span>{" "}
-                    <span className="text-slate-600">
-                      {deviceId ? `${deviceId.substring(0, 12)}...` : "Unknown"}
-                    </span>
-                  </p>
-                  <p className="pt-1 flex justify-between">
-                    <span>USER ID (UID):</span>{" "}
-                    <span className="text-amber-600">{uid || "Unknown"}</span>
                   </p>
                 </div>
               </div>
@@ -1272,19 +1258,12 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                         </div>
 
                         {/* Tracking details below name / warning */}
-                        <div className="bg-slate-50 border border-slate-150 p-3.5 rounded-2xl flex flex-col xs:flex-row items-center justify-between text-[10.5px] font-extrabold text-slate-650 gap-2 select-none shadow-xs mt-1">
+                        <div className="bg-slate-50 border border-slate-150 p-3.5 rounded-2xl flex flex-col items-center justify-center text-[10.5px] font-extrabold text-slate-650 gap-2 select-none shadow-xs mt-1">
                           <span className="flex items-center gap-1.5">
                             <span className="h-2 w-2 rounded-full bg-[#02b396] animate-pulse"></span>
                             IP ADDRESS:{" "}
                             <code className="text-[#02b396] font-mono font-black">
                               {ipAddress || "Checking..."}
-                            </code>
-                          </span>
-                          <span className="flex items-center gap-1.5">
-                            <span className="h-2 w-2 rounded-full bg-[#1b6ffc] animate-pulse"></span>
-                            USER UID:{" "}
-                            <code className="text-[#1b6ffc] font-mono font-black">
-                              {uid || "Checking..."}
                             </code>
                           </span>
                         </div>
@@ -1405,13 +1384,6 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
               <div className="bg-white px-3.5 py-2.5 rounded-2xl border border-slate-200/60 flex flex-col sm:flex-row items-center justify-between text-[10px] text-slate-500 shadow-sm font-semibold select-none gap-2">
                 <div className="flex items-center gap-1.5">
                   <span>নিরাপদ সংযোগ কানেক্টেড</span>
-                  <span className="text-slate-300">|</span>
-                  <span>
-                    UID:{" "}
-                    <code className="text-amber-600 font-mono font-bold">
-                      {uid || "Unknown"}
-                    </code>
-                  </span>
                 </div>
                 <span>
                   IP:{" "}
