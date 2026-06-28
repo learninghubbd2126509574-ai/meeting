@@ -62,6 +62,14 @@ service cloud.firestore {
       allow get: if true;
     }
 
+    // Blocked UIDs Collection Rules
+    match /blockedUIDs/{uid} {
+      // Admins have full access to manage blocked UIDs
+      allow get, list, create, update, delete: if isAdmin();
+      // Public users can look up their own UID block state
+      allow get: if true;
+    }
+
     // Admin Settings Rules
     match /adminSettings/{docId} {
       // Admins have full access to manage settings

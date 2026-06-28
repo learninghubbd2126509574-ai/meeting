@@ -1,30 +1,50 @@
-import React, { useState, useEffect } from 'react';
-import { db, handleFirestoreError, OperationType } from '../firebase';
-import { doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
-import { AlertCircle, User, Loader2, CheckCircle, ShieldAlert, Bell, Clock, Calendar, AlertTriangle } from 'lucide-react';
-import { motion } from 'motion/react';
+import React, { useState, useEffect } from "react";
+import { db, handleFirestoreError, OperationType } from "../firebase";
+import {
+  doc,
+  getDoc,
+  setDoc,
+  serverTimestamp,
+  collection,
+  query,
+  where,
+  getDocs,
+  onSnapshot,
+} from "firebase/firestore";
+import {
+  AlertCircle,
+  User,
+  Loader2,
+  CheckCircle,
+  ShieldAlert,
+  Bell,
+  Clock,
+  Calendar,
+  AlertTriangle,
+} from "lucide-react";
+import { motion } from "motion/react";
 
-const Marquee = 'marquee' as any;
+const Marquee = "marquee" as any;
 
 function getBrowserFingerprint(): string {
   const parts = [
     navigator.userAgent,
-    navigator.language || 'bn',
+    navigator.language || "bn",
     screen.width,
     screen.height,
     screen.colorDepth,
     new Date().getTimezoneOffset(),
-    navigator.hardwareConcurrency || 'unknown',
-    navigator.maxTouchPoints || 'unknown'
+    navigator.hardwareConcurrency || "unknown",
+    navigator.maxTouchPoints || "unknown",
   ];
-  const rawString = parts.join('|');
+  const rawString = parts.join("|");
   let hash = 0;
   for (let i = 0; i < rawString.length; i++) {
     const char = rawString.charCodeAt(i);
     hash = (hash << 5) - hash + char;
     hash = hash & hash; // Convert to 32bit integer
   }
-  return 'fp_' + Math.abs(hash).toString(16);
+  return "fp_" + Math.abs(hash).toString(16);
 }
 
 interface JoinPageProps {
@@ -32,17 +52,24 @@ interface JoinPageProps {
 }
 
 export default function JoinPage({ meetingId }: JoinPageProps) {
-  const [fullName, setFullName] = useState('');
-  const [ipAddress, setIpAddress] = useState<string>('যাচাই হচ্ছে...');
+  const [fullName, setFullName] = useState("");
+  const [ipAddress, setIpAddress] = useState<string>("যাচাই হচ্ছে...");
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [uid, setUid] = useState<string | null>(null);
   const [isIpBlocked, setIsIpBlocked] = useState<boolean>(false);
-  const [isDeviceBlockedById, setIsDeviceBlockedById] = useState<boolean>(false);
-  const [isDeviceBlockedByFp, setIsDeviceBlockedByFp] = useState<boolean>(false);
+  const [isDeviceBlockedById, setIsDeviceBlockedById] =
+    useState<boolean>(false);
+  const [isDeviceBlockedByFp, setIsDeviceBlockedByFp] =
+    useState<boolean>(false);
   const [isUidBlocked, setIsUidBlocked] = useState<boolean>(false);
   const [isVPN, setIsVPN] = useState<boolean>(false);
 
-  const isBlocked = isIpBlocked || isDeviceBlockedById || isDeviceBlockedByFp || isUidBlocked || isVPN;
+  const isBlocked =
+    isIpBlocked ||
+    isDeviceBlockedById ||
+    isDeviceBlockedByFp ||
+    isUidBlocked ||
+    isVPN;
   const [alreadyJoined, setAlreadyJoined] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -51,18 +78,20 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
   const [meetingActive, setMeetingActive] = useState<boolean>(true);
   const [meetingDate, setMeetingDate] = useState<string | null>(null);
   const [meetingTime, setMeetingTime] = useState<string | null>(null);
-  const [noticeText, setNoticeText] = useState<string>('');
+  const [noticeText, setNoticeText] = useState<string>("");
   const [noticeActive, setNoticeActive] = useState<boolean>(false);
   const [preventRepeatJoins, setPreventRepeatJoins] = useState<boolean>(true);
   const [publicLinkActive, setPublicLinkActive] = useState<boolean>(true);
 
   // Demo flow states
   const [demoModeActive, setDemoModeActive] = useState<boolean>(false);
-  const [demoCode, setDemoCode] = useState<string>('1234');
-  const [demoModeStep, setDemoModeStep] = useState<'enter_code' | 'enter_info' | null>(null);
-  const [demoEnteredCode, setDemoEnteredCode] = useState<string>('');
-  const [demoNameInput, setDemoNameInput] = useState<string>('');
-  const [demoGmailInput, setDemoGmailInput] = useState<string>('');
+  const [demoCode, setDemoCode] = useState<string>("1234");
+  const [demoModeStep, setDemoModeStep] = useState<
+    "enter_code" | "enter_info" | null
+  >(null);
+  const [demoEnteredCode, setDemoEnteredCode] = useState<string>("");
+  const [demoNameInput, setDemoNameInput] = useState<string>("");
+  const [demoGmailInput, setDemoGmailInput] = useState<string>("");
   const [demoError, setDemoError] = useState<string | null>(null);
   const [isDemoSubmitting, setIsDemoSubmitting] = useState<boolean>(false);
 
@@ -77,45 +106,45 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
     // Fast parallel IP fetching with timeout to guarantee responsiveness under slow connections
     async function getIpWithTimeout(): Promise<string> {
       const endpoints = [
-        'https://api.ipify.org?format=json',
-        'https://api64.ipify.org?format=json',
-        'https://ipapi.co/json/'
+        "https://api.ipify.org?format=json",
+        "https://api64.ipify.org?format=json",
+        "https://ipapi.co/json/",
       ];
 
       const fetchWithTimeout = (url: string, ms: number): Promise<string> => {
         return new Promise((resolve, reject) => {
-          const timeoutId = setTimeout(() => reject(new Error('Timeout')), ms);
+          const timeoutId = setTimeout(() => reject(new Error("Timeout")), ms);
           fetch(url)
-            .then(res => {
+            .then((res) => {
               if (res.ok) return res.json();
-              throw new Error('Network error');
+              throw new Error("Network error");
             })
-            .then(data => {
+            .then((data) => {
               clearTimeout(timeoutId);
               if (data && data.ip) {
                 resolve(data.ip);
               } else {
-                reject(new Error('No IP JSON'));
+                reject(new Error("No IP JSON"));
               }
             })
-            .catch(err => {
+            .catch((err) => {
               clearTimeout(timeoutId);
               reject(err);
             });
         });
       };
 
-      const promises = endpoints.map(url => fetchWithTimeout(url, 2500));
+      const promises = endpoints.map((url) => fetchWithTimeout(url, 2500));
 
       try {
-        if (typeof Promise.any === 'function') {
+        if (typeof Promise.any === "function") {
           return await Promise.any(promises);
         } else {
           return await new Promise<string>((resolve) => {
             let resolved = false;
             let rejectCount = 0;
-            promises.forEach(p => {
-              p.then(ip => {
+            promises.forEach((p) => {
+              p.then((ip) => {
                 if (!resolved) {
                   resolved = true;
                   resolve(ip);
@@ -123,21 +152,21 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
               }).catch(() => {
                 rejectCount++;
                 if (rejectCount === promises.length) {
-                  resolve('Unknown');
+                  resolve("Unknown");
                 }
               });
             });
             setTimeout(() => {
               if (!resolved) {
                 resolved = true;
-                resolve('Unknown');
+                resolve("Unknown");
               }
             }, 3000);
           });
         }
       } catch (err) {
         console.warn("Resilient IP fetch failed, using fallback.", err);
-        return 'Unknown';
+        return "Unknown";
       }
     }
 
@@ -147,41 +176,45 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
         setErrorMessage(null);
 
         // A. Persistent Device ID (triple storage fallback for ultimate bypass protection)
-        let dId = localStorage.getItem('unity_device_id');
+        let dId = localStorage.getItem("unity_device_id");
         if (!dId) {
-          const cookieMatch = document.cookie.match(/(?:^|; )unity_device_id=([^;]*)/);
+          const cookieMatch = document.cookie.match(
+            /(?:^|; )unity_device_id=([^;]*)/,
+          );
           if (cookieMatch) {
             dId = decodeURIComponent(cookieMatch[1]);
           }
         }
         if (!dId) {
-          dId = sessionStorage.getItem('unity_device_id');
+          dId = sessionStorage.getItem("unity_device_id");
         }
         if (!dId) {
           dId = `dev_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
         }
-        localStorage.setItem('unity_device_id', dId);
-        sessionStorage.setItem('unity_device_id', dId);
+        localStorage.setItem("unity_device_id", dId);
+        sessionStorage.setItem("unity_device_id", dId);
         document.cookie = `unity_device_id=${encodeURIComponent(dId)}; max-age=315360000; path=/; SameSite=Lax`;
         setDeviceId(dId);
 
         // A.2 Persistent User ID (UID) with multiple layers of fallback storage
-        let uId = localStorage.getItem('unity_uid');
+        let uId = localStorage.getItem("unity_uid");
         if (!uId) {
-          const cookieMatch = document.cookie.match(/(?:^|; )unity_uid=([^;]*)/);
+          const cookieMatch = document.cookie.match(
+            /(?:^|; )unity_uid=([^;]*)/,
+          );
           if (cookieMatch) {
             uId = decodeURIComponent(cookieMatch[1]);
           }
         }
         if (!uId) {
-          uId = sessionStorage.getItem('unity_uid');
+          uId = sessionStorage.getItem("unity_uid");
         }
         if (!uId) {
           // Generate a highly distinct readable UID (e.g. UID-582910)
           uId = `UID-${100000 + Math.floor(Math.random() * 900000)}`;
         }
-        localStorage.setItem('unity_uid', uId);
-        sessionStorage.setItem('unity_uid', uId);
+        localStorage.setItem("unity_uid", uId);
+        sessionStorage.setItem("unity_uid", uId);
         document.cookie = `unity_uid=${encodeURIComponent(uId)}; max-age=315360000; path=/; SameSite=Lax`;
         setUid(uId);
 
@@ -190,86 +223,126 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
         setIpAddress(detectedIp);
 
         // Security Check (Async & Non-blocking)
-        if (detectedIp !== 'Unknown' && detectedIp !== 'যাচাই হচ্ছে...') {
+        if (detectedIp !== "Unknown" && detectedIp !== "যাচাই হচ্ছে...") {
           fetch(`https://ipapi.co/${detectedIp}/json/`)
-            .then(res => res.json())
-            .then(meta => {
-              const org = (meta.org || '').toLowerCase();
-              const asn = (meta.asn || '').toLowerCase();
-              const hostingKeywords = ['amazon', 'google', 'digitalocean', 'ovh', 'linode', 'vultr', 'm247', 'pax8', 'hosting', 'datacenter', 'proxy', 'vpn', 'cloudflare'];
-              if (hostingKeywords.some(kw => org.includes(kw) || asn.includes(kw))) {
+            .then((res) => res.json())
+            .then((meta) => {
+              const org = (meta.org || "").toLowerCase();
+              const asn = (meta.asn || "").toLowerCase();
+              const hostingKeywords = [
+                "amazon",
+                "google",
+                "digitalocean",
+                "ovh",
+                "linode",
+                "vultr",
+                "m247",
+                "pax8",
+                "hosting",
+                "datacenter",
+                "proxy",
+                "vpn",
+                "cloudflare",
+              ];
+              if (
+                hostingKeywords.some(
+                  (kw) => org.includes(kw) || asn.includes(kw),
+                )
+              ) {
                 setIsVPN(true);
               }
-            }).catch(() => {});
+            })
+            .catch(() => {});
         }
 
         // C. Live Device Block Listener
         if (dId) {
-          unsubBlockDevice = onSnapshot(doc(db, 'blockedDevices', dId), (snap) => {
-            setIsDeviceBlockedById(snap.exists());
-          });
+          unsubBlockDevice = onSnapshot(
+            doc(db, "blockedDevices", dId),
+            (snap) => {
+              setIsDeviceBlockedById(snap.exists());
+            },
+          );
         }
 
         // C.2. Fallback Browser Fingerprint Listener to prevent dynamic IP + cache clear bypasses
         const fp = getBrowserFingerprint();
-        const qFp = query(collection(db, 'blockedDevices'), where('browserFingerprint', '==', fp));
+        const qFp = query(
+          collection(db, "blockedDevices"),
+          where("browserFingerprint", "==", fp),
+        );
         unsubBlockFp = onSnapshot(qFp, (snap) => {
           setIsDeviceBlockedByFp(!snap.empty);
         });
 
         // C.3. Live UID Block Listener
         if (uId) {
-          unsubBlockUid = onSnapshot(doc(db, 'blockedUIDs', uId), (snap) => {
+          unsubBlockUid = onSnapshot(doc(db, "blockedUIDs", uId), (snap) => {
             setIsUidBlocked(snap.exists());
           });
         }
 
         // D. Real-time Meeting Details Listener
-        unsubMeeting = onSnapshot(doc(db, 'meetings', meetingId), (snap) => {
-          if (snap.exists()) {
-            const mData = snap.data();
-            setGoogleMeetLink(mData.googleMeetLink);
-            setMeetingActive(mData.active !== false);
-            setMeetingDate(mData.meetingDate || null);
-            setMeetingTime(mData.meetingTime || null);
-            setErrorMessage(null); 
-          } else {
-            setErrorMessage("কাউন্সেলিং মিটিং সেশনটি খুঁজে পাওয়া যায়নি। আপনার লিঙ্কের মিটিং আইডি চেক করুন।");
-          }
-        }, (err) => {
-          console.error("Meeting listener error:", err);
-          setErrorMessage("মিটিং ডাটা লোড করতে সমস্যা হচ্ছে। আপনার ইন্টারনেট কানেকশন বা সার্ভার পারমিশন চেক করুন।");
-        });
+        unsubMeeting = onSnapshot(
+          doc(db, "meetings", meetingId),
+          (snap) => {
+            if (snap.exists()) {
+              const mData = snap.data();
+              setGoogleMeetLink(mData.googleMeetLink);
+              setMeetingActive(mData.active !== false);
+              setMeetingDate(mData.meetingDate || null);
+              setMeetingTime(mData.meetingTime || null);
+              setErrorMessage(null);
+            } else {
+              setErrorMessage(
+                "কাউন্সেলিং মিটিং সেশনটি খুঁজে পাওয়া যায়নি। আপনার লিঙ্কের মিটিং আইডি চেক করুন।",
+              );
+            }
+          },
+          (err) => {
+            console.error("Meeting listener error:", err);
+            setErrorMessage(
+              "মিটিং ডাটা লোড করতে সমস্যা হচ্ছে। আপনার ইন্টারনেট কানেকশন বা সার্ভার পারমিশন চেক করুন।",
+            );
+          },
+        );
 
         // E. Real-time Admin Settings Listener (Notice and Joint Policy)
-        unsubSettings = onSnapshot(doc(db, 'adminSettings', 'settings'), (snap) => {
-          if (snap.exists()) {
-            const sData = snap.data();
-            setNoticeText(sData.noticeText || '');
-            setNoticeActive(sData.noticeActive === true);
-            setPreventRepeatJoins(sData.preventRepeatJoins !== false);
-            setPublicLinkActive(sData.publicLinkActive !== false);
-            setDemoModeActive(sData.demoModeActive === true);
-            setDemoCode(sData.demoCode || '1234');
-          }
-          setIsLoading(false);
-        }, (err) => {
-          console.error("Settings listener error:", err);
-          setIsLoading(false);
-        });
-
+        unsubSettings = onSnapshot(
+          doc(db, "adminSettings", "settings"),
+          (snap) => {
+            if (snap.exists()) {
+              const sData = snap.data();
+              setNoticeText(sData.noticeText || "");
+              setNoticeActive(sData.noticeActive === true);
+              setPreventRepeatJoins(sData.preventRepeatJoins !== false);
+              setPublicLinkActive(sData.publicLinkActive !== false);
+              setDemoModeActive(sData.demoModeActive === true);
+              setDemoCode(sData.demoCode || "1234");
+            }
+            setIsLoading(false);
+          },
+          (err) => {
+            console.error("Settings listener error:", err);
+            setIsLoading(false);
+          },
+        );
       } catch (err: any) {
-        console.error('Initialization error:', err);
-        setErrorMessage('নিরাপত্তা ব্যবস্থা যাচাই করতে ব্যর্থ হয়েছে। পেজ রিফ্রেশ করুন।');
+        console.error("Initialization error:", err);
+        setErrorMessage(
+          "নিরাপত্তা ব্যবস্থা যাচাই করতে ব্যর্থ হয়েছে। পেজ রিফ্রেশ করুন।",
+        );
         setIsLoading(false);
       }
     }
 
     // Safety fallback timer for slow internet (releases overlay spinner after 2 seconds on high latency)
     const fallbackTimer = setTimeout(() => {
-      setIsLoading(current => {
+      setIsLoading((current) => {
         if (current) {
-          console.warn("Safety trigger: Slow network connection detected. Loading screen bypassed.");
+          console.warn(
+            "Safety trigger: Slow network connection detected. Loading screen bypassed.",
+          );
           return false;
         }
         return current;
@@ -290,13 +363,20 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
 
   // 1.2. Reactively listen for IP block status once IP address successfully resolves
   useEffect(() => {
-    if (!ipAddress || ipAddress === 'যাচাই হচ্ছে...' || ipAddress === 'Unknown') {
+    if (
+      !ipAddress ||
+      ipAddress === "যাচাই হচ্ছে..." ||
+      ipAddress === "Unknown"
+    ) {
       return;
     }
 
-    const unsubBlockIP = onSnapshot(doc(db, 'blockedIPs', ipAddress), (snap) => {
-      setIsIpBlocked(snap.exists());
-    });
+    const unsubBlockIP = onSnapshot(
+      doc(db, "blockedIPs", ipAddress),
+      (snap) => {
+        setIsIpBlocked(snap.exists());
+      },
+    );
 
     return () => {
       unsubBlockIP();
@@ -304,10 +384,16 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
   }, [ipAddress]);
 
   // Helper helper to wrap promises with a timeout for slow network resilience
-  const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number, fallbackValue: T): Promise<T> => {
+  const withTimeout = <T,>(
+    promise: Promise<T>,
+    timeoutMs: number,
+    fallbackValue: T,
+  ): Promise<T> => {
     return Promise.race([
       promise,
-      new Promise<T>((resolve) => setTimeout(() => resolve(fallbackValue), timeoutMs))
+      new Promise<T>((resolve) =>
+        setTimeout(() => resolve(fallbackValue), timeoutMs),
+      ),
     ]);
   };
 
@@ -316,12 +402,15 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
     e.preventDefault();
     if (!fullName.trim()) return;
     if (!publicLinkActive) {
-      setErrorMessage("দুঃখিত, সাধারণ লিংকের মাধ্যমে জয়েন করা বর্তমানে বন্ধ রাখা হয়েছে।");
+      setErrorMessage(
+        "দুঃখিত, সাধারণ লিংকের মাধ্যমে জয়েন করা বর্তমানে বন্ধ রাখা হয়েছে।",
+      );
       return;
     }
 
     // Low-network resilience: If IP is still loading or blank, default to 'Unknown' and let them pass
-    const finalIp = (!ipAddress || ipAddress === 'যাচাই হচ্ছে...') ? 'Unknown' : ipAddress;
+    const finalIp =
+      !ipAddress || ipAddress === "যাচাই হচ্ছে..." ? "Unknown" : ipAddress;
 
     try {
       setIsSubmitting(true);
@@ -334,12 +423,12 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
       }
 
       // 2. Perform one final quick block check from DB (with 1200ms timeout for slow network)
-      if (finalIp && finalIp !== 'Unknown') {
+      if (finalIp && finalIp !== "Unknown") {
         try {
           const blockSnap = await withTimeout(
-            getDoc(doc(db, 'blockedIPs', finalIp)),
+            getDoc(doc(db, "blockedIPs", finalIp)),
             1200,
-            { exists: () => false } as any
+            { exists: () => false } as any,
           );
           if (blockSnap.exists()) {
             setIsIpBlocked(true);
@@ -347,16 +436,19 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
             return;
           }
         } catch (e) {
-          console.warn("DB IP block check timed out/failed, bypassing for safety", e);
+          console.warn(
+            "DB IP block check timed out/failed, bypassing for safety",
+            e,
+          );
         }
       }
 
-      if (deviceId && deviceId !== 'Unknown') {
+      if (deviceId && deviceId !== "Unknown") {
         try {
           const deviceSnap = await withTimeout(
-            getDoc(doc(db, 'blockedDevices', deviceId)),
+            getDoc(doc(db, "blockedDevices", deviceId)),
             1200,
-            { exists: () => false } as any
+            { exists: () => false } as any,
           );
           if (deviceSnap.exists()) {
             setIsDeviceBlockedById(true);
@@ -364,16 +456,19 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
             return;
           }
         } catch (e) {
-          console.warn("DB device block check timed out/failed, bypassing for safety", e);
+          console.warn(
+            "DB device block check timed out/failed, bypassing for safety",
+            e,
+          );
         }
       }
 
-      if (uid && uid !== 'Unknown') {
+      if (uid && uid !== "Unknown") {
         try {
           const uidSnap = await withTimeout(
-            getDoc(doc(db, 'blockedUIDs', uid)),
+            getDoc(doc(db, "blockedUIDs", uid)),
             1200,
-            { exists: () => false } as any
+            { exists: () => false } as any,
           );
           if (uidSnap.exists()) {
             setIsUidBlocked(true);
@@ -381,24 +476,25 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
             return;
           }
         } catch (e) {
-          console.warn("DB UID block check timed out/failed, bypassing for safety", e);
+          console.warn(
+            "DB UID block check timed out/failed, bypassing for safety",
+            e,
+          );
         }
       }
 
       // 2.5. Check for same IP duplicate prevention if enabled (with 1200ms timeout for slow network)
-      if (preventRepeatJoins && finalIp && finalIp !== 'Unknown') {
+      if (preventRepeatJoins && finalIp && finalIp !== "Unknown") {
         try {
           const qSameIp = query(
-            collection(db, 'participants'),
-            where('meetingId', '==', meetingId),
-            where('ip', '==', finalIp)
+            collection(db, "participants"),
+            where("meetingId", "==", meetingId),
+            where("ip", "==", finalIp),
           );
-          const snapSameIp = await withTimeout(
-            getDocs(qSameIp),
-            1200,
-            { docs: [] } as any
-          );
-          
+          const snapSameIp = await withTimeout(getDocs(qSameIp), 1200, {
+            docs: [],
+          } as any);
+
           // Check if someone with a different device id is already using this IP index
           const duplicate = snapSameIp.docs.find((docOpt: any) => {
             const data = docOpt.data();
@@ -406,51 +502,59 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
           });
 
           if (duplicate) {
-            setErrorMessage("দুঃখিত, এই আইপি অ্যাড্রেস (IP Address) দিয়ে ইতিপূর্বে অন্য একটি ডিভাইস থেকে মিটিংয়ে জয়েন করা হয়েছে। একই ওয়াইফাই বা ইন্টারনেট সংযোগ দিয়ে দ্বিতীয় কেউ মিটিংয়ে অংশগ্রহণ করতে পারবেন না।");
+            setErrorMessage(
+              "দুঃখিত, এই আইপি অ্যাড্রেস (IP Address) দিয়ে ইতিপূর্বে অন্য একটি ডিভাইস থেকে মিটিংয়ে জয়েন করা হয়েছে। একই ওয়াইফাই বা ইন্টারনেট সংযোগ দিয়ে দ্বিতীয় কেউ মিটিংয়ে অংশগ্রহণ করতে পারবেন না।",
+            );
             setIsSubmitting(false);
             return;
           }
         } catch (errSameIp) {
-          console.warn("Failed or timed out checking duplicate IP, proceeding anyway", errSameIp);
+          console.warn(
+            "Failed or timed out checking duplicate IP, proceeding anyway",
+            errSameIp,
+          );
         }
       }
 
       // 3. Create Participant Entry
       const participantId = `part_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-      const pRef = doc(db, 'participants', participantId);
-      
+      const pRef = doc(db, "participants", participantId);
+
       const payload = {
         name: fullName.trim(),
         meetingId: meetingId,
         ip: finalIp,
-        deviceId: deviceId || 'Unknown',
-        uid: uid || 'Unknown',
+        deviceId: deviceId || "Unknown",
+        uid: uid || "Unknown",
         browserFingerprint: getBrowserFingerprint(),
-        userAgent: navigator.userAgent || 'Unknown Browser',
+        userAgent: navigator.userAgent || "Unknown Browser",
         joinedAt: serverTimestamp(),
-        blocked: false
+        blocked: false,
       };
 
       // Try to save participant record (with a strict 1500ms timeout so the user isn't stuck if Firestore hangs)
       try {
-        await withTimeout(
-          setDoc(pRef, payload),
-          1500,
-          null
-        );
+        await withTimeout(setDoc(pRef, payload), 1500, null);
       } catch (err: any) {
-        console.warn("Failed or timed out logging participant, but allowing redirect for user speed:", err);
+        console.warn(
+          "Failed or timed out logging participant, but allowing redirect for user speed:",
+          err,
+        );
       }
 
       // 4. Validate redirection requirements
       if (!meetingActive) {
-        setErrorMessage("এই কাউন্সেলিং সেশনটি বৰ্তমানে নিষ্ক্রিয় বা সম্পন্ন করা হয়েছে।");
+        setErrorMessage(
+          "এই কাউন্সেলিং সেশনটি বৰ্তমানে নিষ্ক্রিয় বা সম্পন্ন করা হয়েছে।",
+        );
         setIsSubmitting(false);
         return;
       }
 
       if (!googleMeetLink) {
-        setErrorMessage("গুগল মিট (Google Meet) লিংকটি এখনও কাউন্সেলিং সেশনে যুক্ত করা হয়নি।");
+        setErrorMessage(
+          "গুগল মিট (Google Meet) লিংকটি এখনও কাউন্সেলিং সেশনে যুক্ত করা হয়নি।",
+        );
         setIsSubmitting(false);
         return;
       }
@@ -458,15 +562,16 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
       // Prepare final redirect URL
       let redirectUrl = googleMeetLink.trim();
       if (!/^https?:\/\//i.test(redirectUrl)) {
-        redirectUrl = 'https://' + redirectUrl;
+        redirectUrl = "https://" + redirectUrl;
       }
 
       // Final redirect
       window.location.assign(redirectUrl);
-
     } catch (err: any) {
       console.error("Global join error:", err);
-      setErrorMessage('সার্ভারের সাথে সংযোগ বিচ্ছিন্ন হয়েছে। অনুগ্রহ করে ইন্টারনেট চেক করে আবার চেষ্টা করুন।');
+      setErrorMessage(
+        "সার্ভারের সাথে সংযোগ বিচ্ছিন্ন হয়েছে। অনুগ্রহ করে ইন্টারনেট চেক করে আবার চেষ্টা করুন।",
+      );
       setIsSubmitting(false);
     }
   }
@@ -476,9 +581,11 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
     e.preventDefault();
     setDemoError(null);
     if (demoEnteredCode === demoCode) {
-      setDemoModeStep('enter_info');
+      setDemoModeStep("enter_info");
     } else {
-      setDemoError("ভুল ডেমো কোড! অনুগ্রহ করে আপনার অ্যাডমিন কর্তৃক সেট করা কোডটি সঠিকভাবে দিন।");
+      setDemoError(
+        "ভুল ডেমো কোড! অনুগ্রহ করে আপনার অ্যাডমিন কর্তৃক সেট করা কোডটি সঠিকভাবে দিন।",
+      );
     }
   }
 
@@ -490,7 +597,8 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
       return;
     }
 
-    const finalIp = (!ipAddress || ipAddress === 'যাচাই হচ্ছে...') ? 'Unknown' : ipAddress;
+    const finalIp =
+      !ipAddress || ipAddress === "যাচাই হচ্ছে..." ? "Unknown" : ipAddress;
 
     try {
       setIsDemoSubmitting(true);
@@ -499,16 +607,18 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
       // 1. Direct block list checks (Bypass VPN restriction for demo users who verified passcode)
       if (isIpBlocked || isDeviceBlockedById || isDeviceBlockedByFp) {
         setIsDemoSubmitting(false);
-        setDemoError("দুঃখিত, আইপি বা ডিভাইস ব্লক থাকার কারণে আপনি জয়েন করতে পারছেন না।");
+        setDemoError(
+          "দুঃখিত, আইপি বা ডিভাইস ব্লক থাকার কারণে আপনি জয়েন করতে পারছেন না।",
+        );
         return;
       }
 
-      if (finalIp && finalIp !== 'Unknown') {
+      if (finalIp && finalIp !== "Unknown") {
         try {
           const blockSnap = await withTimeout(
-            getDoc(doc(db, 'blockedIPs', finalIp)),
+            getDoc(doc(db, "blockedIPs", finalIp)),
             1200,
-            { exists: () => false } as any
+            { exists: () => false } as any,
           );
           if (blockSnap.exists()) {
             setIsIpBlocked(true);
@@ -521,12 +631,12 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
         }
       }
 
-      if (deviceId && deviceId !== 'Unknown') {
+      if (deviceId && deviceId !== "Unknown") {
         try {
           const deviceSnap = await withTimeout(
-            getDoc(doc(db, 'blockedDevices', deviceId)),
+            getDoc(doc(db, "blockedDevices", deviceId)),
             1200,
-            { exists: () => false } as any
+            { exists: () => false } as any,
           );
           if (deviceSnap.exists()) {
             setIsDeviceBlockedById(true);
@@ -539,12 +649,12 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
         }
       }
 
-      if (uid && uid !== 'Unknown') {
+      if (uid && uid !== "Unknown") {
         try {
           const uidSnap = await withTimeout(
-            getDoc(doc(db, 'blockedUIDs', uid)),
+            getDoc(doc(db, "blockedUIDs", uid)),
             1200,
-            { exists: () => false } as any
+            { exists: () => false } as any,
           );
           if (uidSnap.exists()) {
             setIsUidBlocked(true);
@@ -559,42 +669,45 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
 
       // 2. Save to demoParticipants collection
       const demoPartId = `dm_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-      const demoRef = doc(db, 'demoParticipants', demoPartId);
+      const demoRef = doc(db, "demoParticipants", demoPartId);
 
       const demoPayload = {
         name: demoNameInput.trim(),
-        gmail: demoGmailInput.trim() || '',
+        gmail: demoGmailInput.trim() || "",
         meetingId: meetingId,
         ip: finalIp,
-        deviceId: deviceId || 'Unknown',
-        uid: uid || 'Unknown',
+        deviceId: deviceId || "Unknown",
+        uid: uid || "Unknown",
         browserFingerprint: getBrowserFingerprint(),
-        userAgent: navigator.userAgent || 'Unknown Browser',
+        userAgent: navigator.userAgent || "Unknown Browser",
         joinedAt: serverTimestamp(),
-        blocked: false
+        blocked: false,
       };
 
       try {
-        await withTimeout(
-          setDoc(demoRef, demoPayload),
-          1500,
-          null
-        );
+        await withTimeout(setDoc(demoRef, demoPayload), 1500, null);
         // Introduce a tiny 100ms delay to let the network start the write before redirect unloads the page
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, 100));
       } catch (err: any) {
-        console.warn("Failed or timed out to write to demoParticipants, but allowing redirect anyway for quick connection:", err);
+        console.warn(
+          "Failed or timed out to write to demoParticipants, but allowing redirect anyway for quick connection:",
+          err,
+        );
       }
 
       // 3. Meet active checking
       if (!meetingActive) {
-        setDemoError("এই কাউন্সেলিং সেশনটি বৰ্তমানে নিষ্ক্রিয় বা সম্পন্ন করা হয়েছে।");
+        setDemoError(
+          "এই কাউন্সেলিং সেশনটি বৰ্তমানে নিষ্ক্রিয় বা সম্পন্ন করা হয়েছে।",
+        );
         setIsDemoSubmitting(false);
         return;
       }
 
       if (!googleMeetLink) {
-        setDemoError("গুগল মিট (Google Meet) লিংকটি এখনও সেশনে যুক্ত করা হয়নি।");
+        setDemoError(
+          "গুগল মিট (Google Meet) লিংকটি এখনও সেশনে যুক্ত করা হয়নি।",
+        );
         setIsDemoSubmitting(false);
         return;
       }
@@ -602,11 +715,10 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
       // 4. Redirect
       let redirectUrl = googleMeetLink.trim();
       if (!/^https?:\/\//i.test(redirectUrl)) {
-        redirectUrl = 'https://' + redirectUrl;
+        redirectUrl = "https://" + redirectUrl;
       }
 
       window.location.assign(redirectUrl);
-
     } catch (err: any) {
       console.error("Demo registration error:", err);
       setDemoError("সার্ভারের সাথে সংযোগ বিচ্ছিন্ন হয়েছে। আবার চেষ্টা করুন।");
@@ -616,69 +728,92 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
 
   // Formatting meeting date and time into elegant Bengali
   function formatMeetingDateTime(dateStr?: string, timeStr?: string) {
-    if (!dateStr) return '';
+    if (!dateStr) return "";
     try {
-      const parts = dateStr.split('-');
+      const parts = dateStr.split("-");
       if (parts.length === 3) {
         const year = parts[0];
         const month = parts[1];
         const day = parts[2];
-        const monthsBg = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
+        const monthsBg = [
+          "জানুয়ারি",
+          "ফেব্রুয়ারি",
+          "মার্চ",
+          "এপ্রিল",
+          "মে",
+          "জুন",
+          "জুলাই",
+          "আগস্ট",
+          "সেপ্টেম্বর",
+          "অক্টোবর",
+          "নভেম্বর",
+          "ডিসেম্বর",
+        ];
         const monthIndex = parseInt(month, 10) - 1;
         const monthBg = monthsBg[monthIndex] || month;
-        
+
         // Bengali digit converter
         const bgDigits: { [key: string]: string } = {
-          '0': '০', '1': '১', '2': '২', '3': '৩', '4': '৪',
-          '5': '৫', '6': '৬', '7': '৭', '8': '৮', '9': '৯'
+          "0": "০",
+          "1": "১",
+          "2": "২",
+          "3": "৩",
+          "4": "৪",
+          "5": "৫",
+          "6": "৬",
+          "7": "৭",
+          "8": "৮",
+          "9": "৯",
         };
-        const toBgNum = (numStr: string) => numStr.split('').map(char => bgDigits[char] || char).join('');
-        
-        let formattedTime = '';
+        const toBgNum = (numStr: string) =>
+          numStr
+            .split("")
+            .map((char) => bgDigits[char] || char)
+            .join("");
+
+        let formattedTime = "";
         if (timeStr) {
-          const tParts = timeStr.split(':');
+          const tParts = timeStr.split(":");
           if (tParts.length >= 2) {
             let hour = parseInt(tParts[0], 10);
             const minute = tParts[1];
-            let ampm = 'সকাল';
+            let ampm = "সকাল";
             if (hour >= 12) {
-              ampm = 'বিকাল';
+              ampm = "বিকাল";
               if (hour > 12) hour -= 12;
             } else {
               if (hour === 0) hour = 12;
-              if (hour >= 6 && hour < 12) ampm = 'সকাল';
-              else ampm = 'রাত';
+              if (hour >= 6 && hour < 12) ampm = "সকাল";
+              else ampm = "রাত";
             }
             formattedTime = `, ${ampm} ${toBgNum(String(hour))}:${toBgNum(minute)} মিনিট`;
           }
         }
-        
+
         return `${toBgNum(day)} ${monthBg} ${toBgNum(year)} ${formattedTime}`;
       }
     } catch (e) {
       console.warn("Date parsing error", e);
     }
-    return `${dateStr} ${timeStr || ''}`;
+    return `${dateStr} ${timeStr || ""}`;
   }
 
   // --- RENDERING MAIN WITH PHONE FRAME ---
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-slate-100 flex flex-col justify-center items-center p-0 md:p-8 select-text overflow-x-hidden relative">
-      
       {/* Ambient glass glows for luxury background context on desktop */}
       <div className="hidden md:block absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-amber-500/10 rounded-full blur-[130px] pointer-events-none"></div>
       <div className="hidden md:block absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-blue-500/10 rounded-full blur-[130px] pointer-events-none"></div>
-      
+
       {/* PHONE FRAME CHASSIS (Desktop Only) */}
       <div className="w-full min-h-screen md:min-h-[840px] md:max-w-[410px] md:h-[840px] md:border-[14px] md:border-slate-800 md:rounded-[56px] md:shadow-[0_25px_60px_-15px_rgba(0,0,0,0.85)] bg-slate-50 flex flex-col relative overflow-hidden transition-all duration-300">
-        
         {/* Inner shadow/ring border overlay to give real physical frame depth */}
         <div className="absolute inset-0 border border-slate-700/35 rounded-[42px] pointer-events-none z-50 hidden md:block"></div>
 
         {/* PHONE NOTCH / STATUS BAR (Desktop Only) */}
         <div className="hidden md:flex absolute top-0 inset-x-0 h-10 bg-slate-950 justify-between items-center px-7 z-50 text-[10.5px] text-slate-300 font-mono select-none">
           <span className="font-bold tracking-tight text-white/95">০৯:২১</span>
-          
+
           {/* Pill shape dynamic island/notch */}
           <div className="w-28 h-5.5 bg-black rounded-full absolute left-1/2 -translate-x-1/2 flex items-center justify-center border border-slate-800/80 shadow-inner">
             <div className="w-3 h-3 bg-slate-900 rounded-full border border-slate-800 absolute left-3 flex items-center justify-center p-[1px]">
@@ -686,7 +821,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
             </div>
             <div className="w-10 h-1 bg-slate-900 rounded-full absolute right-4"></div>
           </div>
-          
+
           <div className="flex items-center gap-1.5">
             <span className="font-black text-[9px] text-[#22c55e]">5G</span>
             {/* Wifi Icon */}
@@ -706,23 +841,19 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
 
         {/* --- DEMO MODE OVERLAY / CARD MODAL --- */}
         {demoModeStep !== null && (
-          <div 
-            className="absolute inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-5 font-sans animate-fade-in"
-          >
-            <div 
-              className="w-full max-w-sm bg-white rounded-3xl border border-slate-100 shadow-2xl p-6 relative overflow-hidden space-y-4 animate-scale-up"
-            >
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-5 font-sans animate-fade-in">
+            <div className="w-full max-w-sm bg-white rounded-3xl border border-slate-100 shadow-2xl p-6 relative overflow-hidden space-y-4 animate-scale-up">
               {/* Decorative colors Accent */}
               <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-emerald-400 via-teal-500 to-emerald-500"></div>
 
               {/* Close Button */}
-              <button 
+              <button
                 type="button"
                 onClick={() => {
                   setDemoModeStep(null);
-                  setDemoEnteredCode('');
-                  setDemoNameInput('');
-                  setDemoGmailInput('');
+                  setDemoEnteredCode("");
+                  setDemoNameInput("");
+                  setDemoGmailInput("");
                   setDemoError(null);
                 }}
                 className="absolute top-4 right-4 text-slate-400 hover:text-slate-650 font-bold bg-slate-100 h-6 w-6 rounded-full flex items-center justify-center text-xs cursor-pointer"
@@ -735,7 +866,9 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                   ডেমো ইউজার পোর্টাল
                 </span>
-                <h3 className="text-lg font-black text-slate-900 leading-tight">ইউনিক ডেমো সাইন-ইন</h3>
+                <h3 className="text-lg font-black text-slate-900 leading-tight">
+                  ইউনিক ডেমো সাইন-ইন
+                </h3>
                 <p className="text-[10px] text-slate-500 font-extrabold leading-relaxed">
                   অ্যাডমিন প্যানেল কর্তৃক নির্ধারিত কোড দিয়ে প্রবেশ করুন।
                 </p>
@@ -748,10 +881,12 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
               )}
 
               {/* STEP 1: Enter Code */}
-              {demoModeStep === 'enter_code' && (
+              {demoModeStep === "enter_code" && (
                 <form onSubmit={handleDemoCodeVerify} className="space-y-4">
                   <div className="space-y-1.5 text-center">
-                    <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">৪ সংখ্যার কোড টাইপ করুন</label>
+                    <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">
+                      ৪ সংখ্যার কোড টাইপ করুন
+                    </label>
                     <input
                       type="text"
                       required
@@ -759,10 +894,14 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                       pattern="[0-9]{4}"
                       placeholder="••••"
                       value={demoEnteredCode}
-                      onChange={(e) => setDemoEnteredCode(e.target.value.replace(/\D/g, ''))}
+                      onChange={(e) =>
+                        setDemoEnteredCode(e.target.value.replace(/\D/g, ""))
+                      }
                       className="w-32 mx-auto text-center px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 font-mono font-black text-2xl tracking-[0.5em] focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 focus:bg-white transition-all shadow-inner"
                     />
-                    <p className="text-[9px] text-slate-400 font-semibold">অ্যাডমিন আইডি থেকে সেট করা ৪ সংখ্যার কোডটি দিন।</p>
+                    <p className="text-[9px] text-slate-400 font-semibold">
+                      অ্যাডমিন আইডি থেকে সেট করা ৪ সংখ্যার কোডটি দিন।
+                    </p>
                   </div>
 
                   <button
@@ -775,39 +914,53 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
               )}
 
               {/* STEP 2: Enter Student Name */}
-              {demoModeStep === 'enter_info' && (
+              {demoModeStep === "enter_info" && (
                 <form onSubmit={handleDemoJoin} className="space-y-4">
                   <div className="space-y-3">
-                     <div className="space-y-1">
-                       <label className="text-[10px] font-black text-slate-700 block uppercase">আপনার সম্পূর্ণ নাম</label>
-                       <input
-                         type="text"
-                         required
-                         placeholder="যেমন: মোঃ সাকিব হাসান"
-                         value={demoNameInput}
-                         onChange={(e) => setDemoNameInput(e.target.value)}
-                         className="w-full px-4.5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                       />
-                     </div>
-                   </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-700 block uppercase">
+                        আপনার সম্পূর্ণ নাম
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="যেমন: মোঃ সাকিব হাসান"
+                        value={demoNameInput}
+                        onChange={(e) => setDemoNameInput(e.target.value)}
+                        className="w-full px-4.5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                      />
+                    </div>
 
-                   <button
-                     type="submit"
-                     disabled={isDemoSubmitting}
-                     className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-2xl shadow-[0_4px_12px_rgba(16,185,129,0.25)] transition duration-155 text-[12px] cursor-pointer flex items-center justify-center gap-2"
-                   >
-                     {isDemoSubmitting ? (
-                       <>
-                         <Loader2 className="h-4 w-4 animate-spin text-white" />
-                         <span>মিটিংয়ে রেফার করা হচ্ছে...</span>
-                       </>
-                     ) : (
-                       <>
-                         <CheckCircle className="h-4 w-4 text-white" />
-                         <span>মিটিংয়ে প্রবেশ করুন (ডেমো)</span>
-                       </>
-                     )}
-                   </button>
+                    {/* Tracking details below name for demo */}
+                    <div className="bg-slate-50 border border-slate-150 p-3.5 rounded-2xl flex flex-col items-start gap-1.5 text-[9.5px] font-extrabold text-slate-650 select-none mt-2 shadow-xs">
+                      <span className="flex items-center gap-1.5">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        IP ADDRESS: <code className="text-slate-800 font-mono font-black">{ipAddress || 'Checking...'}</code>
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse"></span>
+                        USER UID: <code className="text-[#1b6ffc] font-mono font-black">{uid || 'Checking...'}</code>
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isDemoSubmitting}
+                    className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-2xl shadow-[0_4px_12px_rgba(16,185,129,0.25)] transition duration-155 text-[12px] cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    {isDemoSubmitting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin text-white" />
+                        <span>মিটিংয়ে রেফার করা হচ্ছে...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="h-4 w-4 text-white" />
+                        <span>মিটিংয়ে প্রবেশ করুন (ডেমো)</span>
+                      </>
+                    )}
+                  </button>
                 </form>
               )}
             </div>
@@ -821,8 +974,12 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
               <Loader2 className="h-9 w-9 animate-spin text-amber-500" />
             </div>
             <div className="space-y-1">
-              <p className="text-slate-800 font-black text-sm">ডিভাইস ভেরিফিকেশন চলছে</p>
-              <p className="text-slate-400 font-medium text-[10px]">নিরাপত্তা ব্যবস্থা এবং আইপি অ্যাড্রেস সংযোগ পরীক্ষা হচ্ছে...</p>
+              <p className="text-slate-800 font-black text-sm">
+                ডিভাইস ভেরিফিকেশন চলছে
+              </p>
+              <p className="text-slate-400 font-medium text-[10px]">
+                নিরাপত্তা ব্যবস্থা এবং আইপি অ্যাড্রেস সংযোগ পরীক্ষা হচ্ছে...
+              </p>
             </div>
           </div>
         )}
@@ -830,7 +987,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
         {/* BLOCKED ACCESS-DENIED SCREEN - Center inside frame */}
         {!isLoading && isBlocked && (
           <div className="flex-1 flex flex-col justify-between p-6 bg-slate-50 pt-16">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.3 }}
@@ -839,30 +996,52 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
               <div className="h-20 w-20 bg-rose-50 rounded-3xl shadow-inner flex items-center justify-center mx-auto border-2 border-rose-100">
                 <ShieldAlert className="h-11 w-11 text-rose-500" />
               </div>
-              
+
               <div className="space-y-3">
-                <h1 className="text-2xl font-black text-rose-600 tracking-tight">অ্যাক্সেস ব্লকড!</h1>
-                
+                <h1 className="text-2xl font-black text-rose-600 tracking-tight">
+                  অ্যাক্সেস ব্লকড!
+                </h1>
+
                 {isVPN ? (
                   <p className="text-slate-600 text-xs leading-relaxed px-2 font-medium">
-                    নিরাপত্তা জনিত কারণে <span className="font-extrabold text-rose-650 underline decoration-rose-400">VPN বা প্রক্সি (Proxy Network)</span> ব্যবহার করে মিটিংয়ে জয়েন করা সম্পূর্ণরূপে নিষিদ্ধ। অনুগ্রহ করে আপনার আসল ওয়াইফাই বা মোবাইল ইন্টারনেট ব্যবহার করুন।
+                    নিরাপত্তা জনিত কারণে{" "}
+                    <span className="font-extrabold text-rose-650 underline decoration-rose-400">
+                      VPN বা প্রক্সি (Proxy Network)
+                    </span>{" "}
+                    ব্যবহার করে মিটিংয়ে জয়েন করা সম্পূর্ণরূপে নিষিদ্ধ। অনুগ্রহ
+                    করে আপনার আসল ওয়াইফাই বা মোবাইল ইন্টারনেট ব্যবহার করুন।
                   </p>
                 ) : (
                   <p className="text-slate-600 text-xs leading-relaxed px-2 font-medium">
-                    দুঃখিত, আমাদের সিকিউরিটি ফিল্টার আপনার <span className="font-extrabold text-rose-650">ডিভাইস আইপি অথবা হার্ডওয়্যার আইডি</span> ব্লক করেছে। আপনি আর এই মিটিং সেশনের জন্য অ্যাক্সেস পাবেন না।
+                    দুঃখিত, আমাদের সিকিউরিটি ফিল্টার আপনার{" "}
+                    <span className="font-extrabold text-rose-650">
+                      ডিভাইস আইপি অথবা হার্ডওয়্যার আইডি
+                    </span>{" "}
+                    ব্লক করেছে। আপনি আর এই মিটিং সেশনের জন্য অ্যাক্সেস পাবেন না।
                   </p>
                 )}
-                
+
                 <div className="bg-slate-200/80 border border-slate-300/40 px-3 py-2 rounded-2xl font-mono text-[10.5px] font-extrabold text-slate-700 mt-3 space-y-1 shadow-sm text-left">
-                   <p className="border-b border-slate-300 pb-1 flex justify-between"><span>IP ADDRESS:</span> <span className="text-rose-600">{ipAddress}</span></p>
-                   <p className="border-b border-slate-300 pb-1 pt-1 flex justify-between"><span>DEVICE ID:</span> <span className="text-slate-600">{deviceId ? `${deviceId.substring(0, 12)}...` : 'Unknown'}</span></p>
-                   <p className="pt-1 flex justify-between"><span>USER ID (UID):</span> <span className="text-amber-600">{uid || 'Unknown'}</span></p>
+                  <p className="border-b border-slate-300 pb-1 flex justify-between">
+                    <span>IP ADDRESS:</span>{" "}
+                    <span className="text-rose-600">{ipAddress}</span>
+                  </p>
+                  <p className="border-b border-slate-300 pb-1 pt-1 flex justify-between">
+                    <span>DEVICE ID:</span>{" "}
+                    <span className="text-slate-600">
+                      {deviceId ? `${deviceId.substring(0, 12)}...` : "Unknown"}
+                    </span>
+                  </p>
+                  <p className="pt-1 flex justify-between">
+                    <span>USER ID (UID):</span>{" "}
+                    <span className="text-amber-600">{uid || "Unknown"}</span>
+                  </p>
                 </div>
               </div>
             </motion.div>
           </div>
         )}
-        
+
         {!isLoading && !isBlocked && (
           <div className="flex-1 overflow-y-auto pt-6 md:pt-14 pb-8 flex flex-col bg-slate-50 relative animate-fade-in">
             {/* Thin Scrolling Notice Bar */}
@@ -872,14 +1051,15 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                   <Bell className="h-3 w-3 text-[#02b396] shrink-0 font-bold" />
                   <span>ঘোষণা</span>
                 </span>
-                
+
                 <div className="flex-1 overflow-hidden flex items-center">
-                  <Marquee 
-                    scrollamount="3" 
+                  <Marquee
+                    scrollamount="3"
                     direction="left"
                     className="text-[10.5px] font-extrabold font-sans whitespace-nowrap text-white"
                   >
-                    {noticeText} &nbsp;&nbsp;&nbsp;&nbsp; ★ &nbsp;&nbsp;&nbsp;&nbsp; {noticeText}
+                    {noticeText} &nbsp;&nbsp;&nbsp;&nbsp; ★
+                    &nbsp;&nbsp;&nbsp;&nbsp; {noticeText}
                   </Marquee>
                 </div>
               </div>
@@ -894,32 +1074,39 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                 <div className="absolute -bottom-12 -left-12 w-28 h-28 bg-blue-500/[0.02] rounded-full blur-xl pointer-events-none"></div>
 
                 <div className="space-y-2.5">
-                  <div 
+                  <div
                     onClick={() => {
                       if (demoModeActive) {
-                        setDemoModeStep('enter_code');
-                        setDemoEnteredCode('');
-                        setDemoNameInput('');
-                        setDemoGmailInput('');
+                        setDemoModeStep("enter_code");
+                        setDemoEnteredCode("");
+                        setDemoNameInput("");
+                        setDemoGmailInput("");
                         setDemoError(null);
                       }
                     }}
                     className={`inline-flex items-center gap-2 bg-gradient-to-r from-[#02b396]/5 to-[#1b6ffc]/5 border border-[#02b396]/20 px-4 py-1.5 rounded-full text-[10px] font-black text-[#02b396] shadow-[0_2px_10px_rgba(2,179,150,0.02)] uppercase tracking-widest select-none ${
-                      demoModeActive 
-                        ? 'cursor-pointer hover:from-[#02b396]/10 hover:to-[#1b6ffc]/10 hover:border-[#02b396]/30 transition duration-150 active:scale-95' 
-                        : ''
+                      demoModeActive
+                        ? "cursor-pointer hover:from-[#02b396]/10 hover:to-[#1b6ffc]/10 hover:border-[#02b396]/30 transition duration-150 active:scale-95"
+                        : ""
                     }`}
                   >
                     <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" style={{ animationDuration: '2s' }}></span>
+                      <span
+                        className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"
+                        style={{ animationDuration: "2s" }}
+                      ></span>
                       <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500 shadow-[0_0_6px_#10b981]"></span>
                     </span>
                     <span>সেশন লাইভ পোর্টাল</span>
                   </div>
-                  
+
                   <h1 className="text-2xl font-black tracking-tight text-slate-900 font-sans">
-                    <span className="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 bg-clip-text text-transparent">UNITY</span>
-                    <span className="bg-gradient-to-r from-[#02b396] to-[#1b6ffc] bg-clip-text text-transparent ml-1.5">EARNING</span>
+                    <span className="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 bg-clip-text text-transparent">
+                      UNITY
+                    </span>
+                    <span className="bg-gradient-to-r from-[#02b396] to-[#1b6ffc] bg-clip-text text-transparent ml-1.5">
+                      EARNING
+                    </span>
                   </h1>
                   <p className="text-[12px] font-bold text-slate-500 tracking-wide">
                     অফিসিয়াল সেশন জয়েনিং পোর্টাল
@@ -931,7 +1118,12 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                     <span className="flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-full bg-[#1b6ffc] text-white shadow-sm">
                       <Calendar className="h-4 w-4" />
                     </span>
-                    <span>সেশন সময়: <span className="text-[#1b6ffc] font-black">{formatMeetingDateTime(meetingDate, meetingTime)}</span></span>
+                    <span>
+                      সেশন সময়:{" "}
+                      <span className="text-[#1b6ffc] font-black">
+                        {formatMeetingDateTime(meetingDate, meetingTime)}
+                      </span>
+                    </span>
                   </div>
                 )}
               </div>
@@ -941,7 +1133,9 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                 {errorMessage && (
                   <div className="bg-red-50 border border-red-200 rounded-2xl p-3.5 flex items-start gap-2.5 shadow-sm">
                     <AlertCircle className="h-4.5 w-4.5 text-red-500 shrink-0 mt-0.5" />
-                    <p className="text-xs text-red-800 font-bold leading-normal">{errorMessage}</p>
+                    <p className="text-xs text-red-800 font-bold leading-normal">
+                      {errorMessage}
+                    </p>
                   </div>
                 )}
 
@@ -949,7 +1143,9 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                   <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 flex items-start gap-2.5 shadow-sm">
                     <AlertCircle className="h-4.5 w-4.5 text-amber-600 shrink-0 mt-0.5" />
                     <p className="text-[10.5px] text-amber-900 leading-normal font-medium">
-                      এই কাউন্সেলিং সেশনটি বৰ্তমানে অ্যাডমিন কর্তৃক নিষ্ক্রিয় রাখা হয়েছে। আপনি আপনার নাম সাবমিট করে রাখতে পারেন, কিন্তু মিটিং লিংক অন না করা পর্যন্ত রিডাইরেক্ট হতে পারবেন না।
+                      এই কাউন্সেলিং সেশনটি বৰ্তমানে অ্যাডমিন কর্তৃক নিষ্ক্রিয়
+                      রাখা হয়েছে। আপনি আপনার নাম সাবমিট করে রাখতে পারেন, কিন্তু
+                      মিটিং লিংক অন না করা পর্যন্ত রিডাইরেক্ট হতে পারবেন না।
                     </p>
                   </div>
                 )}
@@ -957,42 +1153,46 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                 {!publicLinkActive && (
                   <div className="bg-[#fff1f2]/90 border-2 border-dashed border-[#f43f5e]/40 rounded-3xl p-5 shadow-sm text-center space-y-3.5 relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-20 h-20 bg-[#f43f5e]/[0.02] rounded-full blur-xl pointer-events-none"></div>
-                    
+
                     <div className="mx-auto w-12 h-12 bg-[#ffe4e6] rounded-full flex items-center justify-center animate-pulse">
                       <ShieldAlert className="h-6 w-6 text-[#e11d48]" />
                     </div>
-                    
+
                     <div className="space-y-1.5">
                       <h3 className="font-sans font-black text-[13.5px] text-[#9f1239] uppercase tracking-wide">
                         ⚠️ জয়েনিং অপশন বর্তমানে বন্ধ রয়েছে
                       </h3>
                       <p className="text-[11.5px] text-[#be123c] font-black leading-relaxed px-1">
-                         সম্মানিত এডমিন বর্তমানে সাধারণ লিংকের মাধ্যমে নাম লিখে জয়েন করার অপশনটি বন্ধ (অফ) করে রেখেছেন। 
+                        সম্মানিত এডমিন বর্তমানে সাধারণ লিংকের মাধ্যমে নাম লিখে
+                        জয়েন করার অপশনটি বন্ধ (অফ) করে রেখেছেন।
                       </p>
                       <p className="text-[10px] text-slate-500 font-bold leading-normal px-2">
-                        এডমিন জয়েন করার অপশন অন করার সাথে সাথে নাম টাইপ করার বক্সটি এখানে সচল হবে। অনুগ্রহ করে লাইভ সেশনের জন্য অপেক্ষা করুন।
+                        এডমিন জয়েন করার অপশন অন করার সাথে সাথে নাম টাইপ করার
+                        বক্সটি এখানে সচল হবে। অনুগ্রহ করে লাইভ সেশনের জন্য
+                        অপেক্ষা করুন।
                       </p>
                     </div>
 
                     <div className="bg-white border border-[#ffe4e6] rounded-2xl py-2 px-4 shadow-inner text-[10px] font-black text-[#be123c] inline-flex items-center gap-1.5 select-none hover:scale-101 transition duration-155">
                       <Clock className="h-3.5 w-3.5 text-[#e11d48] animate-spin" />
-                      <span>স্ট্যাটাস: অ্যাডমিন কর্তৃক সাধারণ জয়েন নিষ্ক্রিয়</span>
+                      <span>
+                        স্ট্যাটাস: অ্যাডমিন কর্তৃক সাধারণ জয়েন নিষ্ক্রিয়
+                      </span>
                     </div>
                   </div>
                 )}
 
                 {/* Form Elements with Redesigned Name Input & Submission wrapper */}
                 <form onSubmit={handleJoin} className="space-y-6">
-                  
                   {/* 1. Name Input Box with premium flashing glowing halo (লাইট জ্বলবে নিবে) */}
                   {publicLinkActive && (
                     <div className="relative">
                       {/* Very gentle, soft, premium ambient glowing halo pulsing slowly (মৃদু লাইট আস্তে আস্তে জ্বলবে নিবে) */}
-                      <div 
-                        className="absolute -inset-1 bg-[#02b396] rounded-[28px] blur-md opacity-25 pointer-events-none animate-pulse" 
-                        style={{ animationDuration: '4s' }}
+                      <div
+                        className="absolute -inset-1 bg-[#02b396] rounded-[28px] blur-md opacity-25 pointer-events-none animate-pulse"
+                        style={{ animationDuration: "4s" }}
                       ></div>
-                      
+
                       <div className="relative bg-white rounded-3xl p-5 border border-[#02b396]/60 shadow-[0_8px_30px_rgba(2,179,150,0.06)] space-y-4 z-10 transition-all duration-300">
                         <div className="flex items-center justify-between px-0.5">
                           <div className="flex items-center gap-2">
@@ -1001,9 +1201,9 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                             </span>
                             <span className="text-slate-800 font-extrabold text-[13px] flex items-center gap-2">
                               <span className="relative flex h-2 w-2">
-                                <span 
+                                <span
                                   className="absolute inline-flex h-full w-full rounded-full bg-[#02b396] opacity-50 animate-ping"
-                                  style={{ animationDuration: '3s' }}
+                                  style={{ animationDuration: "3s" }}
                                 ></span>
                                 <span className="relative inline-flex rounded-full h-2 w-2 bg-[#02b396] shadow-[0_0_4px_#02b396]"></span>
                               </span>
@@ -1011,14 +1211,14 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                             </span>
                           </div>
                         </div>
-                        
+
                         <div className="relative group">
                           {/* Extremely soft and gentle pulsing halo behind the input box */}
-                          <div 
+                          <div
                             className="absolute -inset-0.5 bg-[#02b396] rounded-2xl blur-sm opacity-20 pointer-events-none animate-pulse"
-                            style={{ animationDuration: '4s' }}
+                            style={{ animationDuration: "4s" }}
                           ></div>
-                          
+
                           <div className="relative">
                             <span className="absolute inset-y-0 left-0 pl-4.5 flex items-center text-[#02b396]">
                               <User className="h-5 w-5 opacity-70" />
@@ -1034,21 +1234,39 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                             {/* Gentle, soft breathing indicator inside the input box */}
                             <span className="absolute inset-y-0 right-4 flex items-center pointer-events-none">
                               <span className="relative flex h-2 w-2">
-                                <span 
+                                <span
                                   className="absolute inline-flex h-full w-full rounded-full bg-[#02b396] opacity-40 animate-ping"
-                                  style={{ animationDuration: '3s' }}
+                                  style={{ animationDuration: "3s" }}
                                 ></span>
                                 <span className="relative inline-flex rounded-full h-2 w-2 bg-[#02b396] shadow-[0_0_6px_#02b396]"></span>
                               </span>
                             </span>
                           </div>
                         </div>
-                        
+
                         <div className="bg-[#fff1f2] border border-[#ffe2e2] px-4 py-2.5 rounded-2xl flex items-center justify-center gap-2 select-none">
                           <AlertTriangle className="h-4 w-4 text-[#f59e0b] shrink-0" />
                           <p className="text-[11px] text-rose-600 font-extrabold leading-normal">
                             নাম ভুল হলে মিটিং থেকে সরাসরি বের করে দেয়া হতে পারে।
                           </p>
+                        </div>
+
+                        {/* Tracking details below name / warning */}
+                        <div className="bg-slate-50 border border-slate-150 p-3.5 rounded-2xl flex flex-col xs:flex-row items-center justify-between text-[10.5px] font-extrabold text-slate-650 gap-2 select-none shadow-xs mt-1">
+                          <span className="flex items-center gap-1.5">
+                            <span className="h-2 w-2 rounded-full bg-[#02b396] animate-pulse"></span>
+                            IP ADDRESS:{" "}
+                            <code className="text-[#02b396] font-mono font-black">
+                              {ipAddress || "Checking..."}
+                            </code>
+                          </span>
+                          <span className="flex items-center gap-1.5">
+                            <span className="h-2 w-2 rounded-full bg-[#1b6ffc] animate-pulse"></span>
+                            USER UID:{" "}
+                            <code className="text-[#1b6ffc] font-mono font-black">
+                              {uid || "Checking..."}
+                            </code>
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -1058,14 +1276,19 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                   <div className="relative">
                     <button
                       type="submit"
-                      disabled={isSubmitting || !fullName.trim() || ipAddress === 'যাচাই হচ্ছে...' || !publicLinkActive}
+                      disabled={
+                        isSubmitting ||
+                        !fullName.trim() ||
+                        ipAddress === "যাচাই হচ্ছে..." ||
+                        !publicLinkActive
+                      }
                       className={`w-full py-5 text-white font-black rounded-2xl transition-all duration-300 cursor-pointer text-center flex items-center justify-center gap-2 text-[15px] border ${
-                        publicLinkActive 
-                          ? 'bg-gradient-to-r from-[#02b396] to-[#1b6ffc] hover:from-[#02a085] hover:to-[#175ed4] shadow-[0_10px_25px_-5px_rgba(2,179,150,0.35)] hover:shadow-[0_12px_30px_-5px_rgba(2,179,150,0.45)] border-[#02b396]/20 active:scale-[0.98] disabled:opacity-50' 
-                          : 'bg-slate-200 text-slate-400 border-slate-300 cursor-not-allowed opacity-65 shadow-none'
+                        publicLinkActive
+                          ? "bg-gradient-to-r from-[#02b396] to-[#1b6ffc] hover:from-[#02a085] hover:to-[#175ed4] shadow-[0_10px_25px_-5px_rgba(2,179,150,0.35)] hover:shadow-[0_12px_30px_-5px_rgba(2,179,150,0.45)] border-[#02b396]/20 active:scale-[0.98] disabled:opacity-50"
+                          : "bg-slate-200 text-slate-400 border-slate-300 cursor-not-allowed opacity-65 shadow-none"
                       }`}
                     >
-                      {ipAddress === 'যাচাই হচ্ছে...' ? (
+                      {ipAddress === "যাচাই হচ্ছে..." ? (
                         <div className="flex items-center justify-center gap-2">
                           <Loader2 className="h-5 w-5 animate-spin text-white" />
                           <span>নিরাপত্তা ভেরিফাই করা হচ্ছে...</span>
@@ -1073,16 +1296,23 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                       ) : isSubmitting ? (
                         <div className="flex flex-col items-center gap-1 py-0.5">
                           <Loader2 className="h-5 w-5 animate-spin text-white" />
-                          <span className="text-[10px] font-bold animate-pulse">লিঙ্ক রিকোয়েস্ট হচ্ছে, অপেক্ষা করুন...</span>
+                          <span className="text-[10px] font-bold animate-pulse">
+                            লিঙ্ক রিকোয়েস্ট হচ্ছে, অপেক্ষা করুন...
+                          </span>
                         </div>
                       ) : !publicLinkActive ? (
                         <div className="flex items-center justify-center gap-2 px-1">
                           <AlertCircle className="h-5 w-5 text-white animate-pulse" />
-                          <span className="text-white/80">জয়েনিং সেশন অ্যাডমিন কর্তৃক নিষ্ক্রিয় (অফ)</span>
+                          <span className="text-white/80">
+                            জয়েনিং সেশন অ্যাডমিন কর্তৃক নিষ্ক্রিয় (অফ)
+                          </span>
                         </div>
                       ) : (
                         <div className="flex items-center justify-center gap-2 px-1">
-                          <CheckCircle className="h-5 w-5 text-white" strokeWidth={2.5} />
+                          <CheckCircle
+                            className="h-5 w-5 text-white"
+                            strokeWidth={2.5}
+                          />
                           <span>মিটিংয়ে প্রবেশ করুন</span>
                         </div>
                       )}
@@ -1092,32 +1322,59 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                   {/* 3. Rules Container (Successfully relocated to the bottom of the form block) */}
                   <div className="bg-gradient-to-br from-[#faf8ff] to-[#f4f1ff] border border-violet-200/80 rounded-3xl p-5.5 space-y-4 shadow-sm relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-24 h-24 bg-violet-500/[0.02] rounded-full blur-xl pointer-events-none"></div>
-                    
+
                     <div className="flex items-center gap-2 font-black text-sm text-[#4c1d95] border-b border-violet-200/50 pb-2.5">
                       <AlertCircle className="h-5 w-5 shrink-0 text-[#7c3aed]" />
                       <h2>কাউন্সেলিং সেশন রুলস:</h2>
                     </div>
-                    
+
                     <ul className="space-y-3.5 text-[12.5px] text-[#3f3b5c] list-none pl-0.5 leading-relaxed font-bold">
                       <li className="flex items-start gap-2.5">
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 text-[10px] font-black shadow-inner">১</span>
-                        <span>মিটিংয়ে ঢুকেই প্রথম একটি <strong className="text-red-700 font-extrabold underline decoration-red-300">স্ক্রিনশট (Screenshot)</strong> নিয়ে কাউন্সেলরকে ইনবক্স করুন।</span>
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 text-[10px] font-black shadow-inner">
+                          ১
+                        </span>
+                        <span>
+                          মিটিংয়ে ঢুকেই প্রথম একটি{" "}
+                          <strong className="text-red-700 font-extrabold underline decoration-red-300">
+                            স্ক্রিনশট (Screenshot)
+                          </strong>{" "}
+                          নিয়ে কাউন্সেলরকে ইনবক্স করুন।
+                        </span>
                       </li>
                       <li className="flex items-start gap-2.5">
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 text-[10px] font-black shadow-inner">২</span>
-                        <span>সেশনের সমস্ত নিয়মনীতি মেনে সম্পূর্ণ সময় মিটিংয়ে থাকা আবশ্যক।</span>
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 text-[10px] font-black shadow-inner">
+                          ২
+                        </span>
+                        <span>
+                          সেশনের সমস্ত নিয়মনীতি মেনে সম্পূর্ণ সময় মিটিংয়ে থাকা
+                          আবশ্যক।
+                        </span>
                       </li>
                       <li className="flex items-start gap-2.5">
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 text-[10px] font-black shadow-inner">৩</span>
-                        <span>মাঝখানে চলে গেলে পুনরায় জয়েন রিকোয়েস্ট এক্সেপ্ট করা হবে না।</span>
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 text-[10px] font-black shadow-inner">
+                          ৩
+                        </span>
+                        <span>
+                          মাঝখানে চলে গেলে পুনরায় জয়েন রিকোয়েস্ট এক্সেপ্ট করা
+                          হবে না।
+                        </span>
                       </li>
                       <li className="flex items-start gap-2.5">
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 text-[10px] font-black shadow-inner">৪</span>
-                        <span>মিটিং চলাকালীন ফোনের কোনো প্রকার কলে কথা বলা যাবে না।</span>
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 text-[10px] font-black shadow-inner">
+                          ৪
+                        </span>
+                        <span>
+                          মিটিং চলাকালীন ফোনের কোনো প্রকার কলে কথা বলা যাবে না।
+                        </span>
                       </li>
                       <li className="flex items-start gap-2.5">
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 text-[10px] font-black shadow-inner">৫</span>
-                        <span>১০ মিনিট জয়েনিং টাইম চলবে পুরো মিটিংটি সর্বোচ্চ ৪০ মিনিট হবে।</span>
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 text-[10px] font-black shadow-inner">
+                          ৫
+                        </span>
+                        <span>
+                          ১০ মিনিট জয়েনিং টাইম চলবে পুরো মিটিংটি সর্বোচ্চ ৪০
+                          মিনিট হবে।
+                        </span>
                       </li>
                     </ul>
                   </div>
@@ -1129,9 +1386,19 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                 <div className="flex items-center gap-1.5">
                   <span>নিরাপদ সংযোগ কানেক্টেড</span>
                   <span className="text-slate-300">|</span>
-                  <span>UID: <code className="text-amber-600 font-mono font-bold">{uid || 'Unknown'}</code></span>
+                  <span>
+                    UID:{" "}
+                    <code className="text-amber-600 font-mono font-bold">
+                      {uid || "Unknown"}
+                    </code>
+                  </span>
                 </div>
-                <span>IP: <code className="text-amber-600 font-mono font-bold">{ipAddress === 'Unknown' ? 'যাচাই করা অসম্ভব' : ipAddress}</code></span>
+                <span>
+                  IP:{" "}
+                  <code className="text-amber-600 font-mono font-bold">
+                    {ipAddress === "Unknown" ? "যাচাই করা অসম্ভব" : ipAddress}
+                  </code>
+                </span>
               </div>
             </div>
           </div>
@@ -1139,7 +1406,6 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
 
         {/* HOME INDICATOR (Desktop Only) */}
         <div className="hidden md:block absolute bottom-1.5 left-1/2 -translate-x-1/2 w-32 h-1 bg-slate-400/80 rounded-full opacity-70"></div>
-
       </div>
     </div>
   );

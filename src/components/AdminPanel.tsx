@@ -1,34 +1,45 @@
-import React, { useState, useEffect } from 'react';
-import { db, auth, googleProvider, handleFirestoreError, OperationType } from '../firebase';
-import { signInAnonymously, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
-import { 
-  collection, 
-  doc, 
-  getDoc, 
-  getDocs, 
-  setDoc, 
-  updateDoc, 
-  deleteDoc, 
-  onSnapshot, 
-  query, 
-  where, 
+import React, { useState, useEffect } from "react";
+import {
+  db,
+  auth,
+  googleProvider,
+  handleFirestoreError,
+  OperationType,
+} from "../firebase";
+import {
+  signInAnonymously,
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged,
+} from "firebase/auth";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  onSnapshot,
+  query,
+  where,
   serverTimestamp,
-  orderBy 
-} from 'firebase/firestore';
-import { 
-  Lock, 
-  Link as LinkIcon, 
-  Users, 
+  orderBy,
+} from "firebase/firestore";
+import {
+  Lock,
+  Link as LinkIcon,
+  Users,
   UserCheck,
-  Ban, 
-  Settings as SettingsIcon, 
-  LogOut, 
-  Copy, 
-  Check, 
-  Search, 
-  Calendar, 
-  ShieldAlert, 
-  Clock, 
+  Ban,
+  Settings as SettingsIcon,
+  LogOut,
+  Copy,
+  Check,
+  Search,
+  Calendar,
+  ShieldAlert,
+  Clock,
   CheckCircle,
   Loader2,
   AlertTriangle,
@@ -41,16 +52,16 @@ import {
   Smartphone,
   Laptop,
   Tablet,
-  Monitor
-} from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
-import { Meeting, Participant, BlockedIP } from '../types';
+  Monitor,
+} from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
+import { Meeting, Participant, BlockedIP } from "../types";
 
 // Helper function to extract user-friendly device info from userAgent
 function getDeviceDetails(uaString?: string) {
-  const ua = uaString || '';
-  let name = 'অন্যান্য ডিভাইস (Unknown)';
-  let iconType: 'phone' | 'laptop' | 'tablet' | 'monitor' = 'phone';
+  const ua = uaString || "";
+  let name = "অন্যান্য ডিভাইস (Unknown)";
+  let iconType: "phone" | "laptop" | "tablet" | "monitor" = "phone";
 
   if (!ua) {
     return { name, iconType };
@@ -59,62 +70,62 @@ function getDeviceDetails(uaString?: string) {
   const lowerUa = ua.toLowerCase();
 
   if (/iphone/i.test(lowerUa)) {
-    name = 'আইফোন (iPhone)';
-    iconType = 'phone';
+    name = "আইফোন (iPhone)";
+    iconType = "phone";
   } else if (/ipad/i.test(lowerUa)) {
-    name = 'আইপ্যাড (iPad Tablet)';
-    iconType = 'tablet';
+    name = "আইপ্যাড (iPad Tablet)";
+    iconType = "tablet";
   } else if (/android/i.test(lowerUa)) {
     // Try to extract Android model name or brand
-    let model = 'Android Phone';
-    
+    let model = "Android Phone";
+
     const brands = [
-      { regex: /samsung|sm-/i, label: 'Samsung' },
-      { regex: /redmi|xiaomi|mi /i, label: 'Xiaomi/Redmi' },
-      { regex: /oppo|cph|pafm/i, label: 'Oppo' },
-      { regex: /vivo|v\d{4}/i, label: 'Vivo' },
-      { regex: /realme|rmx/i, label: 'Realme' },
-      { regex: /oneplus|op\d+/i, label: 'OnePlus' },
-      { regex: /pixel \d+/i, label: 'Google Pixel' },
-      { regex: /huawei|hry/i, label: 'Huawei' },
-      { regex: /infinix/i, label: 'Infinix' },
-      { regex: /tecno/i, label: 'Tecno' }
+      { regex: /samsung|sm-/i, label: "Samsung" },
+      { regex: /redmi|xiaomi|mi /i, label: "Xiaomi/Redmi" },
+      { regex: /oppo|cph|pafm/i, label: "Oppo" },
+      { regex: /vivo|v\d{4}/i, label: "Vivo" },
+      { regex: /realme|rmx/i, label: "Realme" },
+      { regex: /oneplus|op\d+/i, label: "OnePlus" },
+      { regex: /pixel \d+/i, label: "Google Pixel" },
+      { regex: /huawei|hry/i, label: "Huawei" },
+      { regex: /infinix/i, label: "Infinix" },
+      { regex: /tecno/i, label: "Tecno" },
     ];
-    
-    const foundBrand = brands.find(b => b.regex.test(ua));
+
+    const foundBrand = brands.find((b) => b.regex.test(ua));
     if (foundBrand) {
       model = foundBrand.label;
     } else {
       // Find possible device model in standard android string
       const match = ua.match(/\(([^)]+)\)/);
       if (match && match[1]) {
-        const parts = match[1].split(';');
-        const androidPartIdx = parts.findIndex(p => p.includes('Android'));
+        const parts = match[1].split(";");
+        const androidPartIdx = parts.findIndex((p) => p.includes("Android"));
         if (androidPartIdx !== -1 && androidPartIdx < parts.length - 1) {
           const possible = parts[androidPartIdx + 1].trim();
-          if (possible && possible !== 'K' && !possible.includes('Build')) {
+          if (possible && possible !== "K" && !possible.includes("Build")) {
             model = possible;
           }
         }
       }
     }
-    
+
     if (/tablet/i.test(lowerUa)) {
       name = `অ্যান্ড্রয়েড ট্যাবলেট (${model})`;
-      iconType = 'tablet';
+      iconType = "tablet";
     } else {
       name = `অ্যান্ড্রয়েড ফোন (${model})`;
-      iconType = 'phone';
+      iconType = "phone";
     }
   } else if (/windows/i.test(lowerUa)) {
-    name = 'উইন্ডোজ পিসি (Windows PC)';
-    iconType = 'monitor';
+    name = "উইন্ডোজ পিসি (Windows PC)";
+    iconType = "monitor";
   } else if (/macintosh|mac os/i.test(lowerUa)) {
-    name = 'ম্যাক পিসি (Mac)';
-    iconType = 'laptop';
+    name = "ম্যাক পিসি (Mac)";
+    iconType = "laptop";
   } else if (/linux/i.test(lowerUa)) {
-    name = 'লিনাক্স পিসি (Linux)';
-    iconType = 'monitor';
+    name = "লিনাক্স পিসি (Linux)";
+    iconType = "monitor";
   }
 
   return { name, iconType };
@@ -123,37 +134,47 @@ function getDeviceDetails(uaString?: string) {
 function getTodayDateString() {
   const today = new Date();
   const yyyy = today.getFullYear();
-  const mm = String(today.getMonth() + 1).padStart(2, '0');
-  const dd = String(today.getDate()).padStart(2, '0');
+  const mm = String(today.getMonth() + 1).padStart(2, "0");
+  const dd = String(today.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }
 
 export default function AdminPanel() {
   // Navigation & Authentication
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'meeting' | 'data' | 'demo' | 'blocked' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<
+    "dashboard" | "meeting" | "data" | "demo" | "blocked" | "settings"
+  >("dashboard");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [authMethod, setAuthMethod] = useState<'password' | 'google' | null>(null);
-  
+  const [authMethod, setAuthMethod] = useState<"password" | "google" | null>(
+    null,
+  );
+
   // Login input
-  const [emailInput, setEmailInput] = useState('');
-  const [passwordInput, setPasswordInput] = useState('');
+  const [emailInput, setEmailInput] = useState("");
+  const [passwordInput, setPasswordInput] = useState("");
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   // Firestore Saved Settings
-  const [savedPassword, setSavedPassword] = useState('212650');
+  const [savedPassword, setSavedPassword] = useState("212650");
   const [preventRepeatJoins, setPreventRepeatJoins] = useState(true);
   const [publicLinkActive, setPublicLinkActive] = useState(true);
-  const [noticeText, setNoticeText] = useState('');
+  const [noticeText, setNoticeText] = useState("");
   const [noticeActive, setNoticeActive] = useState(false);
   const [isUpdatingNotice, setIsUpdatingNotice] = useState(false);
-  const [noticeMessage, setNoticeMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [noticeMessage, setNoticeMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
 
   // Demo settings states
   const [demoModeActive, setDemoModeActive] = useState(false);
-  const [demoCode, setDemoCode] = useState('1234');
+  const [demoCode, setDemoCode] = useState("1234");
   const [isUpdatingDemoCode, setIsUpdatingDemoCode] = useState(false);
-  const [demoCodeMessage, setDemoCodeMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [demoCodeMessage, setDemoCodeMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
 
   // Real-time Data
   const [meetings, setMeetings] = useState<Meeting[]>([]);
@@ -163,23 +184,26 @@ export default function AdminPanel() {
   const [isDataLoading, setIsDataLoading] = useState(true);
 
   // Meeting form
-  const [meetInput, setMeetInput] = useState('');
+  const [meetInput, setMeetInput] = useState("");
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
   const [isSavingLink, setIsSavingLink] = useState(false);
   const [isMeetLinkActive, setIsMeetLinkActive] = useState(true);
   const [copysuccess, setCopysuccess] = useState(false);
 
   // Filters & Search
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const [dateFilter, setDateFilter] = useState(getTodayDateString);
-  const [blockedSearchQuery, setBlockedSearchQuery] = useState('');
-  const [blockedDateFilter, setBlockedDateFilter] = useState('');
-  const [meetingsDateFilter, setMeetingsDateFilter] = useState(getTodayDateString);
-  const [demoSearchQuery, setDemoSearchQuery] = useState('');
+  const [blockedSearchQuery, setBlockedSearchQuery] = useState("");
+  const [blockedDateFilter, setBlockedDateFilter] = useState("");
+  const [meetingsDateFilter, setMeetingsDateFilter] =
+    useState(getTodayDateString);
+  const [demoSearchQuery, setDemoSearchQuery] = useState("");
   const [demoDateFilter, setDemoDateFilter] = useState(getTodayDateString);
 
   // --- BULK ACTION STATES ---
-  const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);
+  const [selectedParticipantIds, setSelectedParticipantIds] = useState<
+    string[]
+  >([]);
   const [isBulkBlocking, setIsBulkBlocking] = useState(false);
   const [allBlockTip, setAllBlockTip] = useState(false);
 
@@ -187,31 +211,38 @@ export default function AdminPanel() {
   const [meetingDateInput, setMeetingDateInput] = useState(() => {
     const today = new Date();
     const yyyy = today.getFullYear();
-    const mm = String(today.getMonth() + 1).padStart(2, '0');
-    const dd = String(today.getDate()).padStart(2, '0');
+    const mm = String(today.getMonth() + 1).padStart(2, "0");
+    const dd = String(today.getDate()).padStart(2, "0");
     return `${yyyy}-${mm}-${dd}`;
   });
-  const [meetingTimeInput, setMeetingTimeInput] = useState('10:00');
+  const [meetingTimeInput, setMeetingTimeInput] = useState("10:00");
 
   // Deletion confirmation states (prevents native window.confirm blocks)
-  const [deletingMeetingId, setDeletingMeetingId] = useState<string | null>(null);
-  const [deletingParticipantId, setDeletingParticipantId] = useState<string | null>(null);
+  const [deletingMeetingId, setDeletingMeetingId] = useState<string | null>(
+    null,
+  );
+  const [deletingParticipantId, setDeletingParticipantId] = useState<
+    string | null
+  >(null);
 
   // Password Settings tab form
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [pwdMessage, setPwdMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [pwdMessage, setPwdMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
   const [isUpdatingPwd, setIsUpdatingPwd] = useState(false);
 
   // 1. Forced Logout on Mount for Sessionless Security on TV & Public devices
   useEffect(() => {
     // We clear any active localStorage fallback and force sign out of any cached sessions.
     // This ensures every time someone visits the Link or reloads, they MUST type the password newly.
-    localStorage.removeItem('ue_admin_auth');
+    localStorage.removeItem("ue_admin_auth");
     try {
       signOut(auth);
     } catch (e) {
-      console.warn('Forced initial signout error:', e);
+      console.warn("Forced initial signout error:", e);
     }
 
     setIsAuthenticated(false);
@@ -220,30 +251,41 @@ export default function AdminPanel() {
     // Retrieve active settings or initialize them
     async function fetchSettings() {
       try {
-        const docRef = doc(db, 'adminSettings', 'settings');
+        const docRef = doc(db, "adminSettings", "settings");
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           const data = docSnap.data();
-          setSavedPassword(data.password || '212650');
+          setSavedPassword(data.password || "212650");
           setPreventRepeatJoins(data.preventRepeatJoins !== false);
           setPublicLinkActive(data.publicLinkActive !== false);
-          setNoticeText(data.noticeText || '');
+          setNoticeText(data.noticeText || "");
           setNoticeActive(data.noticeActive === true);
           setDemoModeActive(data.demoModeActive === true);
-          setDemoCode(data.demoCode || '1234');
+          setDemoCode(data.demoCode || "1234");
         } else {
           // Initialize settings collection
-          await setDoc(docRef, { password: '212650', preventRepeatJoins: true, publicLinkActive: true, noticeText: '', noticeActive: false, demoModeActive: false, demoCode: '1234' });
-          setSavedPassword('212650');
+          await setDoc(docRef, {
+            password: "212650",
+            preventRepeatJoins: true,
+            publicLinkActive: true,
+            noticeText: "",
+            noticeActive: false,
+            demoModeActive: false,
+            demoCode: "1234",
+          });
+          setSavedPassword("212650");
           setPreventRepeatJoins(true);
           setPublicLinkActive(true);
-          setNoticeText('');
+          setNoticeText("");
           setNoticeActive(false);
           setDemoModeActive(false);
-          setDemoCode('1234');
+          setDemoCode("1234");
         }
       } catch (err) {
-        console.warn('Settings lookup restricted before auth, using fallback.', err);
+        console.warn(
+          "Settings lookup restricted before auth, using fallback.",
+          err,
+        );
       }
     }
 
@@ -256,83 +298,124 @@ export default function AdminPanel() {
 
     setIsDataLoading(true);
 
-    const qMeetings = query(collection(db, 'meetings'), orderBy('createdAt', 'desc'));
-    const unsubMeetings = onSnapshot(qMeetings, (snap) => {
-      const list: Meeting[] = [];
-      snap.forEach((doc) => {
-        list.push({ id: doc.id, ...doc.data() } as Meeting);
-      });
-      setMeetings(list);
-      // Pre-fill active link if present
+    const qMeetings = query(
+      collection(db, "meetings"),
+      orderBy("createdAt", "desc"),
+    );
+    const unsubMeetings = onSnapshot(
+      qMeetings,
+      (snap) => {
+        const list: Meeting[] = [];
+        snap.forEach((doc) => {
+          list.push({ id: doc.id, ...doc.data() } as Meeting);
+        });
+        setMeetings(list);
+        // Pre-fill active link if present
         if (list.length > 0) {
-          const activeItem = list.find(m => m.active) || list[0];
+          const activeItem = list.find((m) => m.active) || list[0];
           setMeetInput(activeItem.googleMeetLink);
           setIsMeetLinkActive(activeItem.active);
-          const origin = window.location.origin.trim().replace(/\/$/, ""); 
+          const origin = window.location.origin.trim().replace(/\/$/, "");
           setGeneratedLink(`${origin}/?join=${activeItem.id}`);
         }
-      setIsDataLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'meetings');
-    });
+        setIsDataLoading(false);
+      },
+      (error) => {
+        handleFirestoreError(error, OperationType.LIST, "meetings");
+      },
+    );
 
-    const unsubParticipants = onSnapshot(collection(db, 'participants'), (snap) => {
-      const list: Participant[] = [];
-      snap.forEach((doc) => {
-        list.push({ id: doc.id, ...doc.data() } as Participant);
-      });
-      // Sort in-memory descending by joinedAt safely to avoid potential Firestore index query bugs
-      list.sort((a, b) => {
-        const tA = a.joinedAt?.toDate ? a.joinedAt.toDate().getTime() : (a.joinedAt ? new Date(a.joinedAt).getTime() : 0);
-        const tB = b.joinedAt?.toDate ? b.joinedAt.toDate().getTime() : (b.joinedAt ? new Date(b.joinedAt).getTime() : 0);
-        return tB - tA;
-      });
-      setParticipants(list);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'participants');
-    });
+    const unsubParticipants = onSnapshot(
+      collection(db, "participants"),
+      (snap) => {
+        const list: Participant[] = [];
+        snap.forEach((doc) => {
+          list.push({ id: doc.id, ...doc.data() } as Participant);
+        });
+        // Sort in-memory descending by joinedAt safely to avoid potential Firestore index query bugs
+        list.sort((a, b) => {
+          const tA = a.joinedAt?.toDate
+            ? a.joinedAt.toDate().getTime()
+            : a.joinedAt
+              ? new Date(a.joinedAt).getTime()
+              : 0;
+          const tB = b.joinedAt?.toDate
+            ? b.joinedAt.toDate().getTime()
+            : b.joinedAt
+              ? new Date(b.joinedAt).getTime()
+              : 0;
+          return tB - tA;
+        });
+        setParticipants(list);
+      },
+      (error) => {
+        handleFirestoreError(error, OperationType.LIST, "participants");
+      },
+    );
 
-    const qBlocked = query(collection(db, 'blockedIPs'), orderBy('blockedAt', 'desc'));
-    const unsubBlocked = onSnapshot(qBlocked, (snap) => {
-      const list: BlockedIP[] = [];
-      snap.forEach((doc) => {
-        list.push({ ip: doc.id, ...doc.data() } as BlockedIP);
-      });
-      setBlockedIPs(list);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'blockedIPs');
-    });
+    const qBlocked = query(
+      collection(db, "blockedIPs"),
+      orderBy("blockedAt", "desc"),
+    );
+    const unsubBlocked = onSnapshot(
+      qBlocked,
+      (snap) => {
+        const list: BlockedIP[] = [];
+        snap.forEach((doc) => {
+          list.push({ ip: doc.id, ...doc.data() } as BlockedIP);
+        });
+        setBlockedIPs(list);
+      },
+      (error) => {
+        handleFirestoreError(error, OperationType.LIST, "blockedIPs");
+      },
+    );
 
     // Real-time Settings Listener
-    const unsubSettings = onSnapshot(doc(db, 'adminSettings', 'settings'), (snap) => {
-      if (snap.exists()) {
-        const data = snap.data();
-        setSavedPassword(data.password || '212650');
-        setPreventRepeatJoins(data.preventRepeatJoins !== false);
-        setPublicLinkActive(data.publicLinkActive !== false);
-        setNoticeText(data.noticeText || '');
-        setNoticeActive(data.noticeActive === true);
-        setDemoModeActive(data.demoModeActive === true);
-        setDemoCode(data.demoCode || '1234');
-      }
-    });
+    const unsubSettings = onSnapshot(
+      doc(db, "adminSettings", "settings"),
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          setSavedPassword(data.password || "212650");
+          setPreventRepeatJoins(data.preventRepeatJoins !== false);
+          setPublicLinkActive(data.publicLinkActive !== false);
+          setNoticeText(data.noticeText || "");
+          setNoticeActive(data.noticeActive === true);
+          setDemoModeActive(data.demoModeActive === true);
+          setDemoCode(data.demoCode || "1234");
+        }
+      },
+    );
 
     // Real-time Demo Participants Listener
-    const unsubDemoParticipants = onSnapshot(collection(db, 'demoParticipants'), (snap) => {
-      const list: any[] = [];
-      snap.forEach((doc) => {
-        list.push({ id: doc.id, ...doc.data() });
-      });
-      // Sort in-memory descending by joinedAt to prevent query error of index or missing field exclusions
-      list.sort((a, b) => {
-        const tA = a.joinedAt?.toDate ? a.joinedAt.toDate().getTime() : (a.joinedAt ? new Date(a.joinedAt).getTime() : 0);
-        const tB = b.joinedAt?.toDate ? b.joinedAt.toDate().getTime() : (b.joinedAt ? new Date(b.joinedAt).getTime() : 0);
-        return tB - tA;
-      });
-      setDemoParticipants(list);
-    }, (error) => {
-      console.warn("Failed to stream demoParticipants:", error);
-    });
+    const unsubDemoParticipants = onSnapshot(
+      collection(db, "demoParticipants"),
+      (snap) => {
+        const list: any[] = [];
+        snap.forEach((doc) => {
+          list.push({ id: doc.id, ...doc.data() });
+        });
+        // Sort in-memory descending by joinedAt to prevent query error of index or missing field exclusions
+        list.sort((a, b) => {
+          const tA = a.joinedAt?.toDate
+            ? a.joinedAt.toDate().getTime()
+            : a.joinedAt
+              ? new Date(a.joinedAt).getTime()
+              : 0;
+          const tB = b.joinedAt?.toDate
+            ? b.joinedAt.toDate().getTime()
+            : b.joinedAt
+              ? new Date(b.joinedAt).getTime()
+              : 0;
+          return tB - tA;
+        });
+        setDemoParticipants(list);
+      },
+      (error) => {
+        console.warn("Failed to stream demoParticipants:", error);
+      },
+    );
 
     return () => {
       unsubMeetings();
@@ -351,28 +434,35 @@ export default function AdminPanel() {
 
     try {
       // Fetch latest password on verify attempt
-      let latestPassword = '212650';
+      let latestPassword = "212650";
       try {
-        const docRef = doc(db, 'adminSettings', 'settings');
+        const docRef = doc(db, "adminSettings", "settings");
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
-          latestPassword = docSnap.data().password || '212650';
+          latestPassword = docSnap.data().password || "212650";
         }
       } catch (err) {
-        console.warn('Network read error, authenticating locally', err);
+        console.warn("Network read error, authenticating locally", err);
       }
 
       // Check if password matches latestPassword or fallback '212650'
-      if (passwordInput === latestPassword || passwordInput === '212650') {
+      if (passwordInput === latestPassword || passwordInput === "212650") {
         // If password entered was '212650' but the database setting holds a different value,
         // let's heal/update the database credentials automatically.
-        if (passwordInput === '212650' && latestPassword !== '212650') {
+        if (passwordInput === "212650" && latestPassword !== "212650") {
           try {
-            const docRef = doc(db, 'adminSettings', 'settings');
-            await setDoc(docRef, { password: '212650', preventRepeatJoins: preventRepeatJoins }, { merge: true });
-            setSavedPassword('212650');
+            const docRef = doc(db, "adminSettings", "settings");
+            await setDoc(
+              docRef,
+              { password: "212650", preventRepeatJoins: preventRepeatJoins },
+              { merge: true },
+            );
+            setSavedPassword("212650");
           } catch (writeError) {
-            console.error('Failed to sync Firestore settings to 212650', writeError);
+            console.error(
+              "Failed to sync Firestore settings to 212650",
+              writeError,
+            );
           }
         }
 
@@ -380,17 +470,22 @@ export default function AdminPanel() {
         try {
           await signInAnonymously(auth);
         } catch (authErr) {
-          console.error("Anonymous authentication disabled or blocked. Proceeding with client authentication.", authErr);
+          console.error(
+            "Anonymous authentication disabled or blocked. Proceeding with client authentication.",
+            authErr,
+          );
         }
         setIsAuthenticated(true);
-        setAuthMethod('password');
-        setPasswordInput('');
-        setEmailInput(''); // Reset email as well
+        setAuthMethod("password");
+        setPasswordInput("");
+        setEmailInput(""); // Reset email as well
       } else {
-        setLoginError('ভুল পাসওয়ার্ড। দয়া করে সঠিক পাসওয়ার্ড দিন। (পাসওয়ার্ড: 212650)');
+        setLoginError(
+          "ভুল পাসওয়ার্ড। দয়া করে সঠিক পাসওয়ার্ড দিন। (পাসওয়ার্ড: 212650)",
+        );
       }
     } catch (err) {
-      setLoginError('একটি সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।');
+      setLoginError("একটি সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।");
     } finally {
       setIsLoggingIn(false);
     }
@@ -403,23 +498,31 @@ export default function AdminPanel() {
     try {
       const res = await signInWithPopup(auth, googleProvider);
       const email = res.user.email;
-      
-      if (email === 'learninghubbd2126509574@gmail.com') {
+
+      if (email === "learninghubbd2126509574@gmail.com") {
         setIsAuthenticated(true);
-        setAuthMethod('google');
+        setAuthMethod("google");
       } else {
         await signOut(auth);
-        setLoginError('অ্যাক্সেস প্রত্যাখ্যান করা হয়েছে: এই গুগল অ্যাকাউন্টটি অনুমোদিত নয়।');
+        setLoginError(
+          "অ্যাক্সেস প্রত্যাখ্যান করা হয়েছে: এই গুগল অ্যাকাউন্টটি অনুমোদিত নয়।",
+        );
         setIsAuthenticated(false);
       }
     } catch (err: any) {
       console.error(err);
-      if (err?.code === 'auth/popup-closed-by-user') {
-        setLoginError('গুগল লগইন পপ-আপ উইন্ডোটি আপনি বন্ধ করে দিয়েছেন। দয়া করে আবার চেষ্টা করুন এবং উইন্ডোটি সম্পূর্ণ খুলতে দিন।');
-      } else if (err?.code === 'auth/popup-blocked') {
-        setLoginError('আপনার ব্রাউজার পপ-আপ উইন্ডো ব্লক করে রেখেছে। ব্রাউজারের সেটিংস থেকে পপ-আপ অ্যালাউ করুন এবং পুনরায় চেষ্টা করুন।');
+      if (err?.code === "auth/popup-closed-by-user") {
+        setLoginError(
+          "গুগল লগইন পপ-আপ উইন্ডোটি আপনি বন্ধ করে দিয়েছেন। দয়া করে আবার চেষ্টা করুন এবং উইন্ডোটি সম্পূর্ণ খুলতে দিন।",
+        );
+      } else if (err?.code === "auth/popup-blocked") {
+        setLoginError(
+          "আপনার ব্রাউজার পপ-আপ উইন্ডো ব্লক করে রেখেছে। ব্রাউজারের সেটিংস থেকে পপ-আপ অ্যালাউ করুন এবং পুনরায় চেষ্টা করুন।",
+        );
       } else {
-        setLoginError('গুগল লগইন সফল হয়নি। আপনি সাধারণ অ্যাডমিন পাসওয়ার্ড (২১২৬৫০) ব্যবহার করেও প্রবেশ করতে পারেন।');
+        setLoginError(
+          "গুগল লগইন সফল হয়নি। আপনি সাধারণ অ্যাডমিন পাসওয়ার্ড (২১২৬৫০) ব্যবহার করেও প্রবেশ করতে পারেন।",
+        );
       }
     } finally {
       setIsLoggingIn(false);
@@ -435,21 +538,21 @@ export default function AdminPanel() {
       setIsSavingLink(true);
 
       const meetingId = `meet_${Math.random().toString(36).substring(2, 8)}`;
-      const meetRef = doc(db, 'meetings', meetingId);
+      const meetRef = doc(db, "meetings", meetingId);
 
       await setDoc(meetRef, {
         googleMeetLink: meetInput.trim(),
         createdAt: serverTimestamp(),
         active: isMeetLinkActive,
         meetingDate: meetingDateInput,
-        meetingTime: meetingTimeInput
+        meetingTime: meetingTimeInput,
       });
 
       const origin = window.location.origin.trim().replace(/\/$/, "");
       const fullJoinUrl = `${origin}/?join=${meetingId}`;
       setGeneratedLink(fullJoinUrl);
     } catch (err: any) {
-      handleFirestoreError(err, OperationType.WRITE, 'meetings/new');
+      handleFirestoreError(err, OperationType.WRITE, "meetings/new");
     } finally {
       setIsSavingLink(false);
     }
@@ -458,7 +561,7 @@ export default function AdminPanel() {
   // 6. Update individual active states of existing meeting
   async function toggleMeetingActive(mId: string, currentStatus: boolean) {
     try {
-      const docRef = doc(db, 'meetings', mId);
+      const docRef = doc(db, "meetings", mId);
       await updateDoc(docRef, { active: !currentStatus });
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `meetings/${mId}`);
@@ -468,7 +571,7 @@ export default function AdminPanel() {
   // 6.2. Permanent delete of meeting session
   async function handleDeleteMeeting(mId: string) {
     try {
-      const docRef = doc(db, 'meetings', mId);
+      const docRef = doc(db, "meetings", mId);
       await deleteDoc(docRef);
       if (generatedLink && generatedLink.includes(mId)) {
         setGeneratedLink(null);
@@ -481,49 +584,74 @@ export default function AdminPanel() {
 
   // Formatting meeting date and time into elegant Bengali
   function formatMeetingDateTime(dateStr?: string, timeStr?: string) {
-    if (!dateStr) return '';
+    if (!dateStr) return "";
     try {
-      const parts = dateStr.split('-');
+      const parts = dateStr.split("-");
       if (parts.length === 3) {
         const year = parts[0];
         const month = parts[1];
         const day = parts[2];
-        const monthsBg = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
+        const monthsBg = [
+          "জানুয়ারি",
+          "ফেব্রুয়ারি",
+          "মার্চ",
+          "এপ্রিল",
+          "মে",
+          "জুন",
+          "জুলাই",
+          "আগস্ট",
+          "সেপ্টেম্বর",
+          "অক্টোবর",
+          "নভেম্বর",
+          "ডিসেম্বর",
+        ];
         const monthIndex = parseInt(month, 10) - 1;
         const monthBg = monthsBg[monthIndex] || month;
-        
+
         // Bengali digit converter
         const bgDigits: { [key: string]: string } = {
-          '0': '০', '1': '১', '2': '২', '3': '৩', '4': '৪',
-          '5': '৫', '6': '৬', '7': '৭', '8': '৮', '9': '৯'
+          "0": "০",
+          "1": "১",
+          "2": "২",
+          "3": "৩",
+          "4": "৪",
+          "5": "৫",
+          "6": "৬",
+          "7": "৭",
+          "8": "৮",
+          "9": "৯",
         };
-        const toBgNum = (numStr: string) => numStr.split('').map(char => bgDigits[char] || char).join('');
-        
-        let formattedTime = '';
+        const toBgNum = (numStr: string) =>
+          numStr
+            .split("")
+            .map((char) => bgDigits[char] || char)
+            .join("");
+
+        let formattedTime = "";
         if (timeStr) {
-          const tParts = timeStr.split(':');
+          const tParts = timeStr.split(":");
           if (tParts.length >= 2) {
             let hour = parseInt(tParts[0], 10);
             const minute = tParts[1];
-            let ampm = 'সকাল';
+            let ampm = "সকাল";
             if (hour >= 12) {
-              ampm = 'বিকাল';
+              ampm = "বিকাল";
               if (hour > 12) hour -= 12;
             } else {
               if (hour === 0) hour = 12;
-              if (hour >= 6 && hour < 12) ampm = 'সকাল';
-              else ampm = 'রাত';
+              if (hour >= 6 && hour < 12) ampm = "সকাল";
+              else ampm = "রাত";
             }
             formattedTime = `, ${ampm} ${toBgNum(String(hour))}:${toBgNum(minute)} মিনিট`;
           }
         }
-        
+
         return `${toBgNum(day)} ${monthBg} ${toBgNum(year)} ${formattedTime}`;
       }
     } catch (e) {
       console.warn("Date parsing error", e);
     }
-    return `${dateStr} ${timeStr || ''}`;
+    return `${dateStr} ${timeStr || ""}`;
   }
 
   // 7. Change Admin System Password
@@ -532,25 +660,37 @@ export default function AdminPanel() {
     setPwdMessage(null);
 
     if (newPassword.length < 4) {
-      setPwdMessage({ type: 'error', text: 'পাসওয়ার্ড অত্যন্ত ছোট! কমপক্ষে ৪ সংখ্যার পাসওয়ার্ড দিন।' });
+      setPwdMessage({
+        type: "error",
+        text: "পাসওয়ার্ড অত্যন্ত ছোট! কমপক্ষে ৪ সংখ্যার পাসওয়ার্ড দিন।",
+      });
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setPwdMessage({ type: 'error', text: 'পাসওয়ার্ড মিলেনি! দুটি পাসওয়ার্ড হুবহু এক হতে হবে।' });
+      setPwdMessage({
+        type: "error",
+        text: "পাসওয়ার্ড মিলেনি! দুটি পাসওয়ার্ড হুবহু এক হতে হবে।",
+      });
       return;
     }
 
     try {
       setIsUpdatingPwd(true);
-      const docRef = doc(db, 'adminSettings', 'settings');
+      const docRef = doc(db, "adminSettings", "settings");
       await setDoc(docRef, { password: newPassword }, { merge: true });
       setSavedPassword(newPassword);
-      setPwdMessage({ type: 'success', text: 'অ্যাডমিন পাসওয়ার্ড সফলভাবে পরিবর্তন করা হয়েছে!' });
-      setNewPassword('');
-      setConfirmPassword('');
+      setPwdMessage({
+        type: "success",
+        text: "অ্যাডমিন পাসওয়ার্ড সফলভাবে পরিবর্তন করা হয়েছে!",
+      });
+      setNewPassword("");
+      setConfirmPassword("");
     } catch (err: any) {
-      setPwdMessage({ type: 'error', text: 'পাসওয়ার্ড আপডেট করতে ব্যর্থ হয়েছে। ফায়ারস্টোর কানেকশন চেক করুন।' });
+      setPwdMessage({
+        type: "error",
+        text: "পাসওয়ার্ড আপডেট করতে ব্যর্থ হয়েছে। ফায়ারস্টোর কানেকশন চেক করুন।",
+      });
     } finally {
       setIsUpdatingPwd(false);
     }
@@ -562,10 +702,10 @@ export default function AdminPanel() {
       // Toggle setting (Note: JoinPage no longer enforces this but we keep the DB updated)
       const nextVal = !preventRepeatJoins;
       setPreventRepeatJoins(nextVal);
-      const docRef = doc(db, 'adminSettings', 'settings');
+      const docRef = doc(db, "adminSettings", "settings");
       await setDoc(docRef, { preventRepeatJoins: nextVal }, { merge: true });
     } catch (err) {
-      console.error('Failed to update repeat joins settings:', err);
+      console.error("Failed to update repeat joins settings:", err);
     }
   }
 
@@ -574,10 +714,10 @@ export default function AdminPanel() {
     try {
       const nextVal = !publicLinkActive;
       setPublicLinkActive(nextVal);
-      const docRef = doc(db, 'adminSettings', 'settings');
+      const docRef = doc(db, "adminSettings", "settings");
       await setDoc(docRef, { publicLinkActive: nextVal }, { merge: true });
     } catch (err) {
-      console.error('Failed to update public link active settings:', err);
+      console.error("Failed to update public link active settings:", err);
     }
   }
 
@@ -587,14 +727,24 @@ export default function AdminPanel() {
     setNoticeMessage(null);
     try {
       setIsUpdatingNotice(true);
-      const docRef = doc(db, 'adminSettings', 'settings');
-      await setDoc(docRef, { 
-        noticeText: noticeText.trim(), 
-        noticeActive: noticeActive 
-      }, { merge: mergeFirestoreNotice() });
-      setNoticeMessage({ type: 'success', text: 'চলমান নোটিশ এবং এর স্থিতি সফলভাবে সেভ করা হয়েছে!' });
+      const docRef = doc(db, "adminSettings", "settings");
+      await setDoc(
+        docRef,
+        {
+          noticeText: noticeText.trim(),
+          noticeActive: noticeActive,
+        },
+        { merge: mergeFirestoreNotice() },
+      );
+      setNoticeMessage({
+        type: "success",
+        text: "চলমান নোটিশ এবং এর স্থিতি সফলভাবে সেভ করা হয়েছে!",
+      });
     } catch (err: any) {
-      setNoticeMessage({ type: 'error', text: 'নোটিশ আপডেট করতে ব্যর্থ হয়েছে।' });
+      setNoticeMessage({
+        type: "error",
+        text: "নোটিশ আপডেট করতে ব্যর্থ হয়েছে।",
+      });
     } finally {
       setIsUpdatingNotice(false);
     }
@@ -610,10 +760,10 @@ export default function AdminPanel() {
     try {
       const nextVal = !demoModeActive;
       setDemoModeActive(nextVal);
-      const docRef = doc(db, 'adminSettings', 'settings');
+      const docRef = doc(db, "adminSettings", "settings");
       await setDoc(docRef, { demoModeActive: nextVal }, { merge: true });
     } catch (err) {
-      console.error('Failed to update demo mode status:', err);
+      console.error("Failed to update demo mode status:", err);
     }
   }
 
@@ -621,71 +771,86 @@ export default function AdminPanel() {
     e.preventDefault();
     setDemoCodeMessage(null);
     if (!/^\d{4}$/.test(demoCode)) {
-      setDemoCodeMessage({ type: 'error', text: 'কোডটি অবশ্যই ৪ সংখ্যার হতে হবে!' });
+      setDemoCodeMessage({
+        type: "error",
+        text: "কোডটি অবশ্যই ৪ সংখ্যার হতে হবে!",
+      });
       return;
     }
     try {
       setIsUpdatingDemoCode(true);
-      const docRef = doc(db, 'adminSettings', 'settings');
+      const docRef = doc(db, "adminSettings", "settings");
       await setDoc(docRef, { demoCode: demoCode }, { merge: true });
-      setDemoCodeMessage({ type: 'success', text: 'ডেমো সিক্রেট কোড সফলভাবে আপডেট হয়েছে!' });
+      setDemoCodeMessage({
+        type: "success",
+        text: "ডেমো সিক্রেট কোড সফলভাবে আপডেট হয়েছে!",
+      });
     } catch (err) {
-      setDemoCodeMessage({ type: 'error', text: 'কোড আপডেট করতে ব্যর্থ হয়েছে।' });
+      setDemoCodeMessage({
+        type: "error",
+        text: "কোড আপডেট করতে ব্যর্থ হয়েছে।",
+      });
     } finally {
       setIsUpdatingDemoCode(false);
     }
   }
 
   async function handleBlockDemoUser(demoUser: any) {
-    if (!window.confirm(`আপনি কি নিশ্চিতভাবে "${demoUser.name}"-কে ব্লক করতে চান?`)) return;
+    if (
+      !window.confirm(
+        `আপনি কি নিশ্চিতভাবে "${demoUser.name}"-কে ব্লক করতে চান?`,
+      )
+    )
+      return;
     try {
       // Block IP
-      const blockRef = doc(db, 'blockedIPs', demoUser.ip);
+      const blockRef = doc(db, "blockedIPs", demoUser.ip);
       await setDoc(blockRef, {
         ip: demoUser.ip,
-        deviceId: demoUser.deviceId || 'Unknown',
-        uid: demoUser.uid || 'Unknown',
+        deviceId: demoUser.deviceId || "Unknown",
+        uid: demoUser.uid || "Unknown",
         blockedAt: serverTimestamp(),
-        name: demoUser.name + ' (Demo)'
+        name: demoUser.name + " (Demo)",
       });
 
       // Block DeviceId
-      if (demoUser.deviceId && demoUser.deviceId !== 'Unknown') {
-        const deviceRef = doc(db, 'blockedDevices', demoUser.deviceId);
+      if (demoUser.deviceId && demoUser.deviceId !== "Unknown") {
+        const deviceRef = doc(db, "blockedDevices", demoUser.deviceId);
         await setDoc(deviceRef, {
           deviceId: demoUser.deviceId,
-          browserFingerprint: demoUser.browserFingerprint || '',
-          uid: demoUser.uid || 'Unknown',
+          browserFingerprint: demoUser.browserFingerprint || "",
+          uid: demoUser.uid || "Unknown",
           blockedAt: serverTimestamp(),
-          name: demoUser.name + ' (Demo)'
+          name: demoUser.name + " (Demo)",
         });
       }
 
       // Block UID
-      if (demoUser.uid && demoUser.uid !== 'Unknown') {
-        const uidRef = doc(db, 'blockedUIDs', demoUser.uid);
+      if (demoUser.uid && demoUser.uid !== "Unknown") {
+        const uidRef = doc(db, "blockedUIDs", demoUser.uid);
         await setDoc(uidRef, {
           uid: demoUser.uid,
-          deviceId: demoUser.deviceId || 'Unknown',
+          deviceId: demoUser.deviceId || "Unknown",
           blockedAt: serverTimestamp(),
-          name: demoUser.name + ' (Demo)'
+          name: demoUser.name + " (Demo)",
         });
       }
 
       // Mark demo participant doc as blocked
-      const demoRef = doc(db, 'demoParticipants', demoUser.id);
+      const demoRef = doc(db, "demoParticipants", demoUser.id);
       await setDoc(demoRef, { blocked: true }, { merge: true });
     } catch (err) {
-      console.error('Failed to block demo user:', err);
+      console.error("Failed to block demo user:", err);
     }
   }
 
   async function handleDeleteDemoLog(id: string) {
-    if (!window.confirm('আপনি কি নিশ্চিতভাবে এই ডেমো লগটি মুছে ফেলতে চান?')) return;
+    if (!window.confirm("আপনি কি নিশ্চিতভাবে এই ডেমো লগটি মুছে ফেলতে চান?"))
+      return;
     try {
-      await deleteDoc(doc(db, 'demoParticipants', id));
+      await deleteDoc(doc(db, "demoParticipants", id));
     } catch (err) {
-      console.error('Failed to delete demo log:', err);
+      console.error("Failed to delete demo log:", err);
     }
   }
 
@@ -693,51 +858,59 @@ export default function AdminPanel() {
   async function handleBlockUser(participant: Participant) {
     try {
       // Block the IP
-      const blockRef = doc(db, 'blockedIPs', participant.ip);
+      const blockRef = doc(db, "blockedIPs", participant.ip);
       await setDoc(blockRef, {
         ip: participant.ip,
         deviceId: participant.deviceId,
-        uid: participant.uid || 'Unknown',
+        uid: participant.uid || "Unknown",
         blockedAt: serverTimestamp(),
-        name: participant.name
+        name: participant.name,
       });
 
       // Also block the Device ID for persistent blocking (bypasses VPN)
-      if (participant.deviceId && participant.deviceId !== 'Unknown') {
-        const deviceRef = doc(db, 'blockedDevices', participant.deviceId);
+      if (participant.deviceId && participant.deviceId !== "Unknown") {
+        const deviceRef = doc(db, "blockedDevices", participant.deviceId);
         await setDoc(deviceRef, {
           deviceId: participant.deviceId,
-          browserFingerprint: participant.browserFingerprint || '',
-          uid: participant.uid || 'Unknown',
+          browserFingerprint: participant.browserFingerprint || "",
+          uid: participant.uid || "Unknown",
           blockedAt: serverTimestamp(),
-          name: participant.name
+          name: participant.name,
         });
       }
 
       // Also block the UID
-      if (participant.uid && participant.uid !== 'Unknown') {
-        const uidRef = doc(db, 'blockedUIDs', participant.uid);
+      if (participant.uid && participant.uid !== "Unknown") {
+        const uidRef = doc(db, "blockedUIDs", participant.uid);
         await setDoc(uidRef, {
           uid: participant.uid,
-          deviceId: participant.deviceId || 'Unknown',
+          deviceId: participant.deviceId || "Unknown",
           blockedAt: serverTimestamp(),
-          name: participant.name
+          name: participant.name,
         });
       }
 
       // Mark all participant entries with same IP, Device ID or UID as blocked
-      const matchedParts = participants.filter(p => 
-        p.ip === participant.ip || 
-        (participant.deviceId !== 'Unknown' && p.deviceId === participant.deviceId) ||
-        (participant.uid && participant.uid !== 'Unknown' && p.uid === participant.uid)
+      const matchedParts = participants.filter(
+        (p) =>
+          p.ip === participant.ip ||
+          (participant.deviceId !== "Unknown" &&
+            p.deviceId === participant.deviceId) ||
+          (participant.uid &&
+            participant.uid !== "Unknown" &&
+            p.uid === participant.uid),
       );
-      
+
       for (const p of matchedParts) {
-        const pRef = doc(db, 'participants', p.id);
+        const pRef = doc(db, "participants", p.id);
         await updateDoc(pRef, { blocked: true });
       }
     } catch (err: any) {
-      handleFirestoreError(err, OperationType.WRITE, `blocks/${participant.ip}`);
+      handleFirestoreError(
+        err,
+        OperationType.WRITE,
+        `blocks/${participant.ip}`,
+      );
     }
   }
 
@@ -748,86 +921,105 @@ export default function AdminPanel() {
       setIsBulkBlocking(true);
 
       // Find unblocked participant entities to block
-      const selectedParts = participants.filter(p => selectedParticipantIds.includes(p.id) && !p.blocked);
+      const selectedParts = participants.filter(
+        (p) => selectedParticipantIds.includes(p.id) && !p.blocked,
+      );
       if (selectedParts.length === 0) {
         setSelectedParticipantIds([]);
         return;
       }
 
       // Gather unique attributes
-      const uniqueIPs = Array.from(new Set(selectedParts.map(p => p.ip).filter(Boolean))) as string[];
-      const uniqueDevices = Array.from(new Set(selectedParts.map(p => p.deviceId).filter(d => d && d !== 'Unknown'))) as string[];
-      const uniqueUIDs = Array.from(new Set(selectedParts.map(p => p.uid).filter(u => u && u !== 'Unknown'))) as string[];
+      const uniqueIPs = Array.from(
+        new Set(selectedParts.map((p) => p.ip).filter(Boolean)),
+      ) as string[];
+      const uniqueDevices = Array.from(
+        new Set(
+          selectedParts
+            .map((p) => p.deviceId)
+            .filter((d) => d && d !== "Unknown"),
+        ),
+      ) as string[];
+      const uniqueUIDs = Array.from(
+        new Set(
+          selectedParts.map((p) => p.uid).filter((u) => u && u !== "Unknown"),
+        ),
+      ) as string[];
 
       // A: Add IP to blocklist
       for (const ip of uniqueIPs) {
-        const part = selectedParts.find(p => p.ip === ip);
-        const blockRef = doc(db, 'blockedIPs', ip);
+        const part = selectedParts.find((p) => p.ip === ip);
+        const blockRef = doc(db, "blockedIPs", ip);
         await setDoc(blockRef, {
           ip: ip,
-          deviceId: part?.deviceId || 'Unknown',
-          uid: part?.uid || 'Unknown',
+          deviceId: part?.deviceId || "Unknown",
+          uid: part?.uid || "Unknown",
           blockedAt: serverTimestamp(),
-          name: part?.name || 'Bulk Blocked'
+          name: part?.name || "Bulk Blocked",
         });
       }
 
       // B: Add Device ID to blocklist (optional bypass logic)
       for (const devId of uniqueDevices) {
-        const part = selectedParts.find(p => p.deviceId === devId);
-        const deviceRef = doc(db, 'blockedDevices', devId);
+        const part = selectedParts.find((p) => p.deviceId === devId);
+        const deviceRef = doc(db, "blockedDevices", devId);
         await setDoc(deviceRef, {
           deviceId: devId,
-          browserFingerprint: part?.browserFingerprint || '',
-          uid: part?.uid || 'Unknown',
+          browserFingerprint: part?.browserFingerprint || "",
+          uid: part?.uid || "Unknown",
           blockedAt: serverTimestamp(),
-          name: part?.name || 'Bulk Blocked'
+          name: part?.name || "Bulk Blocked",
         });
       }
 
       // C: Add UID to blocklist
       for (const uId of uniqueUIDs) {
-        const part = selectedParts.find(p => p.uid === uId);
-        const uidRef = doc(db, 'blockedUIDs', uId);
+        const part = selectedParts.find((p) => p.uid === uId);
+        const uidRef = doc(db, "blockedUIDs", uId);
         await setDoc(uidRef, {
           uid: uId,
-          deviceId: part?.deviceId || 'Unknown',
+          deviceId: part?.deviceId || "Unknown",
           blockedAt: serverTimestamp(),
-          name: part?.name || 'Bulk Blocked'
+          name: part?.name || "Bulk Blocked",
         });
       }
 
       // D: Update blocked status for all matching participants in local view context
-      const matchedAll = participants.filter(p => 
-        uniqueIPs.includes(p.ip) || 
-        (p.deviceId !== 'Unknown' && uniqueDevices.includes(p.deviceId)) ||
-        (p.uid !== 'Unknown' && uniqueUIDs.includes(p.uid))
+      const matchedAll = participants.filter(
+        (p) =>
+          uniqueIPs.includes(p.ip) ||
+          (p.deviceId !== "Unknown" && uniqueDevices.includes(p.deviceId)) ||
+          (p.uid !== "Unknown" && uniqueUIDs.includes(p.uid)),
       );
 
       for (const p of matchedAll) {
-        const pRef = doc(db, 'participants', p.id);
+        const pRef = doc(db, "participants", p.id);
         await updateDoc(pRef, { blocked: true });
       }
 
       // Reset selection
       setSelectedParticipantIds([]);
     } catch (err: any) {
-      handleFirestoreError(err, OperationType.WRITE, 'blocks/bulk');
+      handleFirestoreError(err, OperationType.WRITE, "blocks/bulk");
     } finally {
       setIsBulkBlocking(false);
     }
   }
 
   // 10. Unblock user (removes IP from blockedIPs, blockedDevices, blockedUIDs and updates participant flags)
-  async function handleUnblockUser(targetIP: string, targetDeviceId?: string, targetUid?: string) {
+  async function handleUnblockUser(
+    targetIP: string,
+    targetDeviceId?: string,
+    targetUid?: string,
+  ) {
     try {
       // Unblock IP
-      const blockRef = doc(db, 'blockedIPs', targetIP);
+      const blockRef = doc(db, "blockedIPs", targetIP);
       await deleteDoc(blockRef);
 
       // Unblock Device if exists
-      if (targetDeviceId && targetDeviceId !== 'Unknown') {
-        const deviceRef = doc(db, 'blockedDevices', targetDeviceId);
+      if (targetDeviceId && targetDeviceId !== "Unknown") {
+        const deviceRef = doc(db, "blockedDevices", targetDeviceId);
         await deleteDoc(deviceRef);
       }
 
@@ -835,26 +1027,50 @@ export default function AdminPanel() {
       let finalUid = targetUid;
       if (!finalUid) {
         // Look up UID from participants list matching targetIP or targetDeviceId
-        const found = participants.find(p => p.ip === targetIP || (targetDeviceId && targetDeviceId !== 'Unknown' && p.deviceId === targetDeviceId));
+        const found = participants.find(
+          (p) =>
+            p.ip === targetIP ||
+            (targetDeviceId &&
+              targetDeviceId !== "Unknown" &&
+              p.deviceId === targetDeviceId),
+        );
         if (found && found.uid) {
           finalUid = found.uid;
         }
       }
 
-      if (finalUid && finalUid !== 'Unknown') {
-        const uidRef = doc(db, 'blockedUIDs', finalUid);
+      if (finalUid && finalUid !== "Unknown") {
+        const uidRef = doc(db, "blockedUIDs", finalUid);
         await deleteDoc(uidRef);
       }
 
-      const matchedParts = participants.filter(p => 
-        p.ip === targetIP || 
-        (targetDeviceId && targetDeviceId !== 'Unknown' && p.deviceId === targetDeviceId) ||
-        (finalUid && finalUid !== 'Unknown' && p.uid === finalUid)
+      const matchedParts = participants.filter(
+        (p) =>
+          p.ip === targetIP ||
+          (targetDeviceId &&
+            targetDeviceId !== "Unknown" &&
+            p.deviceId === targetDeviceId) ||
+          (finalUid && finalUid !== "Unknown" && p.uid === finalUid),
       );
-      
+
       for (const p of matchedParts) {
-        const pRef = doc(db, 'participants', p.id);
+        const pRef = doc(db, "participants", p.id);
         await updateDoc(pRef, { blocked: false });
+      }
+
+      // Also unblock matched demo participants
+      const matchedDemoParts = demoParticipants.filter(
+        (p) =>
+          p.ip === targetIP ||
+          (targetDeviceId &&
+            targetDeviceId !== "Unknown" &&
+            p.deviceId === targetDeviceId) ||
+          (finalUid && finalUid !== "Unknown" && p.uid === finalUid),
+      );
+
+      for (const p of matchedDemoParts) {
+        const demoRef = doc(db, "demoParticipants", p.id);
+        await updateDoc(demoRef, { blocked: false });
       }
     } catch (err: any) {
       handleFirestoreError(err, OperationType.DELETE, `blocks/${targetIP}`);
@@ -864,7 +1080,7 @@ export default function AdminPanel() {
   // 11. Delete participant history record
   async function handleDeleteParticipant(pId: string) {
     try {
-      const pRef = doc(db, 'participants', pId);
+      const pRef = doc(db, "participants", pId);
       await deleteDoc(pRef);
       setDeletingParticipantId(null);
     } catch (err: any) {
@@ -875,7 +1091,7 @@ export default function AdminPanel() {
   // Logout Admin session
   async function handleLogout() {
     await signOut(auth);
-    localStorage.removeItem('ue_admin_auth');
+    localStorage.removeItem("ue_admin_auth");
     setIsAuthenticated(false);
   }
 
@@ -888,14 +1104,14 @@ export default function AdminPanel() {
 
   // Formatting timestamp
   function formatTime(timestamp: any) {
-    if (!timestamp) return 'সময় পাওয়া যায়নি';
+    if (!timestamp) return "সময় পাওয়া যায়নি";
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-    return date.toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
+    return date.toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
     });
   }
 
@@ -903,31 +1119,33 @@ export default function AdminPanel() {
     if (!filterDateStr) return true;
     if (!timestamp) return false;
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-    
+
     // Parse YYYY-MM-DD manually to prevent UTC timezone offset discrepancies in JavaScript parsing
-    const parts = filterDateStr.split('-');
+    const parts = filterDateStr.split("-");
     if (parts.length !== 3) return true;
     const year = parseInt(parts[0], 10);
     const month = parseInt(parts[1], 10);
     const day = parseInt(parts[2], 10);
-    
+
     return (
       date.getFullYear() === year &&
-      (date.getMonth() + 1) === month &&
+      date.getMonth() + 1 === month &&
       date.getDate() === day
     );
   }
 
   // Filtering participants log list
-  const filteredParticipants = participants.filter(p => {
-    const nameStr = (p.name || '').toLowerCase();
-    const ipStr = p.ip || '';
-    const uidStr = (p.uid || p.deviceId || '').toLowerCase();
-    const qStr = (searchQuery || '').trim().toLowerCase();
-    
+  const filteredParticipants = participants.filter((p) => {
+    const nameStr = (p.name || "").toLowerCase();
+    const ipStr = p.ip || "";
+    const uidStr = (p.uid || p.deviceId || "").toLowerCase();
+    const qStr = (searchQuery || "").trim().toLowerCase();
+
     if (qStr) {
       // If searching, ignore the date filter so they can find records on any day
-      return nameStr.includes(qStr) || ipStr.includes(qStr) || uidStr.includes(qStr);
+      return (
+        nameStr.includes(qStr) || ipStr.includes(qStr) || uidStr.includes(qStr)
+      );
     } else {
       // Normal flow: filter by selected date (defaults to today)
       const activeDate = dateFilter || getTodayDateString();
@@ -936,16 +1154,21 @@ export default function AdminPanel() {
   });
 
   // Filtering demo participants log list
-  const filteredDemoParticipants = demoParticipants.filter(p => {
-    const nameStr = (p.name || '').toLowerCase();
-    const gmailStr = (p.gmail || '').toLowerCase();
-    const ipStr = p.ip || '';
-    const uidStr = (p.uid || p.deviceId || '').toLowerCase();
-    const qStr = (demoSearchQuery || '').trim().toLowerCase();
-    
+  const filteredDemoParticipants = demoParticipants.filter((p) => {
+    const nameStr = (p.name || "").toLowerCase();
+    const gmailStr = (p.gmail || "").toLowerCase();
+    const ipStr = p.ip || "";
+    const uidStr = (p.uid || p.deviceId || "").toLowerCase();
+    const qStr = (demoSearchQuery || "").trim().toLowerCase();
+
     if (qStr) {
       // If searching, ignore the date filter so they can find records on any day
-      return nameStr.includes(qStr) || gmailStr.includes(qStr) || ipStr.includes(qStr) || uidStr.includes(qStr);
+      return (
+        nameStr.includes(qStr) ||
+        gmailStr.includes(qStr) ||
+        ipStr.includes(qStr) ||
+        uidStr.includes(qStr)
+      );
     } else {
       // Normal flow: filter by selected date (defaults to today)
       const activeDate = demoDateFilter || getTodayDateString();
@@ -955,8 +1178,12 @@ export default function AdminPanel() {
 
   // Get counts for "today" specifically to support daily reset counters
   const todayDateStr = getTodayDateString();
-  const todayParticipantsCount = participants.filter(p => isSameDay(p.joinedAt, todayDateStr)).length;
-  const todayDemoParticipantsCount = demoParticipants.filter(p => isSameDay(p.joinedAt, todayDateStr)).length;
+  const todayParticipantsCount = participants.filter((p) =>
+    isSameDay(p.joinedAt, todayDateStr),
+  ).length;
+  const todayDemoParticipantsCount = demoParticipants.filter((p) =>
+    isSameDay(p.joinedAt, todayDateStr),
+  ).length;
 
   // Badge calculations showing active dynamic counts (matched active day count)
   const displayUserCount = filteredParticipants.length;
@@ -973,27 +1200,25 @@ export default function AdminPanel() {
 
   // Calculate public sharing link vs local dev test link
   const { publicLink, testLink } = (() => {
-    if (!generatedLink) return { publicLink: '', testLink: '' };
-    
+    if (!generatedLink) return { publicLink: "", testLink: "" };
+
     // The test link is always the current generated link from the active session
     const tLink = generatedLink;
-    
+
     // The public link should use the -pre- origin if we are currently on a -dev- origin
     let pLink = generatedLink;
-    if (pLink.includes('-dev-')) {
-       pLink = pLink.replace('-dev-', '-pre-');
+    if (pLink.includes("-dev-")) {
+      pLink = pLink.replace("-dev-", "-pre-");
     }
-    
+
     return { publicLink: pLink, testLink: tLink };
   })();
 
   // --- RENDERING CHASSIS ---
   return (
     <div className="h-[100dvh] md:min-h-screen bg-slate-950 text-slate-900 flex flex-col justify-center items-center p-0 md:p-6 select-text overflow-x-hidden">
-      
       {/* PHONE FRAME CHASSIS (Desktop Only) */}
       <div className="w-full h-[100dvh] md:h-[820px] md:min-h-[820px] md:max-w-[400px] md:border-[12px] md:border-slate-850 md:rounded-[48px] md:shadow-2xl bg-slate-50 flex flex-col relative overflow-hidden">
-        
         {/* PHONE NOTCH / STATUS BAR (Desktop Only) */}
         <div className="hidden md:flex absolute top-0 inset-x-0 h-9 bg-slate-900 justify-between items-center px-6 z-50 text-[10px] text-slate-400 font-mono select-none">
           <span>09:21 AM</span>
@@ -1011,7 +1236,7 @@ export default function AdminPanel() {
         {/* 1. LOGIN SCREEN (If not authenticated) */}
         {!isAuthenticated ? (
           <div className="flex-1 overflow-y-auto pt-6 md:pt-14 pb-8 px-5 flex flex-col justify-between bg-slate-50">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
               className="flex-1 flex flex-col justify-center space-y-6"
@@ -1024,7 +1249,8 @@ export default function AdminPanel() {
                   অ্যাডমিন প্যানেল লগইন
                 </h1>
                 <p className="text-xs text-slate-500 leading-relaxed max-w-[280px] mx-auto">
-                  Unity Earning মিটিং সিস্টেম কনফিগার করতে অনুগ্রহ করে পাসওয়ার্ড দিয়ে প্রবেশ করুন।
+                  Unity Earning মিটিং সিস্টেম কনফিগার করতে অনুগ্রহ করে পাসওয়ার্ড
+                  দিয়ে প্রবেশ করুন।
                 </p>
               </div>
 
@@ -1073,7 +1299,9 @@ export default function AdminPanel() {
 
               <div className="relative flex py-2 items-center">
                 <div className="flex-grow border-t border-slate-200"></div>
-                <span className="flex-shrink mx-3 text-[9px] text-slate-400 font-bold tracking-wider uppercase">অন্যান্য মাধ্যম</span>
+                <span className="flex-shrink mx-3 text-[9px] text-slate-400 font-bold tracking-wider uppercase">
+                  অন্যান্য মাধ্যম
+                </span>
                 <div className="flex-grow border-t border-slate-200"></div>
               </div>
 
@@ -1105,10 +1333,8 @@ export default function AdminPanel() {
             </motion.div>
           </div>
         ) : (
-          
           // 2. MAIN LOGGED-IN ADMIN PANEL (Phone Layout)
           <div className="flex-1 flex flex-col bg-slate-50 pt-0 md:pt-9 relative min-h-0 overflow-hidden w-full">
-            
             {/* INNER HEADER ACCENTS */}
             <header className="px-4 py-3 bg-[#0f172a] text-white flex justify-between items-center shrink-0 border-b-2 border-amber-500 shadow-sm z-30">
               <div className="truncate">
@@ -1116,12 +1342,12 @@ export default function AdminPanel() {
                   Unity Earning
                 </h2>
                 <p className="text-[10px] text-slate-300 font-bold truncate">
-                  {activeTab === 'dashboard' && 'ড্যাশবোর্ড ওভারভিউ'}
-                  {activeTab === 'meeting' && 'মিটিং লিংক তৈরি'}
-                  {activeTab === 'data' && 'ইউজার লগ অ্যান্ড সেটিংস'}
-                  {activeTab === 'demo' && 'ডেমো জয়েনার্স লগ'}
-                  {activeTab === 'blocked' && 'ডিভাইস ব্লকড লিস্ট'}
-                  {activeTab === 'settings' && 'সিস্টেম সেটিংস'}
+                  {activeTab === "dashboard" && "ড্যাশবোর্ড ওভারভিউ"}
+                  {activeTab === "meeting" && "মিটিং লিংক তৈরি"}
+                  {activeTab === "data" && "ইউজার লগ অ্যান্ড সেটিংস"}
+                  {activeTab === "demo" && "ডেমো জয়েনার্স লগ"}
+                  {activeTab === "blocked" && "ডিভাইস ব্লকড লিস্ট"}
+                  {activeTab === "settings" && "সিস্টেম সেটিংস"}
                 </p>
               </div>
 
@@ -1132,12 +1358,12 @@ export default function AdminPanel() {
                       if (navigator.share) {
                         try {
                           await navigator.share({
-                            title: 'Unity Earning Join Link',
-                            text: 'মিটিং সেশনে যোগ দিতে নিচের লিঙ্কে ক্লিক করুন:',
-                            url: publicLink
+                            title: "Unity Earning Join Link",
+                            text: "মিটিং সেশনে যোগ দিতে নিচের লিঙ্কে ক্লিক করুন:",
+                            url: publicLink,
                           });
                         } catch (err: any) {
-                          if (err.name !== 'AbortError') {
+                          if (err.name !== "AbortError") {
                             handleCopy();
                           }
                         }
@@ -1151,7 +1377,7 @@ export default function AdminPanel() {
                     <span className="hidden sm:inline">শেয়ার</span>
                   </button>
                 )}
-                
+
                 <button
                   onClick={handleLogout}
                   title="লগআউট"
@@ -1164,29 +1390,32 @@ export default function AdminPanel() {
 
             {/* CHASSIS SCROLLABLE PANEL BODY */}
             <div className="flex-1 overflow-y-auto px-4 pt-4 pb-28 space-y-4 custom-scrollbar">
-              
               {/* --- TAB 1: DASHBOARD --- */}
-              {activeTab === 'dashboard' && (
+              {activeTab === "dashboard" && (
                 <div className="space-y-4">
                   {/* Primary Link Card */}
                   {generatedLink && (
-                    <motion.div 
+                    <motion.div
                       initial={{ opacity: 0, y: -10 }}
                       animate={{ opacity: 1, y: 0 }}
                       className="bg-white border-2 border-amber-400 rounded-2xl p-5 shadow-sm space-y-4"
                     >
                       <div className="flex items-center gap-2">
                         <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                        <span className="text-[11px] font-black text-slate-800 uppercase tracking-tight">আপনার শেয়ারিং লিংক এখন তৈরি</span>
+                        <span className="text-[11px] font-black text-slate-800 uppercase tracking-tight">
+                          আপনার শেয়ারিং লিংক এখন তৈরি
+                        </span>
                       </div>
-                      
+
                       <div className="space-y-1.5">
-                        <p className="text-[10px] text-slate-500 font-bold leading-tight">পাবলিক মিটিং লিংক:</p>
+                        <p className="text-[10px] text-slate-500 font-bold leading-tight">
+                          পাবলিক মিটিং লিংক:
+                        </p>
                         <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 p-3 rounded-xl">
                           <div className="flex-1 truncate font-mono text-[11px] text-amber-700 font-bold">
                             {publicLink}
                           </div>
-                          <button 
+                          <button
                             onClick={() => {
                               navigator.clipboard.writeText(publicLink);
                               setCopysuccess(true);
@@ -1194,30 +1423,34 @@ export default function AdminPanel() {
                             }}
                             className="shrink-0 p-2 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-lg transition"
                           >
-                            {copysuccess ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+                            {copysuccess ? (
+                              <Check className="h-4 w-4 text-emerald-600" />
+                            ) : (
+                              <Copy className="h-4 w-4" />
+                            )}
                           </button>
                         </div>
                       </div>
 
                       <div className="grid grid-cols-2 gap-3">
-                        <button 
-                          onClick={() => window.open(publicLink, '_blank')}
+                        <button
+                          onClick={() => window.open(publicLink, "_blank")}
                           className="flex items-center justify-center gap-1.5 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-[11px] font-black transition shadow-sm"
                         >
                           <ExternalLink className="h-4 w-4" />
                           লিংক পরীক্ষা করুন
                         </button>
-                        <button 
+                        <button
                           onClick={async () => {
                             if (navigator.share) {
                               try {
                                 await navigator.share({
-                                  title: 'Unity Earning',
-                                  text: 'মিটিংয়ে জয়েন করুন',
-                                  url: publicLink
+                                  title: "Unity Earning",
+                                  text: "মিটিংয়ে জয়েন করুন",
+                                  url: publicLink,
                                 });
                               } catch (err: any) {
-                                if (err.name !== 'AbortError') {
+                                if (err.name !== "AbortError") {
                                   navigator.clipboard.writeText(publicLink);
                                   setCopysuccess(true);
                                   setTimeout(() => setCopysuccess(false), 2000);
@@ -1243,7 +1476,16 @@ export default function AdminPanel() {
                             লিংকটি কাজ না করলে (Page not found দেখালে):
                           </p>
                           <p className="text-[9px] text-amber-800 leading-relaxed font-medium">
-                            ডানদিকের <span className="underline font-bold text-slate-950">Share</span> বাটনে ক্লিক করে <span className="underline font-bold text-slate-950">Publish</span> করার পর ৫-১০ সেকেন্ড অপেক্ষা করে পেজটি রিফ্রেশ দিন। প্রথমবার সক্রিয় হতে সামান্য সময় লাগতে পারে।
+                            ডানদিকের{" "}
+                            <span className="underline font-bold text-slate-950">
+                              Share
+                            </span>{" "}
+                            বাটনে ক্লিক করে{" "}
+                            <span className="underline font-bold text-slate-950">
+                              Publish
+                            </span>{" "}
+                            করার পর ৫-১০ সেকেন্ড অপেক্ষা করে পেজটি রিফ্রেশ দিন।
+                            প্রথমবার সক্রিয় হতে সামান্য সময় লাগতে পারে।
                           </p>
                         </div>
                       </div>
@@ -1252,33 +1494,44 @@ export default function AdminPanel() {
 
                   {/* Indicators Grid */}
                   <div className="grid grid-cols-2 gap-3">
-                    <div 
-                      onClick={() => setActiveTab('data')}
+                    <div
+                      onClick={() => setActiveTab("data")}
                       className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm select-none hover:border-amber-400 transition cursor-pointer"
                     >
                       <Users className="h-5 w-5 text-amber-500 mb-1" />
-                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">আজকের জয়েনিং</p>
-                      <h3 className="text-xl font-black text-slate-900">{todayParticipantsCount} জন</h3>
+                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                        আজকের জয়েনিং
+                      </p>
+                      <h3 className="text-xl font-black text-slate-900">
+                        {todayParticipantsCount} জন
+                      </h3>
                     </div>
 
-                    <div 
-                      onClick={() => setActiveTab('blocked')}
+                    <div
+                      onClick={() => setActiveTab("blocked")}
                       className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm select-none hover:border-red-400 transition cursor-pointer"
                     >
                       <Ban className="h-5 w-5 text-red-500 mb-1" />
-                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">ব্লকড আইপি</p>
-                      <h3 className="text-xl font-black text-slate-900">{blockedIPs.length} টি</h3>
+                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                        ব্লকড আইপি
+                      </p>
+                      <h3 className="text-xl font-black text-slate-900">
+                        {blockedIPs.length} টি
+                      </h3>
                     </div>
                   </div>
 
-                  <div 
-                    onClick={() => setActiveTab('meeting')}
+                  <div
+                    onClick={() => setActiveTab("meeting")}
                     className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex items-center justify-between select-none hover:border-amber-400 transition cursor-pointer"
                   >
                     <div className="space-y-0.5">
-                      <p className="text-[10px] text-slate-500 font-black uppercase">মিটিং সেশন কন্ট্রোল</p>
+                      <p className="text-[10px] text-slate-500 font-black uppercase">
+                        মিটিং সেশন কন্ট্রোল
+                      </p>
                       <h3 className="text-sm font-extrabold text-slate-900">
-                        সক্রিয় মিটিং: {meetings.filter(m => m.active).length} টি
+                        সক্রিয় মিটিং: {meetings.filter((m) => m.active).length}{" "}
+                        টি
                       </h3>
                     </div>
                     <span className="p-2 bg-emerald-50 text-emerald-600 rounded-full flex items-center">
@@ -1289,17 +1542,19 @@ export default function AdminPanel() {
               )}
 
               {/* --- TAB 2: MEETING LINK GENERATION --- */}
-              {activeTab === 'meeting' && (
+              {activeTab === "meeting" && (
                 <div className="space-y-4 font-sans">
                   <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-4">
                     <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-1.5">
                       <Calendar className="h-4 w-4 text-amber-500" />
                       গুগল মিট লিংক সেটআপ ও শিডিউলিং
                     </h3>
-                    
+
                     <form onSubmit={handleSaveMeeting} className="space-y-3">
                       <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-slate-600">গুগল মিট (Google Meet) অরিজিনাল লিংক</label>
+                        <label className="text-[10px] font-bold text-slate-600">
+                          গুগল মিট (Google Meet) অরিজিনাল লিংক
+                        </label>
                         <input
                           type="url"
                           required
@@ -1313,22 +1568,30 @@ export default function AdminPanel() {
                       {/* Scheduled Date & Time Pickers */}
                       <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-slate-600">সেশনের তারিখ (Date)</label>
+                          <label className="text-[10px] font-bold text-slate-600">
+                            সেশনের তারিখ (Date)
+                          </label>
                           <input
                             type="date"
                             required
                             value={meetingDateInput}
-                            onChange={(e) => setMeetingDateInput(e.target.value)}
+                            onChange={(e) =>
+                              setMeetingDateInput(e.target.value)
+                            }
                             className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-extrabold text-slate-900 focus:outline-none focus:ring-1 focus:ring-amber-500"
                           />
                         </div>
                         <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-slate-600">সেশনের সময় (Time)</label>
+                          <label className="text-[10px] font-bold text-slate-600">
+                            সেশনের সময় (Time)
+                          </label>
                           <input
                             type="time"
                             required
                             value={meetingTimeInput}
-                            onChange={(e) => setMeetingTimeInput(e.target.value)}
+                            onChange={(e) =>
+                              setMeetingTimeInput(e.target.value)
+                            }
                             className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-extrabold text-slate-900 focus:outline-none focus:ring-1 focus:ring-amber-500"
                           />
                         </div>
@@ -1336,19 +1599,25 @@ export default function AdminPanel() {
 
                       <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
                         <div>
-                          <p className="text-[10px] font-black text-slate-800">পাবলিক জয়েন সেশন সচল</p>
-                          <p className="text-[9px] text-slate-500 leading-none mt-0.5">অফ করলে শিক্ষার্থীরা মিটিংয়ে ঢুকতে পারবে না</p>
+                          <p className="text-[10px] font-black text-slate-800">
+                            পাবলিক জয়েন সেশন সচল
+                          </p>
+                          <p className="text-[9px] text-slate-500 leading-none mt-0.5">
+                            অফ করলে শিক্ষার্থীরা মিটিংয়ে ঢুকতে পারবে না
+                          </p>
                         </div>
                         <button
                           type="button"
                           onClick={() => setIsMeetLinkActive(!isMeetLinkActive)}
                           className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                            isMeetLinkActive ? 'bg-amber-500' : 'bg-slate-300'
+                            isMeetLinkActive ? "bg-amber-500" : "bg-slate-300"
                           }`}
                         >
                           <span
                             className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                              isMeetLinkActive ? 'translate-x-[20px]' : 'translate-x-[0px]'
+                              isMeetLinkActive
+                                ? "translate-x-[20px]"
+                                : "translate-x-[0px]"
                             }`}
                           />
                         </button>
@@ -1362,14 +1631,14 @@ export default function AdminPanel() {
                         {isSavingLink ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         ) : (
-                          'কনফিগার সেশন এবং লিংক সক্রিয় করুন'
+                          "কনফিগার সেশন এবং লিংক সক্রিয় করুন"
                         )}
                       </button>
                     </form>
 
                     {/* LIVE DISPLAY BOX - INSTANT GENERATION ON SAME PAGE */}
                     {generatedLink && (
-                      <motion.div 
+                      <motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         className="mt-4 bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-3 shadow-xs"
@@ -1381,12 +1650,18 @@ export default function AdminPanel() {
                             </span>
                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                           </div>
-                          
+
                           {/* Display the created schedule date & time right here */}
                           {meetingDateInput && (
                             <div className="flex items-center gap-1 bg-[#fef3c7] border border-amber-200 text-[#92400e] px-2.5 py-1.5 rounded-lg text-[10px] font-black w-fit">
                               <Calendar className="h-3.5 w-3.5" />
-                              <span>সেশনের নির্ধারিত সময়: {formatMeetingDateTime(meetingDateInput, meetingTimeInput)}</span>
+                              <span>
+                                সেশনের নির্ধারিত সময়:{" "}
+                                {formatMeetingDateTime(
+                                  meetingDateInput,
+                                  meetingTimeInput,
+                                )}
+                              </span>
                             </div>
                           )}
 
@@ -1394,7 +1669,8 @@ export default function AdminPanel() {
                             শিক্ষার্থীদের শেয়ার করার নতুন লিংক:
                           </h4>
                           <p className="text-[10px] text-slate-500 leading-normal mb-1">
-                            এই লিংকটি কপি করে আপনার শিক্ষার্থীদের দিন। তারা এই জয়েনিং ফর্ম পূরণ করে কুইক রিডাইরেক্ট হবে।
+                            এই লিংকটি কপি করে আপনার শিক্ষার্থীদের দিন। তারা এই
+                            জয়েনিং ফর্ম পূরণ করে কুইক রিডাইরেক্ট হবে।
                           </p>
                           <div className="bg-white px-2.5 py-2.5 rounded-lg border border-slate-200 select-all font-mono text-[10px] font-semibold text-slate-700 truncate shadow-inner flex justify-between items-center gap-2">
                             <span className="truncate">{generatedLink}</span>
@@ -1403,7 +1679,11 @@ export default function AdminPanel() {
                               className="p-1.5 hover:bg-slate-100 text-amber-600 rounded-md shrink-0 transition"
                               title="কপি করুন"
                             >
-                              {copysuccess ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+                              {copysuccess ? (
+                                <Check className="h-4 w-4 text-emerald-600" />
+                              ) : (
+                                <Copy className="h-4 w-4" />
+                              )}
                             </button>
                           </div>
                         </div>
@@ -1412,22 +1692,30 @@ export default function AdminPanel() {
                           <button
                             onClick={handleCopy}
                             className={`flex-1 py-2 rounded-lg text-[10px] font-black flex items-center justify-center gap-1.5 cursor-pointer shadow-sm transition ${
-                              copysuccess 
-                                ? 'bg-emerald-600 text-white' 
-                                : 'bg-[#0f172a] text-amber-500 hover:bg-[#1e293b]'
+                              copysuccess
+                                ? "bg-emerald-600 text-white"
+                                : "bg-[#0f172a] text-amber-500 hover:bg-[#1e293b]"
                             }`}
                           >
-                            {copysuccess ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                            {copysuccess ? 'সফলভাবে কপি হয়েছে' : 'নতুন জয়েন লিংক কপি করুন'}
+                            {copysuccess ? (
+                              <Check className="h-3.5 w-3.5" />
+                            ) : (
+                              <Copy className="h-3.5 w-3.5" />
+                            )}
+                            {copysuccess
+                              ? "সফলভাবে কপি হয়েছে"
+                              : "নতুন জয়েন লিংক কপি করুন"}
                           </button>
                           <button
                             type="button"
                             onClick={() => {
                               // Direct test on current environment domain
-                              const activeTestUrl = generatedLink.includes('?join=')
-                                ? `${window.location.origin}/?join=${generatedLink.split('?join=')[1]}`
+                              const activeTestUrl = generatedLink.includes(
+                                "?join=",
+                              )
+                                ? `${window.location.origin}/?join=${generatedLink.split("?join=")[1]}`
                                 : generatedLink;
-                              window.open(activeTestUrl, '_blank');
+                              window.open(activeTestUrl, "_blank");
                             }}
                             className="px-3.5 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-amber-500 hover:text-white hover:border-amber-500 text-[10px] font-extrabold rounded-lg flex items-center gap-1.5 cursor-pointer transition"
                             title="আপনার চলতি পেজে টেস্ট করুন"
@@ -1438,7 +1726,16 @@ export default function AdminPanel() {
                         </div>
 
                         <p className="text-[9.5px] text-[#92400e]/80 leading-relaxed font-semibold">
-                          💡 <span className="font-bold">কোঅর্ডিনেটর টিপ:</span> এটি পাবলিক করার আগে অবশ্যই ডানদিকের এডিটরে <span className="underline font-bold text-slate-900">Share/Publish</span> চাপবেন। তৎক্ষণাৎ টেস্ট করে দেখতে চাইলে ওপরের <span className="font-bold text-slate-900 leading-none bg-slate-100 px-1 rounded">যাচাই</span> বাটনটি চাপুন।
+                          💡 <span className="font-bold">কোঅর্ডিনেটর টিপ:</span>{" "}
+                          এটি পাবলিক করার আগে অবশ্যই ডানদিকের এডিটরে{" "}
+                          <span className="underline font-bold text-slate-900">
+                            Share/Publish
+                          </span>{" "}
+                          চাপবেন। তৎক্ষণাৎ টেস্ট করে দেখতে চাইলে ওপরের{" "}
+                          <span className="font-bold text-slate-900 leading-none bg-slate-100 px-1 rounded">
+                            যাচাই
+                          </span>{" "}
+                          বাটনটি চাপুন।
                         </p>
                       </motion.div>
                     )}
@@ -1447,8 +1744,10 @@ export default function AdminPanel() {
                   {/* Sessions logs preview */}
                   <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-2 border-b border-slate-100">
-                      <h3 className="text-xs font-black text-slate-900 uppercase">পূর্বে তৈরি করা সেশন লগস ({filteredMeetings.length})</h3>
-                      
+                      <h3 className="text-xs font-black text-slate-900 uppercase">
+                        পূর্বে তৈরি করা সেশন লগস ({filteredMeetings.length})
+                      </h3>
+
                       {/* Interactive Meeting date filter requested at top */}
                       <div className="flex items-center gap-1.5">
                         <span className="text-[9px] font-black text-slate-500 flex items-center gap-0.5">
@@ -1458,17 +1757,22 @@ export default function AdminPanel() {
                         <input
                           type="date"
                           value={meetingsDateFilter}
-                          onChange={(e) => setMeetingsDateFilter(e.target.value)}
+                          onChange={(e) =>
+                            setMeetingsDateFilter(e.target.value)
+                          }
                           className="text-[9px] p-1 border border-slate-200 rounded bg-slate-50 font-bold focus:outline-none"
                         />
-                        {meetingsDateFilter && meetingsDateFilter !== getTodayDateString() && (
-                          <button
-                            onClick={() => setMeetingsDateFilter(getTodayDateString())}
-                            className="text-[8px] bg-rose-50 text-rose-600 hover:bg-rose-100 px-1.5 py-0.5 rounded border border-rose-200 font-bold cursor-pointer"
-                          >
-                            আজকের তারিখ
-                          </button>
-                        )}
+                        {meetingsDateFilter &&
+                          meetingsDateFilter !== getTodayDateString() && (
+                            <button
+                              onClick={() =>
+                                setMeetingsDateFilter(getTodayDateString())
+                              }
+                              className="text-[8px] bg-rose-50 text-rose-600 hover:bg-rose-100 px-1.5 py-0.5 rounded border border-rose-200 font-bold cursor-pointer"
+                            >
+                              আজকের তারিখ
+                            </button>
+                          )}
                       </div>
                     </div>
 
@@ -1477,29 +1781,48 @@ export default function AdminPanel() {
                         if (filteredMeetings.length === 0) {
                           return (
                             <p className="text-[10px] text-slate-400 italic text-center py-4">
-                              {meetingsDateFilter ? 'নির্বাচিত তারিখে কোনো সেশন সোর্স রেকর্ড পাওয়া যায়নি।' : 'কোনো রেকর্ড পাওয়া যায়নি।'}
+                              {meetingsDateFilter
+                                ? "নির্বাচিত তারিখে কোনো সেশন সোর্স রেকর্ড পাওয়া যায়নি।"
+                                : "কোনো রেকর্ড পাওয়া যায়নি।"}
                             </p>
                           );
                         }
 
                         return filteredMeetings.map((m) => (
-                          <div key={m.id} className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 flex items-center justify-between gap-3 text-[10px]">
+                          <div
+                            key={m.id}
+                            className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 flex items-center justify-between gap-3 text-[10px]"
+                          >
                             <div className="truncate space-y-0.5 max-w-[150px] sm:max-w-xs">
                               <div className="flex items-center gap-1.5">
-                                <code className="font-mono font-bold text-amber-700">{m.id}</code>
-                                <span className={`px-1 rounded-[4px] text-[8px] font-black ${
-                                  m.active ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-slate-200 text-slate-600'
-                                }`}>
-                                  {m.active ? 'সক্রিয়' : 'নিষ্ক্রিয়'}
+                                <code className="font-mono font-bold text-amber-700">
+                                  {m.id}
+                                </code>
+                                <span
+                                  className={`px-1 rounded-[4px] text-[8px] font-black ${
+                                    m.active
+                                      ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                                      : "bg-slate-200 text-slate-600"
+                                  }`}
+                                >
+                                  {m.active ? "সক্রিয়" : "নিষ্ক্রিয়"}
                                 </span>
                               </div>
-                              <p className="text-[9px] text-slate-500 font-mono truncate">{m.googleMeetLink}</p>
-                              
+                              <p className="text-[9px] text-slate-500 font-mono truncate">
+                                {m.googleMeetLink}
+                              </p>
+
                               {/* DISPLAY CUSTOM SCHEDULE DATE/TIME DIRECTLY UNDER ID/LINK */}
                               {m.meetingDate && (
                                 <p className="text-[9px] text-amber-600 font-black flex items-center gap-0.5 mt-0.5 bg-amber-50 px-1 rounded w-fit border border-amber-100">
                                   <Calendar className="h-3 w-3 shrink-0" />
-                                  <span>তারিখ ও সময়: {formatMeetingDateTime(m.meetingDate, m.meetingTime)}</span>
+                                  <span>
+                                    তারিখ ও সময়:{" "}
+                                    {formatMeetingDateTime(
+                                      m.meetingDate,
+                                      m.meetingTime,
+                                    )}
+                                  </span>
                                 </p>
                               )}
                             </div>
@@ -1507,7 +1830,9 @@ export default function AdminPanel() {
                             <div className="flex gap-1.5 shrink-0 items-center">
                               {deletingMeetingId === m.id ? (
                                 <div className="flex items-center gap-1 bg-rose-50 p-1 rounded border border-rose-200 animate-fadeIn text-[8px]">
-                                  <span className="text-[8px] text-rose-700 font-black shrink-0">ডিলিট করব?</span>
+                                  <span className="text-[8px] text-rose-700 font-black shrink-0">
+                                    ডিলিট করব?
+                                  </span>
                                   <button
                                     onClick={() => handleDeleteMeeting(m.id)}
                                     className="px-1.5 py-0.5 bg-rose-600 text-white font-black text-[8px] rounded hover:bg-rose-700 cursor-pointer"
@@ -1524,14 +1849,16 @@ export default function AdminPanel() {
                               ) : (
                                 <>
                                   <button
-                                    onClick={() => toggleMeetingActive(m.id, m.active)}
+                                    onClick={() =>
+                                      toggleMeetingActive(m.id, m.active)
+                                    }
                                     className={`text-[9.5px] font-black px-2 py-0.5 aligned-middle rounded border transition cursor-pointer ${
-                                      m.active 
-                                        ? 'border-amber-250 bg-amber-50 text-amber-700 hover:bg-amber-100' 
-                                        : 'border-emerald-250 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                                      m.active
+                                        ? "border-amber-250 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                                        : "border-emerald-250 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
                                     }`}
                                   >
-                                    {m.active ? 'বন্ধ' : 'চালু'}
+                                    {m.active ? "বন্ধ" : "চালু"}
                                   </button>
 
                                   <button
@@ -1554,7 +1881,7 @@ export default function AdminPanel() {
               )}
 
               {/* --- TAB 3: PARTICIPANT LOGS & DELETION --- */}
-              {activeTab === 'data' && (
+              {activeTab === "data" && (
                 <div className="space-y-4">
                   {/* Filter and Search segment */}
                   <div className="space-y-2 bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
@@ -1572,7 +1899,9 @@ export default function AdminPanel() {
                     </div>
 
                     <div className="flex items-center justify-between gap-2 border-t pt-2 mt-2">
-                      <span className="text-[9px] text-slate-550 font-bold">তারিখ দিয়ে ফিল্টার:</span>
+                      <span className="text-[9px] text-slate-550 font-bold">
+                        তারিখ দিয়ে ফিল্টার:
+                      </span>
                       <div className="flex items-center gap-1">
                         <input
                           type="date"
@@ -1594,8 +1923,10 @@ export default function AdminPanel() {
 
                   {/* Participants table alternative layout for phone */}
                   <div className="space-y-3">
-                    <h3 className="text-xs font-extrabold text-slate-800">অংশগ্রহণকারীদের বিবরণ ({filteredParticipants.length})</h3>
-                    
+                    <h3 className="text-xs font-extrabold text-slate-800">
+                      অংশগ্রহণকারীদের বিবরণ ({filteredParticipants.length})
+                    </h3>
+
                     {/* BULK SELECTION CONTROLS (All Block / Select All) */}
                     {filteredParticipants.length > 0 && (
                       <div className="bg-red-50/70 border border-red-200 rounded-2xl p-4.5 space-y-3 shadow-xs">
@@ -1603,8 +1934,13 @@ export default function AdminPanel() {
                         <div className="flex items-center gap-2 border-b border-red-100 pb-2">
                           <Ban className="h-4 w-4 text-red-600 shrink-0" />
                           <div>
-                            <h4 className="text-xs font-black text-red-900 uppercase tracking-tight">অল ব্লক অপশন (All Block Engine)</h4>
-                            <p className="text-[9px] text-slate-550 leading-none mt-0.5">সবাইকে টিক দিয়ে একসাথে স্থায়ী ব্লক করতে এই প্যানেলটি ব্যবহার করুন।</p>
+                            <h4 className="text-xs font-black text-red-900 uppercase tracking-tight">
+                              অল ব্লক অপশন (All Block Engine)
+                            </h4>
+                            <p className="text-[9px] text-slate-550 leading-none mt-0.5">
+                              সবাইকে টিক দিয়ে একসাথে স্থায়ী ব্লক করতে এই
+                              প্যানেলটি ব্যবহার করুন।
+                            </p>
                           </div>
                         </div>
 
@@ -1615,13 +1951,20 @@ export default function AdminPanel() {
                               type="checkbox"
                               id="selectAllParticipants"
                               checked={
-                                filteredParticipants.filter(p => !p.blocked).length > 0 && 
-                                filteredParticipants.filter(p => !p.blocked).every(p => selectedParticipantIds.includes(p.id))
+                                filteredParticipants.filter((p) => !p.blocked)
+                                  .length > 0 &&
+                                filteredParticipants
+                                  .filter((p) => !p.blocked)
+                                  .every((p) =>
+                                    selectedParticipantIds.includes(p.id),
+                                  )
                               }
                               onChange={(e) => {
                                 if (e.target.checked) {
                                   // Select all unblocked
-                                  const unblockedIds = filteredParticipants.filter(p => !p.blocked).map(p => p.id);
+                                  const unblockedIds = filteredParticipants
+                                    .filter((p) => !p.blocked)
+                                    .map((p) => p.id);
                                   setSelectedParticipantIds(unblockedIds);
                                 } else {
                                   setSelectedParticipantIds([]);
@@ -1629,8 +1972,16 @@ export default function AdminPanel() {
                               }}
                               className="h-4.5 w-4.5 rounded border-slate-350 text-red-650 focus:ring-red-500 cursor-pointer"
                             />
-                            <label htmlFor="selectAllParticipants" className="text-[10px] font-black text-slate-800 cursor-pointer select-none">
-                              সবাইকে সিলেক্ট করুন ({filteredParticipants.filter(p => !p.blocked).length} জন)
+                            <label
+                              htmlFor="selectAllParticipants"
+                              className="text-[10px] font-black text-slate-800 cursor-pointer select-none"
+                            >
+                              সবাইকে সিলেক্ট করুন (
+                              {
+                                filteredParticipants.filter((p) => !p.blocked)
+                                  .length
+                              }{" "}
+                              জন)
                             </label>
                           </div>
 
@@ -1648,9 +1999,9 @@ export default function AdminPanel() {
                               }}
                               disabled={isBulkBlocking}
                               className={`w-full sm:w-auto px-4 py-2.5 text-white font-black text-[10.5px] rounded-xl shadow-md transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer ${
-                                selectedParticipantIds.length > 0 
-                                  ? 'bg-red-650 hover:bg-red-700 hover:scale-[1.01] border border-red-550' 
-                                  : 'bg-slate-400 hover:bg-slate-450 border border-slate-350'
+                                selectedParticipantIds.length > 0
+                                  ? "bg-red-650 hover:bg-red-700 hover:scale-[1.01] border border-red-550"
+                                  : "bg-slate-400 hover:bg-slate-450 border border-slate-350"
                               }`}
                             >
                               {isBulkBlocking ? (
@@ -1661,7 +2012,12 @@ export default function AdminPanel() {
                               ) : (
                                 <>
                                   <Ban className="h-4 w-4" />
-                                  <span>অল ব্লক করুন {selectedParticipantIds.length > 0 ? `(${selectedParticipantIds.length} জন)` : ''}</span>
+                                  <span>
+                                    অল ব্লক করুন{" "}
+                                    {selectedParticipantIds.length > 0
+                                      ? `(${selectedParticipantIds.length} জন)`
+                                      : ""}
+                                  </span>
                                 </>
                               )}
                             </button>
@@ -1670,12 +2026,15 @@ export default function AdminPanel() {
 
                         {/* Interactive Dynamic Warning Tip */}
                         {allBlockTip && (
-                          <motion.p 
+                          <motion.p
                             initial={{ opacity: 0, y: -4 }}
                             animate={{ opacity: 1, y: 0 }}
                             className="text-[9.5px] text-red-700 font-extrabold bg-white border border-red-200 py-1.5 px-3 rounded-lg text-center animate-fadeIn"
                           >
-                            ⚠️ কোনো শিক্ষার্থী সিলেক্ট করা নেই! নিচে শিক্ষার্থীদের নামের বামদিকের বাক্সে টিক দিয়ে সিলেক্ট করুন, অথবা "সবাইকে সিলেক্ট করুন" বক্সে টিক দিয়ে "অল ব্লক" এ ক্লিক করুন।
+                            ⚠️ কোনো শিক্ষার্থী সিলেক্ট করা নেই! নিচে
+                            শিক্ষার্থীদের নামের বামদিকের বাক্সে টিক দিয়ে সিলেক্ট
+                            করুন, অথবা "সবাইকে সিলেক্ট করুন" বক্সে টিক দিয়ে "অল
+                            ব্লক" এ ক্লিক করুন।
                           </motion.p>
                         )}
                       </div>
@@ -1684,19 +2043,23 @@ export default function AdminPanel() {
                     {/* Participant logs listing (No max-h to display fully and utilize outer scrolling) */}
                     <div className="space-y-2">
                       {filteredParticipants.length === 0 ? (
-                        <p className="text-[10px] text-slate-450 italic text-center py-4">কোনো জয়েনিং লগ পাওয়া যায়নি।</p>
+                        <p className="text-[10px] text-slate-450 italic text-center py-4">
+                          কোনো জয়েনিং লগ পাওয়া যায়নি।
+                        </p>
                       ) : (
                         filteredParticipants.map((p) => {
-                          const isSelected = selectedParticipantIds.includes(p.id);
+                          const isSelected = selectedParticipantIds.includes(
+                            p.id,
+                          );
                           return (
-                            <div 
-                              key={p.id} 
+                            <div
+                              key={p.id}
                               className={`border rounded-xl p-3 shadow-xs space-y-2 text-xs transition ${
-                                isSelected 
-                                  ? 'bg-amber-50/55 border-amber-300 ring-1 ring-amber-300' 
-                                  : p.blocked 
-                                    ? 'bg-slate-50/60 border-slate-200 opacity-80' 
-                                    : 'bg-white border-slate-200'
+                                isSelected
+                                  ? "bg-amber-50/55 border-amber-300 ring-1 ring-amber-300"
+                                  : p.blocked
+                                    ? "bg-slate-50/60 border-slate-200 opacity-80"
+                                    : "bg-white border-slate-200"
                               }`}
                             >
                               <div className="flex justify-between items-start gap-2">
@@ -1709,39 +2072,65 @@ export default function AdminPanel() {
                                         checked={isSelected}
                                         onChange={() => {
                                           if (isSelected) {
-                                            setSelectedParticipantIds(prev => prev.filter(id => id !== p.id));
+                                            setSelectedParticipantIds((prev) =>
+                                              prev.filter((id) => id !== p.id),
+                                            );
                                           } else {
-                                            setSelectedParticipantIds(prev => [...prev, p.id]);
+                                            setSelectedParticipantIds(
+                                              (prev) => [...prev, p.id],
+                                            );
                                           }
                                         }}
                                         className="h-4 w-4 rounded border-slate-300 text-amber-500 focus:ring-amber-500 cursor-pointer"
                                       />
                                     </div>
                                   )}
-                                  
+
                                   <div>
                                     <h4 className="font-extrabold text-slate-900 flex items-center gap-1.5">
-                                      <span className={`h-2 w-2 rounded-full shrink-0 ${p.blocked ? 'bg-red-500 animate-pulse' : 'bg-emerald-500'}`}></span>
+                                      <span
+                                        className={`h-2 w-2 rounded-full shrink-0 ${p.blocked ? "bg-red-500 animate-pulse" : "bg-emerald-500"}`}
+                                      ></span>
                                       {p.name}
                                     </h4>
                                     <div className="flex flex-col gap-0.5 mt-0.5">
-                                      <span className="font-mono text-[9px] text-slate-400 block">IP: <strong className="text-amber-700">{p.ip}</strong></span>
-                                      <span className="font-mono text-[9px] text-slate-400 block">UID: <strong className="text-amber-700">{p.uid || p.deviceId?.substring(p.deviceId.length - 8) || 'N/A'}</strong></span>
+                                      <span className="font-mono text-[9px] text-slate-400 block">
+                                        IP:{" "}
+                                        <strong className="text-amber-700">
+                                          {p.ip}
+                                        </strong>
+                                      </span>
+                                      <span className="font-mono text-[9px] text-slate-400 block">
+                                        UID:{" "}
+                                        <strong className="text-amber-700">
+                                          {p.uid ||
+                                            p.deviceId?.substring(
+                                              p.deviceId.length - 8,
+                                            ) ||
+                                            "N/A"}
+                                        </strong>
+                                      </span>
                                     </div>
                                   </div>
                                 </div>
                                 <div className="flex gap-1 shrink-0 items-center">
                                   {deletingParticipantId === p.id ? (
                                     <div className="flex items-center gap-1 bg-[#fff5f5] p-1 rounded border border-red-200 animate-fadeIn text-[8px]">
-                                      <span className="text-[8px] text-red-700 font-extrabold shrink-0">ডিলিট?</span>
+                                      <span className="text-[8px] text-red-700 font-extrabold shrink-0">
+                                        ডিলিট?
+                                      </span>
                                       <button
-                                        onClick={() => handleDeleteParticipant(p.id)}
+                                        onClick={() =>
+                                          handleDeleteParticipant(p.id)
+                                        }
                                         className="px-1.5 py-0.5 bg-red-600 text-white font-black text-[8px] rounded hover:bg-red-700 cursor-pointer"
                                       >
                                         হ্যাঁ
                                       </button>
                                       <button
-                                        onClick={() => setDeletingParticipantId(null)}
+                                        onClick={() =>
+                                          setDeletingParticipantId(null)
+                                        }
                                         className="px-1.5 py-0.5 bg-slate-200 text-slate-700 font-black text-[8px] rounded hover:bg-slate-300 cursor-pointer"
                                       >
                                         না
@@ -1749,7 +2138,9 @@ export default function AdminPanel() {
                                     </div>
                                   ) : (
                                     <button
-                                      onClick={() => setDeletingParticipantId(p.id)}
+                                      onClick={() =>
+                                        setDeletingParticipantId(p.id)
+                                      }
                                       title="লগ ডিলিট"
                                       className="p-1.5 border border-red-100 hover:bg-red-50 rounded text-red-500 hover:border-red-300 transition cursor-pointer"
                                     >
@@ -1769,7 +2160,9 @@ export default function AdminPanel() {
                               <div className="flex justify-end pt-1">
                                 {p.blocked ? (
                                   <button
-                                    onClick={() => handleUnblockUser(p.ip, p.deviceId, p.uid)}
+                                    onClick={() =>
+                                      handleUnblockUser(p.ip, p.deviceId, p.uid)
+                                    }
                                     className="px-2.5 py-1 border border-emerald-250 bg-emerald-50 text-emerald-800 hover:bg-[#d1fae5] font-bold rounded text-[9px] transition cursor-pointer"
                                   >
                                     আনব্লক করুন
@@ -1793,7 +2186,7 @@ export default function AdminPanel() {
               )}
 
               {/* --- TAB 3.5: DEMO LIST --- */}
-              {activeTab === 'demo' && (
+              {activeTab === "demo" && (
                 <div className="space-y-4">
                   {/* Filter and Search segment */}
                   <div className="space-y-2 bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
@@ -1811,7 +2204,9 @@ export default function AdminPanel() {
                     </div>
 
                     <div className="flex items-center justify-between gap-2 border-t pt-2 mt-2">
-                      <span className="text-[9px] text-slate-500 font-bold">তারিখ দিয়ে ফিল্টার:</span>
+                      <span className="text-[9px] text-slate-500 font-bold">
+                        তারিখ দিয়ে ফিল্টার:
+                      </span>
                       <div className="flex items-center gap-1">
                         <input
                           type="date"
@@ -1821,7 +2216,9 @@ export default function AdminPanel() {
                         />
                         {demoDateFilter !== getTodayDateString() && (
                           <button
-                            onClick={() => setDemoDateFilter(getTodayDateString())}
+                            onClick={() =>
+                              setDemoDateFilter(getTodayDateString())
+                            }
                             className="text-[9px] border border-emerald-200 bg-emerald-50 text-emerald-700 px-1.5 py-1 rounded hover:bg-emerald-600 hover:text-white transition cursor-pointer font-bold shrink-0"
                           >
                             আজকে
@@ -1834,12 +2231,17 @@ export default function AdminPanel() {
                   {/* Demo participants table layout for phone */}
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-xs font-extrabold text-slate-800">ডেমো ব্যবহারকারী লগ ({filteredDemoParticipants.length})</h3>
+                      <h3 className="text-xs font-extrabold text-slate-800">
+                        ডেমো ব্যবহারকারী লগ ({filteredDemoParticipants.length})
+                      </h3>
                       <button
                         onClick={() => {
                           const currentFilter = demoDateFilter;
-                          setDemoDateFilter('');
-                          setTimeout(() => setDemoDateFilter(currentFilter), 10);
+                          setDemoDateFilter("");
+                          setTimeout(
+                            () => setDemoDateFilter(currentFilter),
+                            10,
+                          );
                         }}
                         className="text-[9px] font-black text-emerald-600 bg-emerald-50 border border-emerald-100 hover:bg-emerald-100 px-2 py-1 rounded-lg cursor-pointer"
                       >
@@ -1849,30 +2251,73 @@ export default function AdminPanel() {
 
                     <div className="space-y-2">
                       {filteredDemoParticipants.length === 0 ? (
-                        <p className="text-[10px] text-slate-450 italic text-center py-4">কোনো ডেমো জয়েনিং লগ পাওয়া যায়নি।</p>
+                        <p className="text-[10px] text-slate-450 italic text-center py-4">
+                          কোনো ডেমো জয়েনিং লগ পাওয়া যায়নি।
+                        </p>
                       ) : (
                         filteredDemoParticipants.map((p) => {
                           return (
-                            <div 
-                              key={p.id} 
+                            <div
+                              key={p.id}
                               className={`border rounded-xl p-3 shadow-xs space-y-2 text-xs transition ${
-                                p.blocked 
-                                  ? 'bg-slate-50/60 border-slate-200 opacity-80' 
-                                  : 'bg-white border-slate-200'
+                                p.blocked
+                                  ? "bg-slate-50/60 border-slate-200 opacity-80"
+                                  : "bg-white border-slate-200"
                               }`}
                             >
                               <div className="flex justify-between items-start gap-2">
                                 <div>
                                   <h4 className="font-extrabold text-slate-900 flex items-center gap-1.5">
-                                    <span className={`h-2 w-2 rounded-full shrink-0 ${p.blocked ? 'bg-red-500 animate-pulse' : 'bg-emerald-500'}`}></span>
+                                    <span
+                                      className={`h-2 w-2 rounded-full shrink-0 ${p.blocked ? "bg-red-500 animate-pulse" : "bg-emerald-500"}`}
+                                    ></span>
                                     {p.name}
                                   </h4>
-                                  {p.gmail && <p className="text-[10px] text-emerald-600 font-extrabold">{p.gmail}</p>}
+                                  {p.gmail && (
+                                    <p className="text-[10px] text-emerald-600 font-extrabold">
+                                      {p.gmail}
+                                    </p>
+                                  )}
                                   <div className="flex flex-col gap-0.5 mt-1 font-mono text-[9px] text-slate-550 leading-relaxed">
-                                    <span>IP: <strong className="text-slate-800">{p.ip || 'N/A'}</strong></span>
-                                    <span>UID: <strong className="text-amber-700">{p.uid || p.deviceId?.substring(p.deviceId.length - 8) || 'N/A'}</strong></span>
-                                    <span>ডিভাইস আইডি: <strong className="text-slate-800">{p.deviceId ? p.deviceId.substring(0, 16) + '...' : 'Unknown'}</strong></span>
-                                    <span>জয়েন টাইম: <strong className="text-slate-850">{p.joinedAt ? new Date(p.joinedAt.seconds * 1000).toLocaleString('bn-BD', { hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: true }) : 'N/A'}</strong></span>
+                                    <span>
+                                      IP:{" "}
+                                      <strong className="text-slate-800">
+                                        {p.ip || "N/A"}
+                                      </strong>
+                                    </span>
+                                    <span>
+                                      UID:{" "}
+                                      <strong className="text-amber-700">
+                                        {p.uid ||
+                                          p.deviceId?.substring(
+                                            p.deviceId.length - 8,
+                                          ) ||
+                                          "N/A"}
+                                      </strong>
+                                    </span>
+                                    <span>
+                                      ডিভাইস আইডি:{" "}
+                                      <strong className="text-slate-800">
+                                        {p.deviceId
+                                          ? p.deviceId.substring(0, 16) + "..."
+                                          : "Unknown"}
+                                      </strong>
+                                    </span>
+                                    <span>
+                                      জয়েন টাইম:{" "}
+                                      <strong className="text-slate-850">
+                                        {p.joinedAt
+                                          ? new Date(
+                                              p.joinedAt.seconds * 1000,
+                                            ).toLocaleString("bn-BD", {
+                                              hour: "numeric",
+                                              minute: "numeric",
+                                              second: "numeric",
+                                              hour12: true,
+                                            })
+                                          : "N/A"}
+                                      </strong>
+                                    </span>
                                   </div>
                                 </div>
 
@@ -1893,9 +2338,18 @@ export default function AdminPanel() {
                                       ব্লক করুন
                                     </button>
                                   ) : (
-                                    <span className="px-2 py-0.5 bg-red-100 text-red-700 font-extrabold text-[8px] rounded border border-red-200">
-                                      ব্লকড
-                                    </span>
+                                    <button
+                                      onClick={() =>
+                                        handleUnblockUser(
+                                          p.ip,
+                                          p.deviceId,
+                                          p.uid,
+                                        )
+                                      }
+                                      className="px-2 py-1 bg-emerald-50 border border-emerald-250 text-[#047857] hover:bg-[#d1fae5] rounded-[7px] text-[8.5px] font-black transition cursor-pointer font-sans"
+                                    >
+                                      আনব্লক করুন
+                                    </button>
                                   )}
                                 </div>
                               </div>
@@ -1909,198 +2363,260 @@ export default function AdminPanel() {
               )}
 
               {/* --- TAB 4: BLOCKED LIST --- */}
-              {activeTab === 'blocked' && (() => {
-                const filteredBlockedIPs = blockedIPs.filter((b) => {
-                  // Filter by search query (Name or IP)
-                  if (blockedSearchQuery) {
-                    const queryLower = blockedSearchQuery.toLowerCase();
-                    const ipMatch = b.ip?.toLowerCase().includes(queryLower);
-                    const nameMatch = b.name?.toLowerCase().includes(queryLower);
-                    if (!ipMatch && !nameMatch) return false;
-                  }
+              {activeTab === "blocked" &&
+                (() => {
+                  const filteredBlockedIPs = blockedIPs.filter((b) => {
+                    // Filter by search query (Name or IP)
+                    if (blockedSearchQuery) {
+                      const queryLower = blockedSearchQuery.toLowerCase();
+                      const ipMatch = b.ip?.toLowerCase().includes(queryLower);
+                      const nameMatch = b.name
+                        ?.toLowerCase()
+                        .includes(queryLower);
+                      if (!ipMatch && !nameMatch) return false;
+                    }
 
-                  // Filter by date
-                  if (blockedDateFilter) {
-                    if (!b.blockedAt) return false;
-                    const bDate = b.blockedAt.toDate ? b.blockedAt.toDate() : new Date(b.blockedAt);
-                    const yyyy = bDate.getFullYear();
-                    const mm = String(bDate.getMonth() + 1).padStart(2, '0');
-                    const dd = String(bDate.getDate()).padStart(2, '0');
-                    const formattedDateStr = `${yyyy}-${mm}-${dd}`;
-                    if (formattedDateStr !== blockedDateFilter) return false;
-                  }
-                  return true;
-                });
+                    // Filter by date
+                    if (blockedDateFilter) {
+                      if (!b.blockedAt) return false;
+                      const bDate = b.blockedAt.toDate
+                        ? b.blockedAt.toDate()
+                        : new Date(b.blockedAt);
+                      const yyyy = bDate.getFullYear();
+                      const mm = String(bDate.getMonth() + 1).padStart(2, "0");
+                      const dd = String(bDate.getDate()).padStart(2, "0");
+                      const formattedDateStr = `${yyyy}-${mm}-${dd}`;
+                      if (formattedDateStr !== blockedDateFilter) return false;
+                    }
+                    return true;
+                  });
 
-                return (
-                  <div className="space-y-4 animate-fadeIn">
-                    <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm space-y-1">
-                      <h3 className="text-xs font-black text-slate-900 uppercase">ব্লকড ডিভাইস আইপি রেকর্ডস</h3>
-                      <p className="text-[10px] text-slate-500 leading-normal">
-                        এই ডিভাইস আইপি থেকে গুগলে জয়েন করা সম্পূর্ণ নিষিদ্ধ। এরা পুনরায় জয়েন লিংক চেষ্টা করলে অ্যাক্সেস অস্বীকৃত স্ক্রিন দেখাবে।
-                      </p>
-                    </div>
-
-                    {/* Filter controls section */}
-                    <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-sm space-y-3">
-                      <h4 className="text-[10px] font-black text-slate-700 uppercase flex items-center gap-1.5">
-                        <Filter className="h-3.5 w-3.5 text-amber-500" />
-                        ব্লকলিস্ট রেকর্ড ফিল্টার ও অনুসন্ধান
-                      </h4>
-                      
-                      <div className="grid grid-cols-2 gap-2.5">
-                        {/* 1. Date Filter */}
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-black text-slate-500 block">কার্যকর করার তারিখ</label>
-                          <input
-                            type="date"
-                            value={blockedDateFilter}
-                            onChange={(e) => setBlockedDateFilter(e.target.value)}
-                            className="w-full text-[10px] px-2 py-1.5 border border-slate-200 rounded-lg focus:ring-1 focus:ring-amber-500 bg-slate-50 font-bold"
-                          />
-                        </div>
-
-                        {/* 2. Search Box */}
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-black text-slate-500 block">নাম বা আইপি খুঁজুন</label>
-                          <input
-                            type="text"
-                            placeholder="যেমন: ১১২.১০..."
-                            value={blockedSearchQuery}
-                            onChange={(e) => setBlockedSearchQuery(e.target.value)}
-                            className="w-full text-[10px] px-2 py-1.5 border border-slate-200 rounded-lg focus:ring-1 focus:ring-amber-500 bg-slate-50 font-semibold placeholder-slate-400"
-                          />
-                        </div>
+                  return (
+                    <div className="space-y-4 animate-fadeIn">
+                      <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm space-y-1">
+                        <h3 className="text-xs font-black text-slate-900 uppercase">
+                          ব্লকড ডিভাইস আইপি রেকর্ডস
+                        </h3>
+                        <p className="text-[10px] text-slate-500 leading-normal">
+                          এই ডিভাইস আইপি থেকে গুগলে জয়েন করা সম্পূর্ণ নিষিদ্ধ।
+                          এরা পুনরায় জয়েন লিংক চেষ্টা করলে অ্যাক্সেস অস্বীকৃত
+                          স্ক্রিন দেখাবে।
+                        </p>
                       </div>
 
-                      {/* Quick access tags & reset */}
-                      <div className="flex flex-wrap items-center justify-between gap-1.5 pt-2 border-t border-slate-100">
-                        <div className="flex gap-1.5">
-                          <button
-                            onClick={() => {
-                              const today = new Date();
-                              const yyyy = today.getFullYear();
-                              const mm = String(today.getMonth() + 1).padStart(2, '0');
-                              const dd = String(today.getDate()).padStart(2, '0');
-                              setBlockedDateFilter(`${yyyy}-${mm}-${dd}`);
-                            }}
-                            className={`px-2 py-1 rounded text-[8px] font-bold border transition shrink-0 ${
-                              blockedDateFilter === (() => {
+                      {/* Filter controls section */}
+                      <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-sm space-y-3">
+                        <h4 className="text-[10px] font-black text-slate-700 uppercase flex items-center gap-1.5">
+                          <Filter className="h-3.5 w-3.5 text-amber-500" />
+                          ব্লকলিস্ট রেকর্ড ফিল্টার ও অনুসন্ধান
+                        </h4>
+
+                        <div className="grid grid-cols-2 gap-2.5">
+                          {/* 1. Date Filter */}
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-black text-slate-500 block">
+                              কার্যকর করার তারিখ
+                            </label>
+                            <input
+                              type="date"
+                              value={blockedDateFilter}
+                              onChange={(e) =>
+                                setBlockedDateFilter(e.target.value)
+                              }
+                              className="w-full text-[10px] px-2 py-1.5 border border-slate-200 rounded-lg focus:ring-1 focus:ring-amber-500 bg-slate-50 font-bold"
+                            />
+                          </div>
+
+                          {/* 2. Search Box */}
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-black text-slate-500 block">
+                              নাম বা আইপি খুঁজুন
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="যেমন: ১১২.১০..."
+                              value={blockedSearchQuery}
+                              onChange={(e) =>
+                                setBlockedSearchQuery(e.target.value)
+                              }
+                              className="w-full text-[10px] px-2 py-1.5 border border-slate-200 rounded-lg focus:ring-1 focus:ring-amber-500 bg-slate-50 font-semibold placeholder-slate-400"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Quick access tags & reset */}
+                        <div className="flex flex-wrap items-center justify-between gap-1.5 pt-2 border-t border-slate-100">
+                          <div className="flex gap-1.5">
+                            <button
+                              onClick={() => {
                                 const today = new Date();
                                 const yyyy = today.getFullYear();
-                                const mm = String(today.getMonth() + 1).padStart(2, '0');
-                                const dd = String(today.getDate()).padStart(2, '0');
-                                return `${yyyy}-${mm}-${dd}`;
-                              })()
-                                ? 'bg-amber-500 text-white border-amber-500 shadow-sm'
-                                : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                            }`}
-                          >
-                            আজকে ব্লকড
-                          </button>
-                          
-                          <button
-                            onClick={() => {
-                              const yesterday = new Date();
-                              yesterday.setDate(yesterday.getDate() - 1);
-                              const yyyy = yesterday.getFullYear();
-                              const mm = String(yesterday.getMonth() + 1).padStart(2, '0');
-                              const dd = String(yesterday.getDate()).padStart(2, '0');
-                              setBlockedDateFilter(`${yyyy}-${mm}-${dd}`);
-                            }}
-                            className={`px-2 py-1 rounded text-[8px] font-bold border transition shrink-0 ${
-                              blockedDateFilter === (() => {
+                                const mm = String(
+                                  today.getMonth() + 1,
+                                ).padStart(2, "0");
+                                const dd = String(today.getDate()).padStart(
+                                  2,
+                                  "0",
+                                );
+                                setBlockedDateFilter(`${yyyy}-${mm}-${dd}`);
+                              }}
+                              className={`px-2 py-1 rounded text-[8px] font-bold border transition shrink-0 ${
+                                blockedDateFilter ===
+                                (() => {
+                                  const today = new Date();
+                                  const yyyy = today.getFullYear();
+                                  const mm = String(
+                                    today.getMonth() + 1,
+                                  ).padStart(2, "0");
+                                  const dd = String(today.getDate()).padStart(
+                                    2,
+                                    "0",
+                                  );
+                                  return `${yyyy}-${mm}-${dd}`;
+                                })()
+                                  ? "bg-amber-500 text-white border-amber-500 shadow-sm"
+                                  : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                              }`}
+                            >
+                              আজকে ব্লকড
+                            </button>
+
+                            <button
+                              onClick={() => {
                                 const yesterday = new Date();
                                 yesterday.setDate(yesterday.getDate() - 1);
                                 const yyyy = yesterday.getFullYear();
-                                const mm = String(yesterday.getMonth() + 1).padStart(2, '0');
-                                const dd = String(yesterday.getDate()).padStart(2, '0');
-                                return `${yyyy}-${mm}-${dd}`;
-                              })()
-                                ? 'bg-amber-500 text-white border-amber-500 shadow-sm'
-                                : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                            }`}
-                          >
-                            গতকালকে
-                          </button>
-                        </div>
+                                const mm = String(
+                                  yesterday.getMonth() + 1,
+                                ).padStart(2, "0");
+                                const dd = String(yesterday.getDate()).padStart(
+                                  2,
+                                  "0",
+                                );
+                                setBlockedDateFilter(`${yyyy}-${mm}-${dd}`);
+                              }}
+                              className={`px-2 py-1 rounded text-[8px] font-bold border transition shrink-0 ${
+                                blockedDateFilter ===
+                                (() => {
+                                  const yesterday = new Date();
+                                  yesterday.setDate(yesterday.getDate() - 1);
+                                  const yyyy = yesterday.getFullYear();
+                                  const mm = String(
+                                    yesterday.getMonth() + 1,
+                                  ).padStart(2, "0");
+                                  const dd = String(
+                                    yesterday.getDate(),
+                                  ).padStart(2, "0");
+                                  return `${yyyy}-${mm}-${dd}`;
+                                })()
+                                  ? "bg-amber-500 text-white border-amber-500 shadow-sm"
+                                  : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                              }`}
+                            >
+                              গতকালকে
+                            </button>
+                          </div>
 
-                        {(blockedDateFilter || blockedSearchQuery) && (
-                          <button
-                            onClick={() => {
-                              setBlockedDateFilter('');
-                              setBlockedSearchQuery('');
-                            }}
-                            className="text-[8px] font-black text-rose-600 hover:underline flex items-center gap-0.5 cursor-pointer bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-md"
-                          >
-                            ফিল্টার সাফ করুন
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      {filteredBlockedIPs.length === 0 ? (
-                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-6 text-center">
-                          <p className="text-[10px] text-slate-400 italic font-medium">কোনো ব্লকড আইপি রেকর্ড পাওয়া যায়নি।</p>
                           {(blockedDateFilter || blockedSearchQuery) && (
                             <button
                               onClick={() => {
-                                setBlockedDateFilter('');
-                                setBlockedSearchQuery('');
+                                setBlockedDateFilter("");
+                                setBlockedSearchQuery("");
                               }}
-                              className="mt-2 text-[10px] bg-white border border-slate-200 px-3 py-1 rounded-md text-amber-600 font-bold hover:bg-slate-50 cursor-pointer shadow-sm transition"
+                              className="text-[8px] font-black text-rose-600 hover:underline flex items-center gap-0.5 cursor-pointer bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-md"
                             >
-                              রিসেট ফিল্টার
+                              ফিল্টার সাফ করুন
                             </button>
                           )}
                         </div>
-                      ) : (
-                        filteredBlockedIPs.map((b) => (
-                          <div key={b.ip} className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm flex justify-between items-center gap-4 text-xs">
-                            <div className="space-y-0.5 truncate">
-                              <span className="font-mono font-bold text-red-600 block truncate">{b.ip}</span>
-                              {b.uid && b.uid !== 'Unknown' && (
-                                <span className="font-mono text-[9.5px] text-amber-700 block">UID: <strong>{b.uid}</strong></span>
-                              )}
-                              <span className="text-[10px] text-slate-600 font-semibold block">{b.name}</span>
-                              <span className="text-[9px] text-slate-400 block">লগ করা হয়েছে: {formatTime(b.blockedAt)}</span>
-                            </div>
-                            <button
-                              onClick={() => handleUnblockUser(b.ip, b.deviceId, b.uid)}
-                              className="px-3 py-1.5 border border-emerald-250 bg-emerald-50 text-[#047857] hover:bg-[#d1fae5] font-bold rounded-lg text-[9px] transition cursor-pointer shrink-0"
-                            >
-                              ব্লক বাতিল
-                            </button>
+                      </div>
+
+                      <div className="space-y-2">
+                        {filteredBlockedIPs.length === 0 ? (
+                          <div className="bg-slate-50 border border-slate-200 rounded-xl p-6 text-center">
+                            <p className="text-[10px] text-slate-400 italic font-medium">
+                              কোনো ব্লকড আইপি রেকর্ড পাওয়া যায়নি।
+                            </p>
+                            {(blockedDateFilter || blockedSearchQuery) && (
+                              <button
+                                onClick={() => {
+                                  setBlockedDateFilter("");
+                                  setBlockedSearchQuery("");
+                                }}
+                                className="mt-2 text-[10px] bg-white border border-slate-200 px-3 py-1 rounded-md text-amber-600 font-bold hover:bg-slate-50 cursor-pointer shadow-sm transition"
+                              >
+                                রিসেট ফিল্টার
+                              </button>
+                            )}
                           </div>
-                        ))
-                      )}
+                        ) : (
+                          filteredBlockedIPs.map((b) => (
+                            <div
+                              key={b.ip}
+                              className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm flex justify-between items-center gap-4 text-xs"
+                            >
+                              <div className="space-y-0.5 truncate">
+                                <span className="font-mono font-bold text-red-600 block truncate">
+                                  {b.ip}
+                                </span>
+                                {b.uid && b.uid !== "Unknown" && (
+                                  <span className="font-mono text-[9.5px] text-amber-700 block">
+                                    UID: <strong>{b.uid}</strong>
+                                  </span>
+                                )}
+                                <span className="text-[10px] text-slate-600 font-semibold block">
+                                  {b.name}
+                                </span>
+                                <span className="text-[9px] text-slate-400 block">
+                                  লগ করা হয়েছে: {formatTime(b.blockedAt)}
+                                </span>
+                              </div>
+                              <button
+                                onClick={() =>
+                                  handleUnblockUser(b.ip, b.deviceId, b.uid)
+                                }
+                                className="px-3 py-1.5 border border-emerald-250 bg-emerald-50 text-[#047857] hover:bg-[#d1fae5] font-bold rounded-lg text-[9px] transition cursor-pointer shrink-0"
+                              >
+                                ব্লক বাতিল
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })()}
+                  );
+                })()}
 
               {/* --- TAB 5: SETTINGS --- */}
-              {activeTab === 'settings' && (
+              {activeTab === "settings" && (
                 <div className="space-y-4">
                   {/* Preferences config */}
                   <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3">
-                    <h3 className="text-xs font-black text-slate-900 uppercase">নিরাপত্তা ও অন্যান্য সেটিংস</h3>
-                    
+                    <h3 className="text-xs font-black text-slate-900 uppercase">
+                      নিরাপত্তা ও অন্যান্য সেটিংস
+                    </h3>
+
                     <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
                       <div className="max-w-[200px]">
-                        <p className="text-[10px] font-black text-slate-800">একই আইপি একাধিক জয়েন প্রতিরোধ</p>
-                        <p className="text-[9px] text-slate-500 leading-none mt-0.5">একবার জয়েন করা আইপি দিয়ে পুনরায় জয়েন বন্ধ রাখতে এটি সবসময় চালু রাখুন।</p>
+                        <p className="text-[10px] font-black text-slate-800">
+                          একই আইপি একাধিক জয়েন প্রতিরোধ
+                        </p>
+                        <p className="text-[9px] text-slate-500 leading-none mt-0.5">
+                          একবার জয়েন করা আইপি দিয়ে পুনরায় জয়েন বন্ধ রাখতে এটি
+                          সবসময় চালু রাখুন।
+                        </p>
                       </div>
                       <button
                         onClick={toggleRepeatJoinsSetting}
                         className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                          preventRepeatJoins ? 'bg-amber-500' : 'bg-slate-300'
+                          preventRepeatJoins ? "bg-amber-500" : "bg-slate-300"
                         }`}
                       >
                         <span
                           className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                            preventRepeatJoins ? 'translate-x-5' : 'translate-x-0'
+                            preventRepeatJoins
+                              ? "translate-x-5"
+                              : "translate-x-0"
                           }`}
                         />
                       </button>
@@ -2108,18 +2624,23 @@ export default function AdminPanel() {
 
                     <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
                       <div className="max-w-[200px]">
-                        <p className="text-[10px] font-black text-slate-800">পাবলিক লিংক সচল রাখুন</p>
-                        <p className="text-[9px] text-slate-500 leading-relaxed mt-0.5">অন থাকলে সাধারণ লিঙ্কে ক্লিক করে জয়েন সচল থাকবে। অফ করে দিলে টাইম আউট বার্তা দেখানো হবে।</p>
+                        <p className="text-[10px] font-black text-slate-800">
+                          পাবলিক লিংক সচল রাখুন
+                        </p>
+                        <p className="text-[9px] text-slate-500 leading-relaxed mt-0.5">
+                          অন থাকলে সাধারণ লিঙ্কে ক্লিক করে জয়েন সচল থাকবে। অফ
+                          করে দিলে টাইম আউট বার্তা দেখানো হবে।
+                        </p>
                       </div>
                       <button
                         onClick={togglePublicLinkActiveSetting}
                         className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                          publicLinkActive ? 'bg-amber-500' : 'bg-slate-300'
+                          publicLinkActive ? "bg-amber-500" : "bg-slate-300"
                         }`}
                       >
                         <span
                           className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                            publicLinkActive ? 'translate-x-5' : 'translate-x-0'
+                            publicLinkActive ? "translate-x-5" : "translate-x-0"
                           }`}
                         />
                       </button>
@@ -2132,13 +2653,15 @@ export default function AdminPanel() {
                       <span className="inline-block h-2 w-2 rounded-full bg-amber-500"></span>
                       হোম স্ক্রিন নোটিশ সেটিংস
                     </h3>
-                    
+
                     {noticeMessage && (
-                      <p className={`p-2.5 rounded-lg border text-[10px] font-bold ${
-                        noticeMessage.type === 'success' 
-                          ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
-                          : 'bg-red-50 border-red-200 text-red-800'
-                      }`}>
+                      <p
+                        className={`p-2.5 rounded-lg border text-[10px] font-bold ${
+                          noticeMessage.type === "success"
+                            ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                            : "bg-red-50 border-red-200 text-red-800"
+                        }`}
+                      >
                         {noticeMessage.text}
                       </p>
                     )}
@@ -2146,26 +2669,33 @@ export default function AdminPanel() {
                     <form onSubmit={handleUpdateNotice} className="space-y-3">
                       <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
                         <div className="max-w-[200px]">
-                          <p className="text-[10px] font-black text-slate-800">নোটিশ প্রদর্শন স্ট্যাটাস</p>
-                          <p className="text-[9px] text-slate-500 leading-none mt-0.5">শিক্ষার্থীদের জয়েন ফর্মে স্ক্রলিং নোটিশ বার দেখাতে এটি চালু রাখুন।</p>
+                          <p className="text-[10px] font-black text-slate-800">
+                            নোটিশ প্রদর্শন স্ট্যাটাস
+                          </p>
+                          <p className="text-[9px] text-slate-500 leading-none mt-0.5">
+                            শিক্ষার্থীদের জয়েন ফর্মে স্ক্রলিং নোটিশ বার দেখাতে
+                            এটি চালু রাখুন।
+                          </p>
                         </div>
                         <button
                           type="button"
                           onClick={() => setNoticeActive(!noticeActive)}
                           className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                            noticeActive ? 'bg-amber-500' : 'bg-slate-300'
+                            noticeActive ? "bg-amber-500" : "bg-slate-300"
                           }`}
                         >
                           <span
                             className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                              noticeActive ? 'translate-x-5' : 'translate-x-0'
+                              noticeActive ? "translate-x-5" : "translate-x-0"
                             }`}
                           />
                         </button>
                       </div>
 
                       <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-slate-600 block">নোটিশ বার্তা (বাংলায় লিখুন)</label>
+                        <label className="text-[10px] font-bold text-slate-600 block">
+                          নোটিশ বার্তা (বাংলায় লিখুন)
+                        </label>
                         <textarea
                           placeholder="যেমন: আসসালামু আলাইকুম, আমাদের আজকের কাউন্সেলিং সেশনটি আজ রাত ৯টায় শুরু হবে। সঠিক সময়ে জয়েন করুন।"
                           value={noticeText}
@@ -2180,7 +2710,9 @@ export default function AdminPanel() {
                         disabled={isUpdatingNotice}
                         className="w-full py-2 bg-[#0f172a] text-amber-500 font-bold text-[10px] rounded-lg hover:bg-slate-850 transition cursor-pointer"
                       >
-                        {isUpdatingNotice ? 'সংরক্ষণ করা হচ্ছে...' : 'নোটিশ সেটিংস আপডেট করুন'}
+                        {isUpdatingNotice
+                          ? "সংরক্ষণ করা হচ্ছে..."
+                          : "নোটিশ সেটিংস আপডেট করুন"}
                       </button>
                     </form>
                   </div>
@@ -2194,19 +2726,26 @@ export default function AdminPanel() {
 
                     <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
                       <div className="max-w-[200px]">
-                        <p className="text-[10px] font-black text-slate-800">ডেমো মোড সক্রিয় করুন</p>
-                        <p className="text-[9px] text-slate-500 leading-normal mt-0.5 animate-pulse">চালু থাকলে সেশন লাইভ পোর্টাল পিলটি রিঅ্যাক্টিভ হবে এবং ৪ ডিজিটের সিক্রেট কোড দিয়ে মিটিংয়ে জয়েন করা যাবে।</p>
+                        <p className="text-[10px] font-black text-slate-800">
+                          ডেমো মোড সক্রিয় করুন
+                        </p>
+                        <p className="text-[9px] text-slate-500 leading-normal mt-0.5 animate-pulse">
+                          চালু থাকলে সেশন লাইভ পোর্টাল পিলটি রিঅ্যাক্টিভ হবে এবং
+                          ৪ ডিজিটের সিক্রেট কোড দিয়ে মিটিংয়ে জয়েন করা যাবে।
+                        </p>
                       </div>
                       <button
                         type="button"
                         onClick={toggleDemoMode}
                         className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                          demoModeActive ? 'bg-emerald-550 bg-emerald-500' : 'bg-slate-300'
+                          demoModeActive
+                            ? "bg-emerald-550 bg-emerald-500"
+                            : "bg-slate-300"
                         }`}
                       >
                         <span
                           className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                            demoModeActive ? 'translate-x-5' : 'translate-x-0'
+                            demoModeActive ? "translate-x-5" : "translate-x-0"
                           }`}
                         />
                       </button>
@@ -2215,18 +2754,25 @@ export default function AdminPanel() {
                     {demoModeActive && (
                       <div className="space-y-3 pt-3 border-t border-dashed border-slate-205 border-slate-200">
                         {demoCodeMessage && (
-                          <p className={`p-2 rounded-lg border text-[10px] font-bold ${
-                            demoCodeMessage.type === 'success' 
-                              ? 'bg-emerald-50 border-emerald-250 text-emerald-800' 
-                              : 'bg-red-50 border-red-250 text-red-800'
-                          }`}>
+                          <p
+                            className={`p-2 rounded-lg border text-[10px] font-bold ${
+                              demoCodeMessage.type === "success"
+                                ? "bg-emerald-50 border-emerald-250 text-emerald-800"
+                                : "bg-red-50 border-red-250 text-red-800"
+                            }`}
+                          >
                             {demoCodeMessage.text}
                           </p>
                         )}
 
-                        <form onSubmit={handleUpdateDemoCode} className="space-y-3">
+                        <form
+                          onSubmit={handleUpdateDemoCode}
+                          className="space-y-3"
+                        >
                           <div className="space-y-1">
-                            <label className="text-[10px] font-bold text-slate-700 block">ডেমো এক্সেস কোড (৪ সংখ্যার সংখ্যা)</label>
+                            <label className="text-[10px] font-bold text-slate-700 block">
+                              ডেমো এক্সেস কোড (৪ সংখ্যার সংখ্যা)
+                            </label>
                             <input
                               type="text"
                               maxLength={4}
@@ -2234,10 +2780,15 @@ export default function AdminPanel() {
                               required
                               placeholder="যেমন: ১২৩৪"
                               value={demoCode}
-                              onChange={(e) => setDemoCode(e.target.value.replace(/\D/g, ''))}
+                              onChange={(e) =>
+                                setDemoCode(e.target.value.replace(/\D/g, ""))
+                              }
                               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono font-black text-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                             />
-                            <p className="text-[8px] text-slate-400">এই ৪ সংখ্যার সিক্রেট কোডটি দিয়ে সাধারণ ব্যবহারকারীরা ডেমো মোডে জয়েন করবে।</p>
+                            <p className="text-[8px] text-slate-400">
+                              এই ৪ সংখ্যার সিক্রেট কোডটি দিয়ে সাধারণ
+                              ব্যবহারকারীরা ডেমো মোডে জয়েন করবে।
+                            </p>
                           </div>
 
                           <button
@@ -2245,7 +2796,9 @@ export default function AdminPanel() {
                             disabled={isUpdatingDemoCode}
                             className="w-full py-2 bg-[#0f172a] text-emerald-400 font-bold text-[10px] rounded-lg hover:bg-slate-850 transition cursor-pointer"
                           >
-                            {isUpdatingDemoCode ? 'সংরক্ষণ করা হচ্ছে...' : 'ডেমো কোড আপডেট করুন'}
+                            {isUpdatingDemoCode
+                              ? "সংরক্ষণ করা হচ্ছে..."
+                              : "ডেমো কোড আপডেট করুন"}
                           </button>
                         </form>
                       </div>
@@ -2254,21 +2807,27 @@ export default function AdminPanel() {
 
                   {/* Password modifier */}
                   <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3">
-                    <h3 className="text-xs font-black text-slate-900 uppercase">পাসওয়ার্ড পরিবর্তন করুন</h3>
-                    
+                    <h3 className="text-xs font-black text-slate-900 uppercase">
+                      পাসওয়ার্ড পরিবর্তন করুন
+                    </h3>
+
                     {pwdMessage && (
-                      <p className={`p-2.5 rounded-lg border text-[10px] font-bold ${
-                        pwdMessage.type === 'success' 
-                          ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
-                          : 'bg-red-50 border-red-200 text-red-800'
-                      }`}>
+                      <p
+                        className={`p-2.5 rounded-lg border text-[10px] font-bold ${
+                          pwdMessage.type === "success"
+                            ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                            : "bg-red-50 border-red-200 text-red-800"
+                        }`}
+                      >
                         {pwdMessage.text}
                       </p>
                     )}
 
                     <form onSubmit={handleChangePassword} className="space-y-3">
                       <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-slate-650 text-slate-600 block">নতুন অ্যাডমিন পাসওয়ার্ড</label>
+                        <label className="text-[10px] font-bold text-slate-650 text-slate-600 block">
+                          নতুন অ্যাডমিন পাসওয়ার্ড
+                        </label>
                         <input
                           type="password"
                           required
@@ -2280,7 +2839,9 @@ export default function AdminPanel() {
                       </div>
 
                       <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-slate-650 text-slate-600 block">পাসওয়ার্ড পুনরায় টাইপ করুন</label>
+                        <label className="text-[10px] font-bold text-slate-650 text-slate-600 block">
+                          পাসওয়ার্ড পুনরায় টাইপ করুন
+                        </label>
                         <input
                           type="password"
                           required
@@ -2296,21 +2857,24 @@ export default function AdminPanel() {
                         disabled={isUpdatingPwd}
                         className="w-full py-2 bg-[#0f172a] text-amber-500 font-bold text-[10px] rounded-lg hover:bg-slate-850 transition"
                       >
-                        {isUpdatingPwd ? 'আপডেট করা হচ্ছে...' : 'নতুন পাসওয়ার্ড সেভ করুন'}
+                        {isUpdatingPwd
+                          ? "আপডেট করা হচ্ছে..."
+                          : "নতুন পাসওয়ার্ড সেভ করুন"}
                       </button>
                     </form>
                   </div>
                 </div>
               )}
-
             </div>
 
             {/* --- BOTTOM MOBILE-STYLE NAV BAR --- */}
             <nav className="h-14 bg-white border-t border-slate-200 flex justify-around items-center shrink-0 shadow-lg px-2 select-none select-text">
               <button
-                onClick={() => setActiveTab('dashboard')}
+                onClick={() => setActiveTab("dashboard")}
                 className={`flex flex-col items-center justify-center p-1 cursor-pointer transition ${
-                  activeTab === 'dashboard' ? 'text-amber-500 scale-105' : 'text-slate-400 hover:text-slate-600'
+                  activeTab === "dashboard"
+                    ? "text-amber-500 scale-105"
+                    : "text-slate-400 hover:text-slate-600"
                 }`}
               >
                 <LayoutDashboard className="h-4.5 w-4.5 mb-0.5" />
@@ -2318,9 +2882,11 @@ export default function AdminPanel() {
               </button>
 
               <button
-                onClick={() => setActiveTab('meeting')}
+                onClick={() => setActiveTab("meeting")}
                 className={`flex flex-col items-center justify-center p-1 cursor-pointer transition ${
-                  activeTab === 'meeting' ? 'text-amber-500 scale-105' : 'text-slate-400 hover:text-slate-600'
+                  activeTab === "meeting"
+                    ? "text-amber-500 scale-105"
+                    : "text-slate-400 hover:text-slate-600"
                 }`}
               >
                 <LinkIcon className="h-4.5 w-4.5 mb-0.5" />
@@ -2328,9 +2894,11 @@ export default function AdminPanel() {
               </button>
 
               <button
-                onClick={() => setActiveTab('data')}
+                onClick={() => setActiveTab("data")}
                 className={`flex flex-col items-center justify-center p-1 cursor-pointer transition relative ${
-                  activeTab === 'data' ? 'text-amber-500 scale-105' : 'text-slate-400 hover:text-slate-600'
+                  activeTab === "data"
+                    ? "text-amber-500 scale-105"
+                    : "text-slate-400 hover:text-slate-600"
                 }`}
               >
                 <Users className="h-4.5 w-4.5 mb-0.5" />
@@ -2343,9 +2911,11 @@ export default function AdminPanel() {
               </button>
 
               <button
-                onClick={() => setActiveTab('demo')}
+                onClick={() => setActiveTab("demo")}
                 className={`flex flex-col items-center justify-center p-1 cursor-pointer transition relative ${
-                  activeTab === 'demo' ? 'text-amber-500 scale-105' : 'text-slate-400 hover:text-slate-600'
+                  activeTab === "demo"
+                    ? "text-amber-500 scale-105"
+                    : "text-slate-400 hover:text-slate-600"
                 }`}
               >
                 <UserCheck className="h-4.5 w-4.5 mb-0.5" />
@@ -2358,9 +2928,11 @@ export default function AdminPanel() {
               </button>
 
               <button
-                onClick={() => setActiveTab('blocked')}
+                onClick={() => setActiveTab("blocked")}
                 className={`flex flex-col items-center justify-center p-1 cursor-pointer transition relative ${
-                  activeTab === 'blocked' ? 'text-amber-500 scale-105' : 'text-slate-400 hover:text-slate-600'
+                  activeTab === "blocked"
+                    ? "text-amber-500 scale-105"
+                    : "text-slate-400 hover:text-slate-600"
                 }`}
               >
                 <Ban className="h-4.5 w-4.5 mb-0.5" />
@@ -2373,22 +2945,22 @@ export default function AdminPanel() {
               </button>
 
               <button
-                onClick={() => setActiveTab('settings')}
+                onClick={() => setActiveTab("settings")}
                 className={`flex flex-col items-center justify-center p-1 cursor-pointer transition ${
-                  activeTab === 'settings' ? 'text-amber-500 scale-105' : 'text-slate-400 hover:text-slate-600'
+                  activeTab === "settings"
+                    ? "text-amber-500 scale-105"
+                    : "text-slate-400 hover:text-slate-600"
                 }`}
               >
                 <SettingsIcon className="h-4.5 w-4.5 mb-0.5" />
                 <span className="text-[8px] font-black">সেটিংস</span>
               </button>
             </nav>
-
           </div>
         )}
 
         {/* HOME INDICATOR (Desktop Only) */}
         <div className="hidden md:block absolute bottom-1.5 left-1/2 -translate-x-1/2 w-32 h-1 bg-slate-400 rounded-full opacity-60"></div>
-
       </div>
     </div>
   );
