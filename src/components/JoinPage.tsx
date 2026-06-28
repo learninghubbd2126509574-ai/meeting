@@ -108,7 +108,10 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
       const endpoints = [
         "https://api.ipify.org?format=json",
         "https://api64.ipify.org?format=json",
+        "https://ipinfo.io/json",
         "https://ipapi.co/json/",
+        "https://api.db-ip.com/v2/free/self",
+        "https://api.ipify.org"
       ];
 
       const fetchWithTimeout = (url: string, ms: number): Promise<string> => {
@@ -116,15 +119,32 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
           const timeoutId = setTimeout(() => reject(new Error("Timeout")), ms);
           fetch(url)
             .then((res) => {
-              if (res.ok) return res.json();
+              if (res.ok) return res.text();
               throw new Error("Network error");
             })
-            .then((data) => {
+            .then((text) => {
               clearTimeout(timeoutId);
-              if (data && data.ip) {
-                resolve(data.ip);
-              } else {
-                reject(new Error("No IP JSON"));
+              const trimmed = text.trim();
+              if (!trimmed) {
+                reject(new Error("Empty response"));
+                return;
+              }
+              // Attempt to parse JSON
+              try {
+                const data = JSON.parse(trimmed);
+                const ip = data.ip || data.ipAddress || data.query;
+                if (ip) {
+                  resolve(ip);
+                } else {
+                  reject(new Error("No IP key in JSON"));
+                }
+              } catch (e) {
+                // Not JSON, check if it's a valid IP format (v4 or v6)
+                if (/^[0-9a-fA-F.:]+$/.test(trimmed)) {
+                  resolve(trimmed);
+                } else {
+                  reject(new Error("Invalid text IP format"));
+                }
               }
             })
             .catch((err) => {
@@ -134,7 +154,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
         });
       };
 
-      const promises = endpoints.map((url) => fetchWithTimeout(url, 2500));
+      const promises = endpoints.map((url) => fetchWithTimeout(url, 5000));
 
       try {
         if (typeof Promise.any === "function") {
@@ -161,7 +181,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                 resolved = true;
                 resolve("Unknown");
               }
-            }, 3000);
+            }, 6000);
           });
         }
       } catch (err) {

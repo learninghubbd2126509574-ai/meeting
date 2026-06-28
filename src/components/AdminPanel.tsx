@@ -1176,6 +1176,17 @@ export default function AdminPanel() {
     }
   });
 
+  // Dynamic helper to check if a participant (standard or demo) is currently blocked
+  const isParticipantBlocked = (p: any) => {
+    if (p.blocked) return true;
+    return blockedIPs.some((b) => {
+      const ipMatch = b.ip && p.ip && b.ip === p.ip;
+      const deviceMatch = b.deviceId && b.deviceId !== "Unknown" && p.deviceId && p.deviceId !== "Unknown" && b.deviceId === p.deviceId;
+      const uidMatch = b.uid && b.uid !== "Unknown" && p.uid && p.uid !== "Unknown" && b.uid === p.uid;
+      return ipMatch || deviceMatch || uidMatch;
+    });
+  };
+
   // Get counts for "today" specifically to support daily reset counters
   const todayDateStr = getTodayDateString();
   const todayParticipantsCount = participants.filter((p) =>
@@ -1951,10 +1962,10 @@ export default function AdminPanel() {
                               type="checkbox"
                               id="selectAllParticipants"
                               checked={
-                                filteredParticipants.filter((p) => !p.blocked)
+                                filteredParticipants.filter((p) => !isParticipantBlocked(p))
                                   .length > 0 &&
                                 filteredParticipants
-                                  .filter((p) => !p.blocked)
+                                  .filter((p) => !isParticipantBlocked(p))
                                   .every((p) =>
                                     selectedParticipantIds.includes(p.id),
                                   )
@@ -1963,7 +1974,7 @@ export default function AdminPanel() {
                                 if (e.target.checked) {
                                   // Select all unblocked
                                   const unblockedIds = filteredParticipants
-                                    .filter((p) => !p.blocked)
+                                    .filter((p) => !isParticipantBlocked(p))
                                     .map((p) => p.id);
                                   setSelectedParticipantIds(unblockedIds);
                                 } else {
@@ -1978,7 +1989,7 @@ export default function AdminPanel() {
                             >
                               সবাইকে সিলেক্ট করুন (
                               {
-                                filteredParticipants.filter((p) => !p.blocked)
+                                filteredParticipants.filter((p) => !isParticipantBlocked(p))
                                   .length
                               }{" "}
                               জন)
@@ -2034,7 +2045,7 @@ export default function AdminPanel() {
                             ⚠️ কোনো শিক্ষার্থী সিলেক্ট করা নেই! নিচে
                             শিক্ষার্থীদের নামের বামদিকের বাক্সে টিক দিয়ে সিলেক্ট
                             করুন, অথবা "সবাইকে সিলেক্ট করুন" বক্সে টিক দিয়ে "অল
-                            ব্লক" এ ক্লিক করুন।
+                            block" এ ক্লিক করুন।
                           </motion.p>
                         )}
                       </div>
@@ -2051,13 +2062,14 @@ export default function AdminPanel() {
                           const isSelected = selectedParticipantIds.includes(
                             p.id,
                           );
+                          const isBlocked = isParticipantBlocked(p);
                           return (
                             <div
                               key={p.id}
                               className={`border rounded-xl p-3 shadow-xs space-y-2 text-xs transition ${
                                 isSelected
                                   ? "bg-amber-50/55 border-amber-300 ring-1 ring-amber-300"
-                                  : p.blocked
+                                  : isBlocked
                                     ? "bg-slate-50/60 border-slate-200 opacity-80"
                                     : "bg-white border-slate-200"
                               }`}
@@ -2065,7 +2077,7 @@ export default function AdminPanel() {
                               <div className="flex justify-between items-start gap-2">
                                 <div className="flex items-start gap-2.5">
                                   {/* Checkbox wrapper - only allow selecting if not yet blocked */}
-                                  {!p.blocked && (
+                                  {!isBlocked && (
                                     <div className="pt-0.5 shrink-0">
                                       <input
                                         type="checkbox"
@@ -2089,25 +2101,25 @@ export default function AdminPanel() {
                                   <div>
                                     <h4 className="font-extrabold text-slate-900 flex items-center gap-1.5">
                                       <span
-                                        className={`h-2 w-2 rounded-full shrink-0 ${p.blocked ? "bg-red-500 animate-pulse" : "bg-emerald-500"}`}
+                                        className={`h-2 w-2 rounded-full shrink-0 ${isBlocked ? "bg-red-500 animate-pulse" : "bg-emerald-500"}`}
                                       ></span>
                                       {p.name}
                                     </h4>
-                                    <div className="flex flex-col gap-0.5 mt-0.5">
-                                      <span className="font-mono text-[9px] text-slate-400 block">
+                                    <div className="flex flex-col gap-0.5 mt-1 font-mono text-[9px] text-slate-550 leading-relaxed">
+                                      <span>
                                         IP:{" "}
-                                        <strong className="text-amber-700">
-                                          {p.ip}
+                                        <strong className="text-slate-800 font-bold">
+                                          {p.ip || "Unknown"}
                                         </strong>
                                       </span>
-                                      <span className="font-mono text-[9px] text-slate-400 block">
+                                      <span>
                                         UID:{" "}
-                                        <strong className="text-amber-700">
+                                        <strong className="text-[#1b6ffc] font-bold">
                                           {p.uid ||
                                             p.deviceId?.substring(
                                               p.deviceId.length - 8,
                                             ) ||
-                                            "N/A"}
+                                            "Unknown"}
                                         </strong>
                                       </span>
                                     </div>
@@ -2150,7 +2162,7 @@ export default function AdminPanel() {
                                 </div>
                               </div>
 
-                              <div className="flex justify-between items-center bg-slate-50 p-1.5 rounded border border-slate-100 text-[9px] text-slate-500">
+                              <div className="flex justify-between items-center bg-slate-50 p-1.5 rounded border border-slate-100 text-[9px] text-slate-550">
                                 <span className="flex items-center gap-1">
                                   <Clock className="h-3 w-3 shrink-0" />
                                   {formatTime(p.joinedAt)}
@@ -2158,7 +2170,7 @@ export default function AdminPanel() {
                               </div>
 
                               <div className="flex justify-end pt-1">
-                                {p.blocked ? (
+                                {isBlocked ? (
                                   <button
                                     onClick={() =>
                                       handleUnblockUser(p.ip, p.deviceId, p.uid)
@@ -2170,7 +2182,7 @@ export default function AdminPanel() {
                                 ) : (
                                   <button
                                     onClick={() => handleBlockUser(p)}
-                                    className="px-2.5 py-1 border border-red-200 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white font-bold rounded text-[9px] transition cursor-pointer"
+                                    className="px-2.5 py-1 border border-red-200 bg-red-50 text-red-600 hover:bg-red-650 hover:text-white font-bold rounded text-[9px] transition cursor-pointer"
                                   >
                                     স্থায়ী ব্লক করুন
                                   </button>
@@ -2256,11 +2268,12 @@ export default function AdminPanel() {
                         </p>
                       ) : (
                         filteredDemoParticipants.map((p) => {
+                          const isBlocked = isParticipantBlocked(p);
                           return (
                             <div
                               key={p.id}
                               className={`border rounded-xl p-3 shadow-xs space-y-2 text-xs transition ${
-                                p.blocked
+                                isBlocked
                                   ? "bg-slate-50/60 border-slate-200 opacity-80"
                                   : "bg-white border-slate-200"
                               }`}
@@ -2269,30 +2282,30 @@ export default function AdminPanel() {
                                 <div>
                                   <h4 className="font-extrabold text-slate-900 flex items-center gap-1.5">
                                     <span
-                                      className={`h-2 w-2 rounded-full shrink-0 ${p.blocked ? "bg-red-500 animate-pulse" : "bg-emerald-500"}`}
+                                      className={`h-2 w-2 rounded-full shrink-0 ${isBlocked ? "bg-red-500 animate-pulse" : "bg-emerald-500"}`}
                                     ></span>
                                     {p.name}
                                   </h4>
                                   {p.gmail && (
-                                    <p className="text-[10px] text-emerald-600 font-extrabold">
+                                    <p className="text-[10px] text-emerald-600 font-extrabold mt-0.5">
                                       {p.gmail}
                                     </p>
                                   )}
                                   <div className="flex flex-col gap-0.5 mt-1 font-mono text-[9px] text-slate-550 leading-relaxed">
                                     <span>
                                       IP:{" "}
-                                      <strong className="text-slate-800">
-                                        {p.ip || "N/A"}
+                                      <strong className="text-slate-800 font-bold">
+                                        {p.ip || "Unknown"}
                                       </strong>
                                     </span>
                                     <span>
                                       UID:{" "}
-                                      <strong className="text-amber-700">
+                                      <strong className="text-[#1b6ffc] font-bold">
                                         {p.uid ||
                                           p.deviceId?.substring(
                                             p.deviceId.length - 8,
                                           ) ||
-                                          "N/A"}
+                                          "Unknown"}
                                       </strong>
                                     </span>
                                     <span>
@@ -2330,7 +2343,7 @@ export default function AdminPanel() {
                                     <Trash2 className="h-3 w-3" />
                                   </button>
 
-                                  {!p.blocked ? (
+                                  {!isBlocked ? (
                                     <button
                                       onClick={() => handleBlockDemoUser(p)}
                                       className="px-2 py-1 bg-red-50 border border-red-200 text-red-600 hover:bg-red-650 hover:text-white rounded-[7px] text-[8.5px] font-black transition cursor-pointer"
