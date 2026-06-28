@@ -428,6 +428,20 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
       return;
     }
 
+    if (!googleMeetLink) {
+      setErrorMessage(
+        "গুগল মিট (Google Meet) লিংকটি এখনও কাউন্সেলিং সেশনে যুক্ত করা হয়নি।",
+      );
+      return;
+    }
+
+    if (!meetingActive) {
+      setErrorMessage(
+        "এই কাউন্সেলিং সেশনটি বৰ্তমানে নিষ্ক্রিয় বা সম্পন্ন করা হয়েছে।",
+      );
+      return;
+    }
+
     // Low-network resilience: If IP is still loading or blank, default to 'Unknown' and let them pass
     const finalIp =
       !ipAddress || ipAddress === "যাচাই হচ্ছে..." ? "Unknown" : ipAddress;
@@ -614,6 +628,20 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
     e.preventDefault();
     if (!demoNameInput.trim()) {
       setDemoError("আপনার সম্পূর্ণ নামটি দেওয়া আবশ্যক।");
+      return;
+    }
+
+    if (!googleMeetLink) {
+      setDemoError(
+        "গুগল মিট (Google Meet) লিংকটি এখনও সেশনে যুক্ত করা হয়নি।",
+      );
+      return;
+    }
+
+    if (!meetingActive) {
+      setDemoError(
+        "এই কাউন্সেলিং সেশনটি বৰ্তমানে নিষ্ক্রিয় বা সম্পন্ন করা হয়েছে।",
+      );
       return;
     }
 
@@ -1037,10 +1065,14 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                   </p>
                 )}
 
-                <div className="bg-slate-200/80 border border-slate-300/40 px-4 py-2.5 rounded-2xl font-mono text-[10.5px] font-extrabold text-slate-700 mt-3 shadow-sm text-left">
-                  <p className="flex justify-between">
+                <div className="bg-slate-200/80 border border-slate-300/40 px-4 py-2.5 rounded-2xl font-mono text-[10.5px] font-extrabold text-slate-700 mt-3 shadow-sm text-left space-y-1.5">
+                  <p className="flex justify-between border-b border-slate-300/50 pb-1.5">
                     <span>IP ADDRESS:</span>{" "}
                     <span className="text-rose-600">{ipAddress}</span>
+                  </p>
+                  <p className="flex justify-between pt-0.5">
+                    <span>USER ID (UID):</span>{" "}
+                    <span className="text-amber-600">{uid || "Unknown"}</span>
                   </p>
                 </div>
               </div>
