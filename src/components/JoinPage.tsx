@@ -1256,17 +1256,6 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                             নাম ভুল হলে মিটিং থেকে সরাসরি বের করে দেয়া হতে পারে।
                           </p>
                         </div>
-
-                        {/* Tracking details below name / warning */}
-                        <div className="bg-slate-50 border border-slate-150 p-3.5 rounded-2xl flex flex-col items-center justify-center text-[10.5px] font-extrabold text-slate-650 gap-2 select-none shadow-xs mt-1">
-                          <span className="flex items-center gap-1.5">
-                            <span className="h-2 w-2 rounded-full bg-[#02b396] animate-pulse"></span>
-                            IP ADDRESS:{" "}
-                            <code className="text-[#02b396] font-mono font-black">
-                              {ipAddress || "Checking..."}
-                            </code>
-                          </span>
-                        </div>
                       </div>
                     </div>
                   )}
