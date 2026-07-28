@@ -699,8 +699,44 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
         );
       }
 
-      // 4. Validate redirection requirements
-      if (!meetingActive) {
+      // 4. Validate redirection requirements with robust fresh fetch & retry for Telegram/WebView race conditions
+      let currentMeetLink = googleMeetLink;
+      let currentMeetingActive = meetingActive;
+
+      try {
+        const freshMeetingSnap = await withTimeout(
+          getDoc(doc(db, "meetings", meetingId)),
+          2000,
+          null
+        );
+        if (freshMeetingSnap && freshMeetingSnap.exists()) {
+          const freshData = freshMeetingSnap.data();
+          if (freshData.googleMeetLink) {
+            currentMeetLink = freshData.googleMeetLink;
+          }
+          if (freshData.active !== undefined) {
+            currentMeetingActive = freshData.active !== false;
+          }
+        }
+      } catch (fetchErr) {
+        console.warn("Fresh meeting link validation fetch warning:", fetchErr);
+      }
+
+      // If still empty, try one quick retry after 500ms for Telegram Webview cold start / latency
+      if (!currentMeetLink || !currentMeetLink.trim()) {
+        try {
+          await new Promise(r => setTimeout(r, 600));
+          const retrySnap = await getDoc(doc(db, "meetings", meetingId));
+          if (retrySnap.exists() && retrySnap.data().googleMeetLink) {
+            currentMeetLink = retrySnap.data().googleMeetLink;
+            if (retrySnap.data().active !== undefined) {
+              currentMeetingActive = retrySnap.data().active !== false;
+            }
+          }
+        } catch (e) {}
+      }
+
+      if (!currentMeetingActive) {
         setErrorMessage(
           "এই কাউন্সেলিং সেশনটি বৰ্তমানে নিষ্ক্রিয় বা সম্পন্ন করা হয়েছে।",
         );
@@ -708,16 +744,16 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
         return;
       }
 
-      if (!googleMeetLink) {
+      if (!currentMeetLink || !currentMeetLink.trim()) {
         setErrorMessage(
-          "গুগল মিট (Google Meet) লিংকটি এখনও কাউন্সেলিং সেশনে যুক্ত করা হয়নি।",
+          "গুগল মিট (Google Meet) লিংকটি লোড হচ্ছে। অনুগ্রহ করে আবার 'মিটিংয়ে প্রবেশ করুন' এ ক্লিক করুন।",
         );
         setIsSubmitting(false);
         return;
       }
 
       // Prepare final redirect URL
-      let redirectUrl = googleMeetLink.trim();
+      let redirectUrl = currentMeetLink.trim();
       if (!/^https?:\/\//i.test(redirectUrl)) {
         redirectUrl = "https://" + redirectUrl;
       }
