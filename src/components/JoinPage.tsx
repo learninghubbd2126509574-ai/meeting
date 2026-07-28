@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { db, handleFirestoreError, OperationType } from "../firebase";
+import { db, auth, handleFirestoreError, OperationType } from "../firebase";
+import { onAuthStateChanged } from "firebase/auth";
 import {
   doc,
   getDoc,
@@ -193,6 +194,35 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
         setIsLoading(true);
         setErrorMessage(null);
 
+        // Log detailed browser & in-app environment diagnostics (Telegram, WhatsApp, Messenger, etc.)
+        const ua = navigator.userAgent || "";
+        const isInApp = /Telegram|FBAN|FBAV|Instagram|WhatsApp|Messenger/i.test(ua);
+        console.log("Client Environment Diagnostics:", {
+          userAgent: ua,
+          isInAppBrowser: isInApp,
+          meetingId,
+          timestamp: new Date().toISOString(),
+          url: window.location.href
+        });
+
+        // 1. Wait for Firebase Authentication (onAuthStateChanged) to complete or timeout before querying Firestore
+        await new Promise<void>((resolve) => {
+          const unsubscribe = onAuthStateChanged(auth, (user) => {
+            console.log("Firebase Auth State Resolved in JoinPage:", {
+              uid: user?.uid,
+              isAnonymous: user?.isAnonymous,
+              email: user?.email
+            });
+            unsubscribe();
+            resolve();
+          });
+          setTimeout(() => {
+            unsubscribe();
+            console.warn("Firebase Auth State Timeout (1500ms) reached - proceeding with public/anonymous access fallback.");
+            resolve();
+          }, 1500);
+        });
+
         // A. Persistent Device ID (triple storage fallback for ultimate bypass protection)
         let dId = localStorage.getItem("unity_device_id");
         if (!dId) {
@@ -300,10 +330,53 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
           });
         }
 
-        // D. Real-time Meeting Details Listener
+        // D. Real-time Meeting Details Listener with robust retry & direct getDoc fallback for Telegram/in-app browsers
+        let retryCount = 0;
+        const maxRetries = 4;
+
+        async function fetchMeetingWithRetry() {
+          try {
+            console.log(`Attempting direct getDoc for meetingId: ${meetingId} (Attempt ${retryCount + 1})`);
+            const docRef = doc(db, "meetings", meetingId);
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+              const mData = docSnap.data();
+              console.log("Meeting successfully fetched via direct getDoc:", mData);
+              setGoogleMeetLink(mData.googleMeetLink);
+              setMeetingActive(mData.active !== false);
+              setMeetingDate(mData.meetingDate || null);
+              setMeetingTime(mData.meetingTime || null);
+              setErrorMessage(null);
+            } else {
+              if (retryCount < maxRetries) {
+                retryCount++;
+                console.warn(`Meeting not found on attempt ${retryCount} for ID: ${meetingId}, retrying in 1200ms...`);
+                setTimeout(fetchMeetingWithRetry, 1200);
+              } else {
+                console.error("Meeting document does not exist after all retries:", meetingId);
+                setErrorMessage(
+                  "কাউন্সেলিং মিটিং সেশনটি খুঁজে পাওয়া যায়নি। আপনার লিঙ্কের মিটিং আইডি চেক করুন।"
+                );
+              }
+            }
+          } catch (fetchErr: any) {
+            console.error("Direct meeting fetch error:", fetchErr);
+            handleFirestoreError(fetchErr, OperationType.GET, `meetings/${meetingId}`);
+            if (retryCount < maxRetries) {
+              retryCount++;
+              setTimeout(fetchMeetingWithRetry, 1200);
+            } else {
+              setErrorMessage(
+                "মিটিং ডাটা লোড করতে সমস্যা হচ্ছে। আপনার ইন্টারনেট কানেকশন বা সার্ভার পারমিশন চেক করুন।"
+              );
+            }
+          }
+        }
+
         unsubMeeting = onSnapshot(
           doc(db, "meetings", meetingId),
           (snap) => {
+            console.log("Meeting snapshot update received for:", meetingId, "exists:", snap.exists());
             if (snap.exists()) {
               const mData = snap.data();
               setGoogleMeetLink(mData.googleMeetLink);
@@ -312,18 +385,17 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
               setMeetingTime(mData.meetingTime || null);
               setErrorMessage(null);
             } else {
-              setErrorMessage(
-                "কাউন্সেলিং মিটিং সেশনটি খুঁজে পাওয়া যায়নি। আপনার লিঙ্কের মিটিং আইডি চেক করুন।",
-              );
+              console.warn("Meeting snapshot does not exist yet for:", meetingId);
             }
           },
           (err) => {
             console.error("Meeting listener error:", err);
-            setErrorMessage(
-              "মিটিং ডাটা লোড করতে সমস্যা হচ্ছে। আপনার ইন্টারনেট কানেকশন বা সার্ভার পারমিশন চেক করুন।",
-            );
+            handleFirestoreError(err, OperationType.GET, `meetings/${meetingId}`);
           },
         );
+
+        // Execute initial robust fetch
+        await fetchMeetingWithRetry();
 
         // E. Real-time Admin Settings Listener (Notice and Joint Policy)
         unsubSettings = onSnapshot(
@@ -346,7 +418,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
           },
         );
       } catch (err: any) {
-        console.error("Initialization error:", err);
+        console.error("Initialization error in setupListeners:", err);
         setErrorMessage(
           "নিরাপত্তা ব্যবস্থা যাচাই করতে ব্যর্থ হয়েছে। পেজ রিফ্রেশ করুন।",
         );

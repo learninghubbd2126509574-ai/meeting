@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, setPersistence, browserLocalPersistence, inMemoryPersistence } from 'firebase/auth';
 import { 
   getFirestore, 
   collection, 
@@ -21,6 +21,17 @@ const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
+
+// Handle Auth Persistence robustly for Telegram, WhatsApp, and Facebook Messenger in-app browsers where IndexedDB might be restricted
+try {
+  setPersistence(auth, browserLocalPersistence).catch(() => {
+    setPersistence(auth, inMemoryPersistence).catch((err) => {
+      console.warn("Auth persistence fallback warning:", err);
+    });
+  });
+} catch (e) {
+  console.warn("Auth persistence exception handled:", e);
+}
 
 export enum OperationType {
   CREATE = 'create',

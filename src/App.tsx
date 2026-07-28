@@ -17,21 +17,19 @@ export default function App() {
     const hash = window.location.hash;
     const params = new URLSearchParams(window.location.search);
 
-    // Query parameters matching: ?page=admin
+    // Query parameters matching: ?join=..., ?id=..., ?meetingId=..., ?meeting=...
     const pageParam = params.get('page');
-    const idParam = params.get('id');
-    const joinParam = params.get('join');
+    const idParam = params.get('id') || params.get('meetingId') || params.get('meeting');
+    const joinParam = params.get('join') || idParam;
 
     if (joinParam) {
+      console.log("Parsed join route with meetingId:", joinParam);
       return { type: 'join', meetingId: joinParam };
     }
     if (pageParam === 'admin') {
       return { type: 'admin' };
     }
     if (pageParam === 'join' && idParam) {
-      return { type: 'join', meetingId: idParam };
-    }
-    if (idParam) {
       return { type: 'join', meetingId: idParam };
     }
 
