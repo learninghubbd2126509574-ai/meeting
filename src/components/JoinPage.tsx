@@ -330,7 +330,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
           });
         }
 
-        // D. Real-time Meeting Details Listener with robust retry & direct getDoc fallback for Telegram/in-app browsers
+        // D. Real-time Meeting Details Listener with robust retry & collection fallback for Telegram/WhatsApp/Messenger in-app browsers
         let retryCount = 0;
         const maxRetries = 4;
 
@@ -353,7 +353,40 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                 console.warn(`Meeting not found on attempt ${retryCount} for ID: ${meetingId}, retrying in 1200ms...`);
                 setTimeout(fetchMeetingWithRetry, 1200);
               } else {
-                console.error("Meeting document does not exist after all retries:", meetingId);
+                console.warn(`Meeting ${meetingId} not found after retries. Searching for any active meeting in Firestore collection...`);
+                // Fallback: fetch all meetings and pick the latest active one
+                try {
+                  const allMeetingsSnap = await getDocs(collection(db, "meetings"));
+                  if (!allMeetingsSnap.empty) {
+                    const meetingsList = allMeetingsSnap.docs.map(d => ({
+                      id: d.id,
+                      ...d.data()
+                    })) as any[];
+                    meetingsList.sort((a, b) => {
+                      const timeA = a.createdAt?.toMillis?.() || a.createdAt?.seconds || 0;
+                      const timeB = b.createdAt?.toMillis?.() || b.createdAt?.seconds || 0;
+                      return timeB - timeA;
+                    });
+                    const activeMeeting = meetingsList.find(m => m.active !== false) || meetingsList[0];
+                    if (activeMeeting) {
+                      console.log("Found fallback active meeting:", activeMeeting);
+                      setGoogleMeetLink(activeMeeting.googleMeetLink);
+                      setMeetingActive(activeMeeting.active !== false);
+                      setMeetingDate(activeMeeting.meetingDate || null);
+                      setMeetingTime(activeMeeting.meetingTime || null);
+                      setErrorMessage(null);
+                      try {
+                        const newUrl = `/?join=${activeMeeting.id}`;
+                        window.history.replaceState({ page: 'join', id: activeMeeting.id }, '', newUrl);
+                      } catch (e) {}
+                      return;
+                    }
+                  }
+                } catch (fallbackErr) {
+                  console.error("Fallback meeting query error:", fallbackErr);
+                }
+
+                console.error("Meeting document does not exist after all retries and fallback:", meetingId);
                 setErrorMessage(
                   "কাউন্সেলিং মিটিং সেশনটি খুঁজে পাওয়া যায়নি। আপনার লিঙ্কের মিটিং আইডি চেক করুন।"
                 );
@@ -366,6 +399,26 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
               retryCount++;
               setTimeout(fetchMeetingWithRetry, 1200);
             } else {
+              // Try fallback on catch as well
+              try {
+                const allMeetingsSnap = await getDocs(collection(db, "meetings"));
+                if (!allMeetingsSnap.empty) {
+                  const meetingsList = allMeetingsSnap.docs.map(d => ({
+                    id: d.id,
+                    ...d.data()
+                  })) as any[];
+                  const activeMeeting = meetingsList.find(m => m.active !== false) || meetingsList[0];
+                  if (activeMeeting) {
+                    setGoogleMeetLink(activeMeeting.googleMeetLink);
+                    setMeetingActive(activeMeeting.active !== false);
+                    setMeetingDate(activeMeeting.meetingDate || null);
+                    setMeetingTime(activeMeeting.meetingTime || null);
+                    setErrorMessage(null);
+                    return;
+                  }
+                }
+              } catch (e) {}
+
               setErrorMessage(
                 "মিটিং ডাটা লোড করতে সমস্যা হচ্ছে। আপনার ইন্টারনেট কানেকশন বা সার্ভার পারমিশন চেক করুন।"
               );
