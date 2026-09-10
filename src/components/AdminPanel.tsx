@@ -874,6 +874,16 @@ export default function AdminPanel() {
       return;
     try {
       // Block IP
+      const blockPayload: BlockedIP = {
+        ip: demoUser.ip,
+        name: `${demoUser.name} (Demo)`,
+        deviceId: demoUser.deviceId || "Unknown",
+        uid: demoUser.uid || "Unknown",
+        blockedAt: new Date().toISOString(),
+        reason: "অ্যাডমিন কর্তৃক ব্লকড (ডেমো)",
+      };
+      await dbService.blockIP(blockPayload);
+
       const blockRef = doc(db, "blockedIPs", demoUser.ip);
       await setDoc(blockRef, {
         ip: demoUser.ip,
@@ -885,6 +895,7 @@ export default function AdminPanel() {
 
       // Block DeviceId
       if (demoUser.deviceId && demoUser.deviceId !== "Unknown") {
+        await dbService.blockDevice(demoUser.deviceId, demoUser.ip, demoUser.uid);
         const deviceRef = doc(db, "blockedDevices", demoUser.deviceId);
         await setDoc(deviceRef, {
           deviceId: demoUser.deviceId,
@@ -897,6 +908,7 @@ export default function AdminPanel() {
 
       // Block UID
       if (demoUser.uid && demoUser.uid !== "Unknown") {
+        await dbService.blockUID(demoUser.uid, demoUser.ip, demoUser.deviceId);
         const uidRef = doc(db, "blockedUIDs", demoUser.uid);
         await setDoc(uidRef, {
           uid: demoUser.uid,
@@ -909,6 +921,11 @@ export default function AdminPanel() {
       // Mark demo participant doc as blocked
       const demoRef = doc(db, "demoParticipants", demoUser.id);
       await setDoc(demoRef, { blocked: true }, { merge: true });
+
+      setBlockedIPs((prev) => [blockPayload, ...prev.filter((b) => b.ip !== demoUser.ip)]);
+      setDemoParticipants((prev) =>
+        prev.map((d) => (d.id === demoUser.id || d.ip === demoUser.ip ? { ...d, blocked: true } : d))
+      );
     } catch (err) {
       console.error("Failed to block demo user:", err);
     }
@@ -992,6 +1009,18 @@ export default function AdminPanel() {
         const pRef = doc(db, "participants", p.id);
         updateDoc(pRef, { blocked: true }).catch(() => {});
       }
+      const blockRecord: BlockedIP = {
+        ip: participant.ip,
+        name: participant.name,
+        deviceId: participant.deviceId || "Unknown",
+        uid: participant.uid || "Unknown",
+        blockedAt: new Date().toISOString(),
+        reason: "অ্যাডমিন কর্তৃক ব্লকড",
+      };
+      setBlockedIPs((prev) => [
+        blockRecord,
+        ...prev.filter((b) => b.ip !== participant.ip),
+      ]);
       setParticipants((prev) =>
         prev.map((p) =>
           p.ip === participant.ip || (p.deviceId !== "Unknown" && p.deviceId === participant.deviceId)
@@ -1394,6 +1423,57 @@ export default function AdminPanel() {
       minute: "2-digit",
       second: "2-digit",
     });
+  }
+
+  // Formatting block timestamp in clear Bengali date & time
+  function formatBlockTime(timestamp: any) {
+    if (!timestamp) return "সময় পাওয়া যায়নি";
+    try {
+      let date: Date;
+      if (timestamp && typeof timestamp.toDate === "function") {
+        date = timestamp.toDate();
+      } else if (timestamp && typeof timestamp.seconds === "number") {
+        date = new Date(timestamp.seconds * 1000);
+      } else {
+        date = new Date(timestamp);
+      }
+
+      if (isNaN(date.getTime())) return "সময় পাওয়া যায়নি";
+
+      const bgDigits: { [key: string]: string } = {
+        "0": "০", "1": "১", "2": "২", "3": "৩", "4": "৪",
+        "5": "৫", "6": "৬", "7": "৭", "8": "৮", "9": "৯"
+      };
+      const toBg = (num: number, pad = 2) =>
+        String(num).padStart(pad, "0").split("").map((c) => bgDigits[c] || c).join("");
+
+      const monthsBg = [
+        "জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন",
+        "জুলাই", "আগস্ট", "সেপ্টেম্বর", "অক্টোবর", "নভেম্বর", "ডিসেম্বর"
+      ];
+
+      const year = toBg(date.getFullYear(), 4);
+      const month = monthsBg[date.getMonth()];
+      const day = toBg(date.getDate(), 1);
+
+      let hour = date.getHours();
+      const minute = toBg(date.getMinutes(), 2);
+      const second = toBg(date.getSeconds(), 2);
+
+      let period = "সকাল";
+      if (hour >= 12) {
+        period = hour >= 15 ? (hour >= 18 ? "রাত" : "বিকাল") : "দুপুর";
+        if (hour > 12) hour -= 12;
+      } else {
+        if (hour === 0) hour = 12;
+        if (hour < 6) period = "রাত";
+      }
+      const hourBg = toBg(hour, 1);
+
+      return `${day} ${month} ${year}, ${period} ${hourBg}:${minute}:${second}`;
+    } catch (e) {
+      return "সময় পাওয়া যায়নি";
+    }
   }
 
   function isSameDay(timestamp: any, filterDateStr: string) {
@@ -2698,18 +2778,128 @@ export default function AdminPanel() {
               {/* --- TAB 4: BLOCKED LIST --- */}
               {activeTab === "blocked" &&
                 (() => {
-                  const filteredBlockedIPs = blockedIPs.filter((b) => {
-                    // Filter by search query (Name or IP)
+                  // Synthesize and unify blocked items from blockedIPs state, blocked participants, and blocked demo participants
+                  const map = new Map<
+                    string,
+                    {
+                      key: string;
+                      ip: string;
+                      name: string;
+                      uid: string;
+                      deviceId: string;
+                      blockedAt: any;
+                      deviceDetails?: {
+                        name: string;
+                        iconType: "phone" | "laptop" | "tablet" | "monitor";
+                      };
+                      userType: string;
+                    }
+                  >();
+
+                  // 1. Process explicit blockedIPs records
+                  blockedIPs.forEach((b) => {
+                    const key =
+                      b.ip || b.uid || b.deviceId || Math.random().toString();
+                    const matchedP = participants.find(
+                      (p) =>
+                        (b.ip && p.ip === b.ip) ||
+                        (b.uid && b.uid !== "Unknown" && p.uid === b.uid) ||
+                        (b.deviceId &&
+                          b.deviceId !== "Unknown" &&
+                          p.deviceId === b.deviceId),
+                    );
+                    const matchedD = demoParticipants.find(
+                      (p) =>
+                        (b.ip && p.ip === b.ip) ||
+                        (b.uid && b.uid !== "Unknown" && p.uid === b.uid) ||
+                        (b.deviceId &&
+                          b.deviceId !== "Unknown" &&
+                          p.deviceId === b.deviceId),
+                    );
+
+                    const matchedName =
+                      b.name || matchedP?.name || matchedD?.name || "নাম পাওয়া যায়নি";
+                    const matchedUid =
+                      b.uid && b.uid !== "Unknown"
+                        ? b.uid
+                        : matchedP?.uid || matchedD?.uid || "N/A";
+                    const matchedDevId =
+                      b.deviceId && b.deviceId !== "Unknown"
+                        ? b.deviceId
+                        : matchedP?.deviceId || matchedD?.deviceId || "N/A";
+                    const userAgent = matchedP?.userAgent || matchedD?.userAgent || "";
+                    const devInfo = getDeviceDetails(userAgent);
+
+                    map.set(key, {
+                      key,
+                      ip: b.ip || matchedP?.ip || matchedD?.ip || "N/A",
+                      name: matchedName,
+                      uid: matchedUid,
+                      deviceId: matchedDevId,
+                      blockedAt:
+                        b.blockedAt ||
+                        matchedP?.joinedAt ||
+                        matchedD?.joinedAt ||
+                        new Date().toISOString(),
+                      deviceDetails: devInfo,
+                      userType: matchedD ? "ডেমো ইউজার" : "সাধারণ ইউজার",
+                    });
+                  });
+
+                  // 2. Add participants with blocked === true
+                  participants
+                    .filter((p) => p.blocked)
+                    .forEach((p) => {
+                      const key = p.ip || p.uid || p.id;
+                      if (!map.has(key)) {
+                        const devInfo = getDeviceDetails(p.userAgent);
+                        map.set(key, {
+                          key,
+                          ip: p.ip || "N/A",
+                          name: p.name || "নাম পাওয়া যায়নি",
+                          uid: p.uid || p.id || "N/A",
+                          deviceId: p.deviceId || "N/A",
+                          blockedAt: p.joinedAt || new Date().toISOString(),
+                          deviceDetails: devInfo,
+                          userType: "সাধারণ ইউজার",
+                        });
+                      }
+                    });
+
+                  // 3. Add demo participants with blocked === true
+                  demoParticipants
+                    .filter((p) => p.blocked)
+                    .forEach((p) => {
+                      const key = p.ip || p.uid || p.id;
+                      if (!map.has(key)) {
+                        const devInfo = getDeviceDetails(p.userAgent);
+                        map.set(key, {
+                          key,
+                          ip: p.ip || "N/A",
+                          name: `${p.name || "নাম পাওয়া যায়নি"} (Demo)`,
+                          uid: p.uid || p.id || "N/A",
+                          deviceId: p.deviceId || "N/A",
+                          blockedAt: p.joinedAt || new Date().toISOString(),
+                          deviceDetails: devInfo,
+                          userType: "ডেমো ইউজার",
+                        });
+                      }
+                    });
+
+                  const unifiedList = Array.from(map.values());
+
+                  // Filter by search query (Name, IP, or UID) & Date filter
+                  const filteredBlockedList = unifiedList.filter((b) => {
                     if (blockedSearchQuery) {
                       const queryLower = blockedSearchQuery.toLowerCase();
                       const ipMatch = b.ip?.toLowerCase().includes(queryLower);
-                      const nameMatch = b.name
-                        ?.toLowerCase()
-                        .includes(queryLower);
-                      if (!ipMatch && !nameMatch) return false;
+                      const nameMatch = b.name?.toLowerCase().includes(queryLower);
+                      const uidMatch = b.uid?.toLowerCase().includes(queryLower);
+                      const devMatch = b.deviceId?.toLowerCase().includes(queryLower);
+                      if (!ipMatch && !nameMatch && !uidMatch && !devMatch)
+                        return false;
                     }
 
-                    // Filter by date
                     if (blockedDateFilter) {
                       if (!b.blockedAt) return false;
                       const bDate = b.blockedAt.toDate
@@ -2727,13 +2917,14 @@ export default function AdminPanel() {
                   return (
                     <div className="space-y-4 animate-fadeIn">
                       <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm space-y-1">
-                        <h3 className="text-xs font-black text-slate-900 uppercase">
-                          ব্লকড ডিভাইস আইপি ও ইউআইডি রেকর্ডস
-                        </h3>
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-xs font-black text-slate-900 uppercase flex items-center gap-1.5">
+                            <ShieldAlert className="h-4 w-4 text-rose-600" />
+                            ব্লকড ইউজার, আইপি ও ইউআইডি তালিকা ({filteredBlockedList.length})
+                          </h3>
+                        </div>
                         <p className="text-[10px] text-slate-500 leading-normal">
-                          এই ডিভাইস আইপি বা ইউআইডি থেকে জয়েন করা সম্পূর্ণ নিষিদ্ধ।
-                          এরা পুনরায় জয়েন লিংক চেষ্টা করলে অ্যাক্সেস অস্বীকৃত
-                          স্ক্রিন দেখাবে।
+                          ব্লককৃত ইউজারদের আইপি, নাম, ইউআইডি এবং ব্লক করার সময় নিচে উল্লেখ রয়েছে। যেকোনো ইউজারকে আনব্লক করতে ডানপাশের <strong>আনব্লক করুন</strong> বাটনে ক্লিক করুন।
                         </p>
                       </div>
 
@@ -2800,7 +2991,7 @@ export default function AdminPanel() {
                           {/* 1. Date Filter */}
                           <div className="space-y-1">
                             <label className="text-[9px] font-black text-slate-500 block">
-                              কার্যকর করার তারিখ
+                              ব্লক করার তারিখ
                             </label>
                             <input
                               type="date"
@@ -2815,11 +3006,11 @@ export default function AdminPanel() {
                           {/* 2. Search Box */}
                           <div className="space-y-1">
                             <label className="text-[9px] font-black text-slate-500 block">
-                              নাম বা আইপি খুঁজুন
+                              নাম, আইপি বা ইউআইডি খুঁজুন
                             </label>
                             <input
                               type="text"
-                              placeholder="যেমন: ১১২.১০..."
+                              placeholder="নাম বা আইপি বা ইউআইডি..."
                               value={blockedSearchQuery}
                               onChange={(e) =>
                                 setBlockedSearchQuery(e.target.value)
@@ -2916,11 +3107,11 @@ export default function AdminPanel() {
                         </div>
                       </div>
 
-                      <div className="space-y-2">
-                        {filteredBlockedIPs.length === 0 ? (
+                      <div className="space-y-3">
+                        {filteredBlockedList.length === 0 ? (
                           <div className="bg-slate-50 border border-slate-200 rounded-xl p-6 text-center">
                             <p className="text-[10px] text-slate-400 italic font-medium">
-                              কোনো ব্লকড আইপি রেকর্ড পাওয়া যায়নি।
+                              কোনো ব্লকড ইউজার পাওয়া যায়নি।
                             </p>
                             {(blockedDateFilter || blockedSearchQuery) && (
                               <button
@@ -2935,35 +3126,83 @@ export default function AdminPanel() {
                             )}
                           </div>
                         ) : (
-                          filteredBlockedIPs.map((b) => (
+                          filteredBlockedList.map((b) => (
                             <div
-                              key={b.ip}
-                              className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm flex justify-between items-center gap-4 text-xs"
+                              key={b.key}
+                              className="bg-white border-2 border-rose-200 hover:border-rose-300 rounded-2xl p-3.5 shadow-sm space-y-2.5 transition relative overflow-hidden"
                             >
-                              <div className="space-y-0.5 truncate">
-                                <span className="font-mono font-bold text-red-600 block truncate">
-                                  {b.ip}
-                                </span>
-                                {b.uid && b.uid !== "Unknown" && (
-                                  <span className="font-mono text-[9.5px] text-amber-700 block">
-                                    UID: <strong>{b.uid}</strong>
-                                  </span>
-                                )}
-                                <span className="text-[10px] text-slate-600 font-semibold block">
-                                  {b.name}
-                                </span>
-                                <span className="text-[9px] text-slate-400 block">
-                                  লগ করা হয়েছে: {formatTime(b.blockedAt)}
-                                </span>
+                              {/* Red top bar accent */}
+                              <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-rose-500 via-red-500 to-rose-600"></div>
+
+                              {/* Top Row: User Name & User Type Badge */}
+                              <div className="flex items-start justify-between gap-2 pt-1">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-8 h-8 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center font-black text-xs shrink-0 shadow-xs border border-rose-200">
+                                    <Ban className="h-4 w-4 text-rose-600" />
+                                  </div>
+                                  <div>
+                                    <h4 className="text-xs font-black text-slate-900 leading-tight">
+                                      {b.name}
+                                    </h4>
+                                    <span className="text-[9.5px] font-bold text-rose-600 bg-rose-50 border border-rose-100 px-1.5 py-0.2 rounded-md inline-block mt-0.5">
+                                      ⛔ {b.userType} - স্থায়ী ব্লকড
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* UNBLOCK BUTTON */}
+                                <button
+                                  onClick={() => handleUnblockUser(b.ip, b.deviceId, b.uid)}
+                                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-[10px] transition cursor-pointer shadow-sm flex items-center gap-1 active:scale-95 shrink-0"
+                                >
+                                  <CheckCircle className="h-3.5 w-3.5" />
+                                  <span>আনব্লক করুন</span>
+                                </button>
                               </div>
-                              <button
-                                onClick={() =>
-                                  handleUnblockUser(b.ip, b.deviceId, b.uid)
-                                }
-                                className="px-3 py-1.5 border border-emerald-250 bg-emerald-50 text-[#047857] hover:bg-[#d1fae5] font-bold rounded-lg text-[9px] transition cursor-pointer shrink-0"
-                              >
-                                ব্লক বাতিল
-                              </button>
+
+                              {/* Middle Info Box: IP, UID, Device & Time */}
+                              <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 space-y-1.5 text-[10.5px]">
+                                {/* IP Address */}
+                                <div className="flex items-center justify-between">
+                                  <span className="text-slate-500 font-bold text-[10px]">আইপি ঠিকানা (IP):</span>
+                                  <span className="font-mono font-extrabold text-slate-900 bg-amber-100/80 text-amber-950 border border-amber-300 px-2 py-0.5 rounded-md text-[10.5px]">
+                                    {b.ip}
+                                  </span>
+                                </div>
+
+                                {/* UID */}
+                                <div className="flex items-center justify-between">
+                                  <span className="text-slate-500 font-bold text-[10px]">ইউআইডি (UID):</span>
+                                  <span className="font-mono font-extrabold text-slate-800 bg-white border border-slate-200 px-2 py-0.5 rounded-md text-[10px]">
+                                    {b.uid}
+                                  </span>
+                                </div>
+
+                                {/* Device Info */}
+                                {b.deviceDetails && (
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-slate-500 font-bold text-[10px]">ডিভাইস মডেল:</span>
+                                    <span className="font-bold text-slate-700 flex items-center gap-1 text-[10px]">
+                                      {b.deviceDetails.iconType === "phone" && <Smartphone className="h-3 w-3 text-slate-500" />}
+                                      {b.deviceDetails.iconType === "tablet" && <Tablet className="h-3 w-3 text-slate-500" />}
+                                      {b.deviceDetails.iconType === "laptop" && <Laptop className="h-3 w-3 text-slate-500" />}
+                                      {b.deviceDetails.iconType === "monitor" && <Monitor className="h-3 w-3 text-slate-500" />}
+                                      <span>{b.deviceDetails.name}</span>
+                                    </span>
+                                  </div>
+                                )}
+
+                                {/* Blocked Timestamp */}
+                                <div className="flex items-center justify-between pt-1 border-t border-slate-200/60">
+                                  <span className="text-slate-500 font-bold text-[10px] flex items-center gap-1">
+                                    <Clock className="h-3 w-3 text-amber-600" />
+                                    ব্লক করার সময়:
+                                  </span>
+                                  <span className="font-bold text-slate-900 text-[10px] bg-slate-200/70 px-2 py-0.5 rounded-md">
+                                    {formatBlockTime(b.blockedAt)}
+                                  </span>
+                                </div>
+                              </div>
                             </div>
                           ))
                         )}
