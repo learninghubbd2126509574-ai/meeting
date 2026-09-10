@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { db, auth, handleFirestoreError, OperationType } from "../firebase";
+import * as dbService from "../dbService";
 import { onAuthStateChanged } from "firebase/auth";
 import {
   doc,
@@ -22,6 +23,8 @@ import {
   Clock,
   Calendar,
   AlertTriangle,
+  Lock,
+  Sparkles,
 } from "lucide-react";
 import { motion } from "motion/react";
 
@@ -73,14 +76,41 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [googleMeetLink, setGoogleMeetLink] = useState<string | null>(null);
-  const [meetingActive, setMeetingActive] = useState<boolean>(true);
-  const [meetingDate, setMeetingDate] = useState<string | null>(null);
-  const [meetingTime, setMeetingTime] = useState<string | null>(null);
+  const [googleMeetLink, setGoogleMeetLink] = useState<string | null>(() => {
+    try {
+      const cached = localStorage.getItem(`ue_meet_${meetingId}`);
+      if (cached) return JSON.parse(cached).googleMeetLink || null;
+    } catch {}
+    return null;
+  });
+  const [meetingActive, setMeetingActive] = useState<boolean>(() => {
+    try {
+      const cached = localStorage.getItem(`ue_meet_${meetingId}`);
+      if (cached) return JSON.parse(cached).active !== false;
+    } catch {}
+    return true;
+  });
+  const [meetingDate, setMeetingDate] = useState<string | null>(() => {
+    try {
+      const cached = localStorage.getItem(`ue_meet_${meetingId}`);
+      if (cached) return JSON.parse(cached).meetingDate || null;
+    } catch {}
+    return null;
+  });
+  const [meetingTime, setMeetingTime] = useState<string | null>(() => {
+    try {
+      const cached = localStorage.getItem(`ue_meet_${meetingId}`);
+      if (cached) return JSON.parse(cached).meetingTime || null;
+    } catch {}
+    return null;
+  });
   const [noticeText, setNoticeText] = useState<string>("");
   const [noticeActive, setNoticeActive] = useState<boolean>(false);
   const [preventRepeatJoins, setPreventRepeatJoins] = useState<boolean>(true);
   const [publicLinkActive, setPublicLinkActive] = useState<boolean>(true);
+
+  // Notification Popup State
+  const [showNotificationPopup, setShowNotificationPopup] = useState<boolean>(true);
 
   // Demo flow states
   const [demoModeActive, setDemoModeActive] = useState<boolean>(false);
@@ -97,6 +127,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
   // 1. Live Listeners for Meeting, Block Status, and Settings
   useEffect(() => {
     let unsubMeeting: (() => void) | null = null;
+    let unsubDbMeetings: (() => void) | null = null;
     let unsubBlockDevice: (() => void) | null = null;
     let unsubBlockFp: (() => void) | null = null;
     let unsubBlockUid: (() => void) | null = null;
@@ -128,7 +159,6 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                 reject(new Error("Empty response"));
                 return;
               }
-              // Attempt to parse JSON
               try {
                 const data = JSON.parse(trimmed);
                 const ip = data.ip || data.ipAddress || data.query;
@@ -138,7 +168,6 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                   reject(new Error("No IP key in JSON"));
                 }
               } catch (e) {
-                // Not JSON, check if it's a valid IP format (v4 or v6)
                 if (/^[0-9a-fA-F.:]+$/.test(trimmed)) {
                   resolve(trimmed);
                 } else {
@@ -194,7 +223,6 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
         setIsLoading(true);
         setErrorMessage(null);
 
-        // Log detailed browser & in-app environment diagnostics (Telegram, WhatsApp, Messenger, etc.)
         const ua = navigator.userAgent || "";
         const isInApp = /Telegram|FBAN|FBAV|Instagram|WhatsApp|Messenger/i.test(ua);
         console.log("Client Environment Diagnostics:", {
@@ -205,7 +233,6 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
           url: window.location.href
         });
 
-        // 1. Wait for Firebase Authentication (onAuthStateChanged) to complete or timeout before querying Firestore
         await new Promise<void>((resolve) => {
           const unsubscribe = onAuthStateChanged(auth, (user) => {
             console.log("Firebase Auth State Resolved in JoinPage:", {
@@ -223,7 +250,6 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
           }, 1500);
         });
 
-        // A. Persistent Device ID (triple storage fallback for ultimate bypass protection)
         let dId = localStorage.getItem("unity_device_id");
         if (!dId) {
           const cookieMatch = document.cookie.match(
@@ -244,7 +270,6 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
         document.cookie = `unity_device_id=${encodeURIComponent(dId)}; max-age=315360000; path=/; SameSite=Lax`;
         setDeviceId(dId);
 
-        // A.2 Persistent User ID (UID) with multiple layers of fallback storage
         let uId = localStorage.getItem("unity_uid");
         if (!uId) {
           const cookieMatch = document.cookie.match(
@@ -258,7 +283,6 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
           uId = sessionStorage.getItem("unity_uid");
         }
         if (!uId) {
-          // Generate a highly distinct readable UID (e.g. UID-582910)
           uId = `UID-${100000 + Math.floor(Math.random() * 900000)}`;
         }
         localStorage.setItem("unity_uid", uId);
@@ -266,11 +290,9 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
         document.cookie = `unity_uid=${encodeURIComponent(uId)}; max-age=315360000; path=/; SameSite=Lax`;
         setUid(uId);
 
-        // B. Fetch IP (With parallel race & swift fallback for slower internet)
         const detectedIp = await getIpWithTimeout();
         setIpAddress(detectedIp);
 
-        // Security Check (Async & Non-blocking)
         if (detectedIp !== "Unknown" && detectedIp !== "যাচাই হচ্ছে...") {
           fetch(`https://ipapi.co/${detectedIp}/json/`)
             .then((res) => res.json())
@@ -303,173 +325,120 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
             .catch(() => {});
         }
 
-        // C. Live Device Block Listener
         if (dId) {
-          unsubBlockDevice = onSnapshot(
-            doc(db, "blockedDevices", dId),
-            (snap) => {
-              setIsDeviceBlockedById(snap.exists());
-            },
-          );
-        }
-
-        // C.2. Fallback Browser Fingerprint Listener to prevent dynamic IP + cache clear bypasses
-        const fp = getBrowserFingerprint();
-        const qFp = query(
-          collection(db, "blockedDevices"),
-          where("browserFingerprint", "==", fp),
-        );
-        unsubBlockFp = onSnapshot(qFp, (snap) => {
-          setIsDeviceBlockedByFp(!snap.empty);
-        });
-
-        // C.3. Live UID Block Listener
-        if (uId) {
-          unsubBlockUid = onSnapshot(doc(db, "blockedUIDs", uId), (snap) => {
-            setIsUidBlocked(snap.exists());
+          dbService.isDeviceBlocked(dId).then((blocked) => {
+            if (blocked) setIsDeviceBlockedById(true);
           });
         }
 
-        // D. Real-time Meeting Details Listener with robust retry & collection fallback for Telegram/WhatsApp/Messenger in-app browsers
+        if (uId) {
+          dbService.isUIDBlocked(uId).then((blocked) => {
+            if (blocked) setIsUidBlocked(true);
+          });
+        }
+
         let retryCount = 0;
         const maxRetries = 4;
 
         async function fetchMeetingWithRetry() {
           try {
-            console.log(`Attempting direct getDoc for meetingId: ${meetingId} (Attempt ${retryCount + 1})`);
+            const sMeeting = await dbService.getMeetingById(meetingId);
+            if (sMeeting) {
+              setGoogleMeetLink(sMeeting.googleMeetLink);
+              setMeetingActive(sMeeting.active !== false);
+              setMeetingDate(sMeeting.meetingDate || null);
+              setMeetingTime(sMeeting.meetingTime || null);
+              setErrorMessage(null);
+              try {
+                localStorage.setItem(`ue_meet_${meetingId}`, JSON.stringify(sMeeting));
+              } catch (e) {}
+              return;
+            }
+
             const docRef = doc(db, "meetings", meetingId);
             const docSnap = await getDoc(docRef);
             if (docSnap.exists()) {
               const mData = docSnap.data();
-              console.log("Meeting successfully fetched via direct getDoc:", mData);
               setGoogleMeetLink(mData.googleMeetLink);
               setMeetingActive(mData.active !== false);
               setMeetingDate(mData.meetingDate || null);
               setMeetingTime(mData.meetingTime || null);
               setErrorMessage(null);
-            } else {
-              if (retryCount < maxRetries) {
-                retryCount++;
-                console.warn(`Meeting not found on attempt ${retryCount} for ID: ${meetingId}, retrying in 1200ms...`);
-                setTimeout(fetchMeetingWithRetry, 1200);
-              } else {
-                console.warn(`Meeting ${meetingId} not found after retries. Searching for any active meeting in Firestore collection...`);
-                // Fallback: fetch all meetings and pick the latest active one
-                try {
-                  const allMeetingsSnap = await getDocs(collection(db, "meetings"));
-                  if (!allMeetingsSnap.empty) {
-                    const meetingsList = allMeetingsSnap.docs.map(d => ({
-                      id: d.id,
-                      ...d.data()
-                    })) as any[];
-                    meetingsList.sort((a, b) => {
-                      const timeA = a.createdAt?.toMillis?.() || a.createdAt?.seconds || 0;
-                      const timeB = b.createdAt?.toMillis?.() || b.createdAt?.seconds || 0;
-                      return timeB - timeA;
-                    });
-                    const activeMeeting = meetingsList.find(m => m.active !== false) || meetingsList[0];
-                    if (activeMeeting) {
-                      console.log("Found fallback active meeting:", activeMeeting);
-                      setGoogleMeetLink(activeMeeting.googleMeetLink);
-                      setMeetingActive(activeMeeting.active !== false);
-                      setMeetingDate(activeMeeting.meetingDate || null);
-                      setMeetingTime(activeMeeting.meetingTime || null);
-                      setErrorMessage(null);
-                      try {
-                        const newUrl = `/?join=${activeMeeting.id}`;
-                        window.history.replaceState({ page: 'join', id: activeMeeting.id }, '', newUrl);
-                      } catch (e) {}
-                      return;
-                    }
-                  }
-                } catch (fallbackErr) {
-                  console.error("Fallback meeting query error:", fallbackErr);
-                }
+              try {
+                localStorage.setItem(`ue_meet_${meetingId}`, JSON.stringify(mData));
+              } catch (e) {}
+              return;
+            }
 
-                console.error("Meeting document does not exist after all retries and fallback:", meetingId);
-                setErrorMessage(
-                  "কাউন্সেলিং মিটিং সেশনটি খুঁজে পাওয়া যায়নি। আপনার লিঙ্কের মিটিং আইডি চেক করুন।"
-                );
+            // Check dbService.getMeetings() which includes persistent LocalStorage cache
+            const allMeetings = await dbService.getMeetings();
+            if (allMeetings && allMeetings.length > 0) {
+              const foundMeeting = allMeetings.find((m) => m.id === meetingId) || allMeetings.find((m) => m.active !== false) || allMeetings[0];
+              if (foundMeeting) {
+                setGoogleMeetLink(foundMeeting.googleMeetLink);
+                setMeetingActive(foundMeeting.active !== false);
+                setMeetingDate(foundMeeting.meetingDate || null);
+                setMeetingTime(foundMeeting.meetingTime || null);
+                setErrorMessage(null);
+                try {
+                  const newUrl = `/?join=${foundMeeting.id}`;
+                  window.history.replaceState({ page: 'join', id: foundMeeting.id }, '', newUrl);
+                } catch (e) {}
+                return;
               }
             }
-          } catch (fetchErr: any) {
-            console.error("Direct meeting fetch error:", fetchErr);
-            handleFirestoreError(fetchErr, OperationType.GET, `meetings/${meetingId}`);
+
             if (retryCount < maxRetries) {
               retryCount++;
               setTimeout(fetchMeetingWithRetry, 1200);
-            } else {
-              // Try fallback on catch as well
-              try {
-                const allMeetingsSnap = await getDocs(collection(db, "meetings"));
-                if (!allMeetingsSnap.empty) {
-                  const meetingsList = allMeetingsSnap.docs.map(d => ({
-                    id: d.id,
-                    ...d.data()
-                  })) as any[];
-                  const activeMeeting = meetingsList.find(m => m.active !== false) || meetingsList[0];
-                  if (activeMeeting) {
-                    setGoogleMeetLink(activeMeeting.googleMeetLink);
-                    setMeetingActive(activeMeeting.active !== false);
-                    setMeetingDate(activeMeeting.meetingDate || null);
-                    setMeetingTime(activeMeeting.meetingTime || null);
-                    setErrorMessage(null);
-                    return;
-                  }
-                }
-              } catch (e) {}
-
-              setErrorMessage(
-                "মিটিং ডাটা লোড করতে সমস্যা হচ্ছে। আপনার ইন্টারনেট কানেকশন বা সার্ভার পারমিশন চেক করুন।"
-              );
+            }
+          } catch (fetchErr: any) {
+            console.warn("fetchMeetingWithRetry notice:", fetchErr);
+            const allMeetings = await dbService.getMeetings();
+            if (allMeetings && allMeetings.length > 0) {
+              const foundMeeting = allMeetings.find((m) => m.id === meetingId) || allMeetings.find((m) => m.active !== false) || allMeetings[0];
+              if (foundMeeting) {
+                setGoogleMeetLink(foundMeeting.googleMeetLink);
+                setMeetingActive(foundMeeting.active !== false);
+                setMeetingDate(foundMeeting.meetingDate || null);
+                setMeetingTime(foundMeeting.meetingTime || null);
+                setErrorMessage(null);
+                return;
+              }
+            }
+            if (retryCount < maxRetries) {
+              retryCount++;
+              setTimeout(fetchMeetingWithRetry, 1200);
             }
           }
         }
 
-        unsubMeeting = onSnapshot(
-          doc(db, "meetings", meetingId),
-          (snap) => {
-            console.log("Meeting snapshot update received for:", meetingId, "exists:", snap.exists());
-            if (snap.exists()) {
-              const mData = snap.data();
-              setGoogleMeetLink(mData.googleMeetLink);
-              setMeetingActive(mData.active !== false);
-              setMeetingDate(mData.meetingDate || null);
-              setMeetingTime(mData.meetingTime || null);
+        unsubDbMeetings = dbService.subscribeMeetings((list) => {
+          if (list && list.length > 0) {
+            const target = list.find((m) => m.id === meetingId) || list.find((m) => m.active !== false) || list[0];
+            if (target) {
+              setGoogleMeetLink(target.googleMeetLink);
+              setMeetingActive(target.active !== false);
+              setMeetingDate(target.meetingDate || null);
+              setMeetingTime(target.meetingTime || null);
               setErrorMessage(null);
-            } else {
-              console.warn("Meeting snapshot does not exist yet for:", meetingId);
             }
-          },
-          (err) => {
-            console.error("Meeting listener error:", err);
-            handleFirestoreError(err, OperationType.GET, `meetings/${meetingId}`);
-          },
-        );
+          }
+        });
 
-        // Execute initial robust fetch
+        unsubSettings = dbService.subscribeAdminSettings((sData) => {
+          if (sData) {
+            setNoticeText(sData.noticeText || "");
+            setNoticeActive(sData.noticeActive === true);
+            setPreventRepeatJoins(sData.preventRepeatJoins !== false);
+            setPublicLinkActive(sData.publicLinkActive !== false);
+            setDemoModeActive(sData.demoModeActive === true);
+            setDemoCode(sData.demoCode || "1234");
+          }
+          setIsLoading(false);
+        });
+
         await fetchMeetingWithRetry();
-
-        // E. Real-time Admin Settings Listener (Notice and Joint Policy)
-        unsubSettings = onSnapshot(
-          doc(db, "adminSettings", "settings"),
-          (snap) => {
-            if (snap.exists()) {
-              const sData = snap.data();
-              setNoticeText(sData.noticeText || "");
-              setNoticeActive(sData.noticeActive === true);
-              setPreventRepeatJoins(sData.preventRepeatJoins !== false);
-              setPublicLinkActive(sData.publicLinkActive !== false);
-              setDemoModeActive(sData.demoModeActive === true);
-              setDemoCode(sData.demoCode || "1234");
-            }
-            setIsLoading(false);
-          },
-          (err) => {
-            console.error("Settings listener error:", err);
-            setIsLoading(false);
-          },
-        );
       } catch (err: any) {
         console.error("Initialization error in setupListeners:", err);
         setErrorMessage(
@@ -479,13 +448,9 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
       }
     }
 
-    // Safety fallback timer for slow internet (releases overlay spinner after 2 seconds on high latency)
     const fallbackTimer = setTimeout(() => {
       setIsLoading((current) => {
         if (current) {
-          console.warn(
-            "Safety trigger: Slow network connection detected. Loading screen bypassed.",
-          );
           return false;
         }
         return current;
@@ -497,6 +462,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
     return () => {
       clearTimeout(fallbackTimer);
       if (unsubMeeting) unsubMeeting();
+      if (unsubDbMeetings) unsubDbMeetings();
       if (unsubBlockDevice) unsubBlockDevice();
       if (unsubBlockFp) unsubBlockFp();
       if (unsubBlockUid) unsubBlockUid();
@@ -504,29 +470,55 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
     };
   }, [meetingId]);
 
-  // 1.2. Reactively listen for IP block status once IP address successfully resolves
   useEffect(() => {
     if (
       !ipAddress ||
       ipAddress === "যাচাই হচ্ছে..." ||
       ipAddress === "Unknown"
     ) {
+      setIsIpBlocked(false);
       return;
     }
 
-    const unsubBlockIP = onSnapshot(
-      doc(db, "blockedIPs", ipAddress),
-      (snap) => {
-        setIsIpBlocked(snap.exists());
-      },
-    );
+    const unsubBlockIP = dbService.subscribeBlockedIPs((list) => {
+      setIsIpBlocked(list.some((b) => b.ip === ipAddress));
+    });
 
     return () => {
       unsubBlockIP();
     };
   }, [ipAddress]);
 
-  // Helper helper to wrap promises with a timeout for slow network resilience
+  useEffect(() => {
+    if (!deviceId || deviceId === "Unknown") {
+      setIsDeviceBlockedById(false);
+      return;
+    }
+
+    const unsubBlockDevice = dbService.subscribeBlockedDevices((list) => {
+      setIsDeviceBlockedById(list.some((b) => b.deviceId === deviceId));
+    });
+
+    return () => {
+      unsubBlockDevice();
+    };
+  }, [deviceId]);
+
+  useEffect(() => {
+    if (!uid || uid === "Unknown") {
+      setIsUidBlocked(false);
+      return;
+    }
+
+    const unsubBlockUid = dbService.subscribeBlockedUIDs((list) => {
+      setIsUidBlocked(list.some((b) => b.uid === uid));
+    });
+
+    return () => {
+      unsubBlockUid();
+    };
+  }, [uid]);
+
   const withTimeout = <T,>(
     promise: Promise<T>,
     timeoutMs: number,
@@ -540,7 +532,6 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
     ]);
   };
 
-  // 2. Submit join request
   async function handleJoin(e: React.FormEvent) {
     e.preventDefault();
     if (!fullName.trim()) return;
@@ -565,7 +556,6 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
       return;
     }
 
-    // Low-network resilience: If IP is still loading or blank, default to 'Unknown' and let them pass
     const finalIp =
       !ipAddress || ipAddress === "যাচাই হচ্ছে..." ? "Unknown" : ipAddress;
 
@@ -573,90 +563,47 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
       setIsSubmitting(true);
       setErrorMessage(null);
 
-      // 1. Double check block status locally (already tracked by listeners, but for safety)
       if (isBlocked) {
         setIsSubmitting(false);
         return;
       }
 
-      // 2. Perform one final quick block check from DB (with 1200ms timeout for slow network)
       if (finalIp && finalIp !== "Unknown") {
         try {
-          const blockSnap = await withTimeout(
-            getDoc(doc(db, "blockedIPs", finalIp)),
-            1200,
-            { exists: () => false } as any,
-          );
-          if (blockSnap.exists()) {
+          if (await dbService.isIPBlocked(finalIp)) {
             setIsIpBlocked(true);
             setIsSubmitting(false);
             return;
           }
-        } catch (e) {
-          console.warn(
-            "DB IP block check timed out/failed, bypassing for safety",
-            e,
-          );
-        }
+        } catch (e) {}
       }
 
       if (deviceId && deviceId !== "Unknown") {
         try {
-          const deviceSnap = await withTimeout(
-            getDoc(doc(db, "blockedDevices", deviceId)),
-            1200,
-            { exists: () => false } as any,
-          );
-          if (deviceSnap.exists()) {
+          if (await dbService.isDeviceBlocked(deviceId)) {
             setIsDeviceBlockedById(true);
             setIsSubmitting(false);
             return;
           }
-        } catch (e) {
-          console.warn(
-            "DB device block check timed out/failed, bypassing for safety",
-            e,
-          );
-        }
+        } catch (e) {}
       }
 
       if (uid && uid !== "Unknown") {
         try {
-          const uidSnap = await withTimeout(
-            getDoc(doc(db, "blockedUIDs", uid)),
-            1200,
-            { exists: () => false } as any,
-          );
-          if (uidSnap.exists()) {
+          if (await dbService.isUIDBlocked(uid)) {
             setIsUidBlocked(true);
             setIsSubmitting(false);
             return;
           }
-        } catch (e) {
-          console.warn(
-            "DB UID block check timed out/failed, bypassing for safety",
-            e,
-          );
-        }
+        } catch (e) {}
       }
 
-      // 2.5. Check for same IP duplicate prevention if enabled (with 1200ms timeout for slow network)
       if (preventRepeatJoins && finalIp && finalIp !== "Unknown") {
         try {
-          const qSameIp = query(
-            collection(db, "participants"),
-            where("meetingId", "==", meetingId),
-            where("ip", "==", finalIp),
+          const parts = await dbService.getParticipants();
+          const duplicate = parts.find(
+            (p) => p.meetingId === meetingId && p.ip === finalIp && p.deviceId !== deviceId
           );
-          const snapSameIp = await withTimeout(getDocs(qSameIp), 1200, {
-            docs: [],
-          } as any);
-
-          // Check if someone with a different device id is already using this IP index
-          const duplicate = snapSameIp.docs.find((docOpt: any) => {
-            const data = docOpt.data();
-            return data.deviceId !== deviceId;
-          });
 
           if (duplicate) {
             setErrorMessage(
@@ -665,64 +612,41 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
             setIsSubmitting(false);
             return;
           }
-        } catch (errSameIp) {
-          console.warn(
-            "Failed or timed out checking duplicate IP, proceeding anyway",
-            errSameIp,
-          );
-        }
+        } catch (errSameIp) {}
       }
 
-      // 3. Create Participant Entry
       const participantId = `part_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-      const pRef = doc(db, "participants", participantId);
 
-      const payload = {
-        name: fullName.trim(),
-        meetingId: meetingId,
-        ip: finalIp,
-        deviceId: deviceId || "Unknown",
-        uid: uid || "Unknown",
-        browserFingerprint: getBrowserFingerprint(),
-        userAgent: navigator.userAgent || "Unknown Browser",
-        joinedAt: serverTimestamp(),
-        blocked: false,
-      };
-
-      // Try to save participant record (with a strict 1500ms timeout so the user isn't stuck if Firestore hangs)
       try {
-        await withTimeout(setDoc(pRef, payload), 1500, null);
-      } catch (err: any) {
-        console.warn(
-          "Failed or timed out logging participant, but allowing redirect for user speed:",
-          err,
-        );
-      }
+        await dbService.saveParticipant({
+          id: participantId,
+          name: fullName.trim(),
+          meetingId: meetingId,
+          ip: finalIp,
+          deviceId: deviceId || "Unknown",
+          uid: uid || "Unknown",
+          browserFingerprint: getBrowserFingerprint(),
+          userAgent: navigator.userAgent || "Unknown Browser",
+          joinedAt: new Date().toISOString(),
+          blocked: false,
+        });
+      } catch (err: any) {}
 
-      // 4. Validate redirection requirements with robust fresh fetch & retry for Telegram/WebView race conditions
       let currentMeetLink = googleMeetLink;
       let currentMeetingActive = meetingActive;
 
       try {
-        const freshMeetingSnap = await withTimeout(
-          getDoc(doc(db, "meetings", meetingId)),
-          2000,
-          null
-        );
-        if (freshMeetingSnap && freshMeetingSnap.exists()) {
-          const freshData = freshMeetingSnap.data();
-          if (freshData.googleMeetLink) {
-            currentMeetLink = freshData.googleMeetLink;
+        const freshMeeting = await dbService.getMeetingById(meetingId);
+        if (freshMeeting) {
+          if (freshMeeting.googleMeetLink) {
+            currentMeetLink = freshMeeting.googleMeetLink;
           }
-          if (freshData.active !== undefined) {
-            currentMeetingActive = freshData.active !== false;
+          if (freshMeeting.active !== undefined) {
+            currentMeetingActive = freshMeeting.active !== false;
           }
         }
-      } catch (fetchErr) {
-        console.warn("Fresh meeting link validation fetch warning:", fetchErr);
-      }
+      } catch (fetchErr) {}
 
-      // If still empty, try one quick retry after 500ms for Telegram Webview cold start / latency
       if (!currentMeetLink || !currentMeetLink.trim()) {
         try {
           await new Promise(r => setTimeout(r, 600));
@@ -752,13 +676,11 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
         return;
       }
 
-      // Prepare final redirect URL
       let redirectUrl = currentMeetLink.trim();
       if (!/^https?:\/\//i.test(redirectUrl)) {
         redirectUrl = "https://" + redirectUrl;
       }
 
-      // Final redirect
       window.location.assign(redirectUrl);
     } catch (err: any) {
       console.error("Global join error:", err);
@@ -769,7 +691,6 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
     }
   }
 
-  // 2.2. Submit demo 4-digit code
   function handleDemoCodeVerify(e: React.FormEvent) {
     e.preventDefault();
     setDemoError(null);
@@ -782,7 +703,6 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
     }
   }
 
-  // 2.3. Submit demo user info and join
   async function handleDemoJoin(e: React.FormEvent) {
     e.preventDefault();
     if (!demoNameInput.trim()) {
@@ -811,7 +731,6 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
       setIsDemoSubmitting(true);
       setDemoError(null);
 
-      // 1. Direct block list checks (Bypass VPN restriction for demo users who verified passcode)
       if (isIpBlocked || isDeviceBlockedById || isDeviceBlockedByFp) {
         setIsDemoSubmitting(false);
         setDemoError(
@@ -822,87 +741,56 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
 
       if (finalIp && finalIp !== "Unknown") {
         try {
-          const blockSnap = await withTimeout(
-            getDoc(doc(db, "blockedIPs", finalIp)),
-            1200,
-            { exists: () => false } as any,
-          );
-          if (blockSnap.exists()) {
+          if (await dbService.isIPBlocked(finalIp)) {
             setIsIpBlocked(true);
             setIsDemoSubmitting(false);
             setDemoError("দুঃখিত, আপনার আইপিটি ব্লকড করা হয়েছে।");
             return;
           }
-        } catch (e) {
-          console.warn("Demo DB IP block check failed or timed out", e);
-        }
+        } catch (e) {}
       }
 
       if (deviceId && deviceId !== "Unknown") {
         try {
-          const deviceSnap = await withTimeout(
-            getDoc(doc(db, "blockedDevices", deviceId)),
-            1200,
-            { exists: () => false } as any,
-          );
-          if (deviceSnap.exists()) {
+          if (await dbService.isDeviceBlocked(deviceId)) {
             setIsDeviceBlockedById(true);
             setIsDemoSubmitting(false);
             setDemoError("দুঃখিত, আপনার ডিভাইসটি ব্লকড করা হয়েছে।");
             return;
           }
-        } catch (e) {
-          console.warn("Demo DB device block check failed or timed out", e);
-        }
+        } catch (e) {}
       }
 
       if (uid && uid !== "Unknown") {
         try {
-          const uidSnap = await withTimeout(
-            getDoc(doc(db, "blockedUIDs", uid)),
-            1200,
-            { exists: () => false } as any,
-          );
-          if (uidSnap.exists()) {
+          if (await dbService.isUIDBlocked(uid)) {
             setIsUidBlocked(true);
             setIsDemoSubmitting(false);
             setDemoError("দুঃখিত, আপনার ইউজার আইডি (UID) ব্লকড করা হয়েছে।");
             return;
           }
-        } catch (e) {
-          console.warn("Demo DB UID block check failed or timed out", e);
-        }
+        } catch (e) {}
       }
 
-      // 2. Save to demoParticipants collection
       const demoPartId = `dm_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-      const demoRef = doc(db, "demoParticipants", demoPartId);
-
-      const demoPayload = {
-        name: demoNameInput.trim(),
-        gmail: demoGmailInput.trim() || "",
-        meetingId: meetingId,
-        ip: finalIp,
-        deviceId: deviceId || "Unknown",
-        uid: uid || "Unknown",
-        browserFingerprint: getBrowserFingerprint(),
-        userAgent: navigator.userAgent || "Unknown Browser",
-        joinedAt: serverTimestamp(),
-        blocked: false,
-      };
 
       try {
-        await withTimeout(setDoc(demoRef, demoPayload), 1500, null);
-        // Introduce a tiny 100ms delay to let the network start the write before redirect unloads the page
+        await dbService.saveDemoParticipant({
+          id: demoPartId,
+          name: demoNameInput.trim(),
+          gmail: demoGmailInput.trim() || "",
+          meetingId: meetingId,
+          ip: finalIp,
+          deviceId: deviceId || "Unknown",
+          uid: uid || "Unknown",
+          browserFingerprint: getBrowserFingerprint(),
+          userAgent: navigator.userAgent || "Unknown Browser",
+          joinedAt: new Date().toISOString(),
+          blocked: false,
+        });
         await new Promise((resolve) => setTimeout(resolve, 100));
-      } catch (err: any) {
-        console.warn(
-          "Failed or timed out to write to demoParticipants, but allowing redirect anyway for quick connection:",
-          err,
-        );
-      }
+      } catch (err: any) {}
 
-      // 3. Meet active checking
       if (!meetingActive) {
         setDemoError(
           "এই কাউন্সেলিং সেশনটি বৰ্তমানে নিষ্ক্রিয় বা সম্পন্ন করা হয়েছে।",
@@ -919,7 +807,6 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
         return;
       }
 
-      // 4. Redirect
       let redirectUrl = googleMeetLink.trim();
       if (!/^https?:\/\//i.test(redirectUrl)) {
         redirectUrl = "https://" + redirectUrl;
@@ -933,129 +820,219 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
     }
   }
 
-  // Formatting meeting date and time into elegant Bengali
-  function formatMeetingDateTime(dateStr?: string, timeStr?: string) {
-    if (!dateStr) return "";
-    try {
+  function getMeetingDateAndParts(dateStr?: string | null, timeStr?: string | null) {
+    const bgDigits: { [key: string]: string } = {
+      "0": "০", "1": "১", "2": "২", "3": "৩", "4": "৪",
+      "5": "৫", "6": "৬", "7": "৭", "8": "৮", "9": "৯",
+    };
+    const toBgNum = (numStr: string) =>
+      numStr
+        .split("")
+        .map((char) => bgDigits[char] || char)
+        .join("");
+
+    let formattedDate = "";
+    if (dateStr) {
       const parts = dateStr.split("-");
       if (parts.length === 3) {
         const year = parts[0];
         const month = parts[1];
         const day = parts[2];
         const monthsBg = [
-          "জানুয়ারি",
-          "ফেব্রুয়ারি",
-          "মার্চ",
-          "এপ্রিল",
-          "মে",
-          "জুন",
-          "জুলাই",
-          "আগস্ট",
-          "সেপ্টেম্বর",
-          "অক্টোবর",
-          "নভেম্বর",
-          "ডিসেম্বর",
+          "জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন",
+          "জুলাই", "আগস্ট", "সেপ্টেম্বর", "অক্টোবর", "নভেম্বর", "ডিসেম্বর"
         ];
         const monthIndex = parseInt(month, 10) - 1;
         const monthBg = monthsBg[monthIndex] || month;
-
-        // Bengali digit converter
-        const bgDigits: { [key: string]: string } = {
-          "0": "০",
-          "1": "১",
-          "2": "২",
-          "3": "৩",
-          "4": "৪",
-          "5": "৫",
-          "6": "৬",
-          "7": "৭",
-          "8": "৮",
-          "9": "৯",
-        };
-        const toBgNum = (numStr: string) =>
-          numStr
-            .split("")
-            .map((char) => bgDigits[char] || char)
-            .join("");
-
-        let formattedTime = "";
-        if (timeStr) {
-          const tParts = timeStr.split(":");
-          if (tParts.length >= 2) {
-            let hour = parseInt(tParts[0], 10);
-            const minute = tParts[1];
-            let ampm = "সকাল";
-            if (hour >= 12) {
-              ampm = "বিকাল";
-              if (hour > 12) hour -= 12;
-            } else {
-              if (hour === 0) hour = 12;
-              if (hour >= 6 && hour < 12) ampm = "সকাল";
-              else ampm = "রাত";
-            }
-            formattedTime = `, ${ampm} ${toBgNum(String(hour))}:${toBgNum(minute)} মিনিট`;
-          }
-        }
-
-        return `${toBgNum(day)} ${monthBg} ${toBgNum(year)} ${formattedTime}`;
+        formattedDate = `${toBgNum(day)} ${monthBg} ${toBgNum(year)}`;
+      } else {
+        formattedDate = dateStr;
       }
+    }
+
+    let formattedTime = "";
+    if (timeStr) {
+      const tParts = timeStr.split(":");
+      if (tParts.length >= 2) {
+        let hour = parseInt(tParts[0], 10);
+        const minute = tParts[1];
+        let ampm = "সকাল";
+        if (hour >= 12) {
+          ampm = "বিকাল";
+          if (hour > 12) hour -= 12;
+        } else {
+          if (hour === 0) hour = 12;
+          if (hour >= 6 && hour < 12) ampm = "সকাল";
+          else ampm = "রাত";
+        }
+        formattedTime = `${ampm} ${toBgNum(String(hour))}:${toBgNum(minute)} মিনিট`;
+      } else {
+        formattedTime = timeStr;
+      }
+    }
+
+    return {
+      formattedDate: formattedDate || "আজকের লাইভ সেশন",
+      formattedTime: formattedTime || "নির্ধারিত সময়",
+    };
+  }
+
+  function formatMeetingDateTime(dateStr?: string | null, timeStr?: string | null) {
+    if (!dateStr && !timeStr) return "";
+    try {
+      const bgDigits: { [key: string]: string } = {
+        "0": "০", "1": "১", "2": "২", "3": "৩", "4": "৪",
+        "5": "৫", "6": "৬", "7": "৭", "8": "৮", "9": "৯",
+      };
+      const toBgNum = (numStr: string) =>
+        numStr
+          .split("")
+          .map((char) => bgDigits[char] || char)
+          .join("");
+
+      let formattedTime = "";
+      if (timeStr) {
+        const tParts = timeStr.split(":");
+        if (tParts.length >= 2) {
+          let hour = parseInt(tParts[0], 10);
+          const minute = tParts[1];
+          let ampm = "সকাল";
+          if (hour >= 12) {
+            ampm = "বিকাল";
+            if (hour > 12) hour -= 12;
+          } else {
+            if (hour === 0) hour = 12;
+            if (hour >= 6 && hour < 12) ampm = "সকাল";
+            else ampm = "রাত";
+          }
+          formattedTime = `${ampm} ${toBgNum(String(hour))}:${toBgNum(minute)} মিনিট`;
+        } else {
+          formattedTime = timeStr;
+        }
+      }
+
+      let formattedDate = "";
+      if (dateStr) {
+        const parts = dateStr.split("-");
+        if (parts.length === 3) {
+          const year = parts[0];
+          const month = parts[1];
+          const day = parts[2];
+          const monthsBg = [
+            "জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন",
+            "জুলাই", "আগস্ট", "সেপ্টেম্বর", "অক্টোবর", "নভেম্বর", "ডিসেম্বর"
+          ];
+          const monthIndex = parseInt(month, 10) - 1;
+          const monthBg = monthsBg[monthIndex] || month;
+          formattedDate = `${toBgNum(day)} ${monthBg} ${toBgNum(year)}`;
+        } else {
+          formattedDate = dateStr;
+        }
+      }
+
+      if (formattedDate && formattedTime) {
+        return `${formattedDate}, ${formattedTime}`;
+      }
+      return formattedDate || formattedTime;
     } catch (e) {
       console.warn("Date parsing error", e);
     }
-    return `${dateStr} ${timeStr || ""}`;
+    return `${dateStr || ""} ${timeStr || ""}`.trim();
   }
 
-  // --- RENDERING MAIN WITH PHONE FRAME ---
+  // NEOMORPHISM DESIGN SYSTEM
+  // Base background: #eef2f7
+  // Raised shadow: shadow-[8px_8px_16px_#d1d9e6,-8px_-8px_16px_#ffffff]
+  // Inset shadow: shadow-[inset_3px_3px_6px_#d1d9e6,inset_-3px_-3px_6px_#ffffff]
+  // Button shadow: shadow-[5px_5px_12px_#d1d9e6,-5px_-5px_12px_#ffffff]
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-slate-100 flex flex-col justify-center items-center p-0 md:p-8 select-text overflow-x-hidden relative">
-      {/* Ambient glass glows for luxury background context on desktop */}
-      <div className="hidden md:block absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-amber-500/10 rounded-full blur-[130px] pointer-events-none"></div>
-      <div className="hidden md:block absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-blue-500/10 rounded-full blur-[130px] pointer-events-none"></div>
-
+    <div className="min-h-screen bg-[#eef2f7] text-[#1e293b] flex flex-col justify-center items-center p-0 md:p-6 select-text overflow-x-hidden font-sans">
+      
       {/* PHONE FRAME CHASSIS (Desktop Only) */}
-      <div className="w-full min-h-screen md:min-h-[840px] md:max-w-[410px] md:h-[840px] md:border-[14px] md:border-slate-800 md:rounded-[56px] md:shadow-[0_25px_60px_-15px_rgba(0,0,0,0.85)] bg-slate-50 flex flex-col relative overflow-hidden transition-all duration-300">
-        {/* Inner shadow/ring border overlay to give real physical frame depth */}
-        <div className="absolute inset-0 border border-slate-700/35 rounded-[42px] pointer-events-none z-50 hidden md:block"></div>
-
+      <div className="w-full min-h-screen md:min-h-[850px] md:max-w-[420px] md:h-[850px] md:border-[10px] md:border-[#334155] md:rounded-[48px] md:shadow-[14px_14px_28px_#d1d9e6,-14px_-14px_28px_#ffffff] bg-[#eef2f7] flex flex-col relative overflow-hidden transition-all duration-300">
+        
         {/* PHONE NOTCH / STATUS BAR (Desktop Only) */}
-        <div className="hidden md:flex absolute top-0 inset-x-0 h-10 bg-slate-950 justify-between items-center px-7 z-50 text-[10.5px] text-slate-300 font-mono select-none">
+        <div className="hidden md:flex absolute top-0 inset-x-0 h-10 bg-[#0f172a] justify-between items-center px-7 z-50 text-[10.5px] text-slate-300 font-mono select-none">
           <span className="font-bold tracking-tight text-white/95">০৯:২১</span>
 
-          {/* Pill shape dynamic island/notch */}
-          <div className="w-28 h-5.5 bg-black rounded-full absolute left-1/2 -translate-x-1/2 flex items-center justify-center border border-slate-800/80 shadow-inner">
-            <div className="w-3 h-3 bg-slate-900 rounded-full border border-slate-800 absolute left-3 flex items-center justify-center p-[1px]">
-              <div className="w-1.5 h-1.5 bg-blue-950 rounded-full"></div>
+          {/* Dynamic Island / Notch */}
+          <div className="w-28 h-5 bg-[#020617] rounded-full absolute left-1/2 -translate-x-1/2 flex items-center justify-center border border-slate-800/80 shadow-inner">
+            <div className="w-2.5 h-2.5 bg-slate-900 rounded-full border border-slate-800 absolute left-3 flex items-center justify-center p-[1px]">
+              <div className="w-1 h-1 bg-[#2563eb] rounded-full"></div>
             </div>
-            <div className="w-10 h-1 bg-slate-900 rounded-full absolute right-4"></div>
+            <div className="w-8 h-1 bg-slate-900 rounded-full absolute right-4"></div>
           </div>
 
-          <div className="flex items-center gap-1.5">
-            <span className="font-black text-[9px] text-[#22c55e]">5G</span>
-            {/* Wifi Icon */}
+          <div className="flex items-center gap-2">
+            <span className="font-black text-[9px] text-[#10b981]">5G</span>
             <div className="flex gap-[1px] items-end h-2.5">
-              <div className="w-[2.5px] h-1 bg-emerald-500 rounded-full"></div>
-              <div className="w-[2.5px] h-1.5 bg-emerald-500 rounded-full"></div>
-              <div className="w-[2.5px] h-2 bg-emerald-500 rounded-full"></div>
-              <div className="w-[2.5px] h-2.5 bg-emerald-500 rounded-full"></div>
+              <div className="w-[2.5px] h-1 bg-[#10b981] rounded-full"></div>
+              <div className="w-[2.5px] h-1.5 bg-[#10b981] rounded-full"></div>
+              <div className="w-[2.5px] h-2 bg-[#10b981] rounded-full"></div>
+              <div className="w-[2.5px] h-2.5 bg-[#10b981] rounded-full"></div>
             </div>
-            {/* Battery */}
-            <div className="w-5 h-2.5 border border-slate-400 rounded-sm p-[1px] flex items-center relative gap-[1px]">
-              <div className="bg-emerald-500 h-full w-[85%] rounded-[1px]"></div>
-              <div className="w-[1.5px] h-1 bg-slate-400 rounded-r-sm absolute -right-[2px] top-1/2 -translate-y-1/2"></div>
+            <div className="w-5 h-2.5 border border-slate-400 rounded-sm p-[1px] flex items-center relative">
+              <div className="bg-[#10b981] h-full w-[85%] rounded-[1px]"></div>
             </div>
           </div>
         </div>
 
+        {/* MEETING NOTIFICATION POPUP */}
+        {showNotificationPopup && !isLoading && !isBlocked && (
+          <div className="fixed inset-0 bg-[#0f172a]/65 backdrop-blur-md z-[100] flex items-center justify-center p-4 font-sans animate-fade-in">
+            <div className="w-full max-w-sm bg-[#eef2f7] rounded-[32px] border border-white/90 shadow-[14px_14px_32px_#b8c2d0,-14px_-14px_32px_#ffffff] p-6 relative overflow-hidden space-y-4.5 text-center my-auto transition-all">
+              
+              {/* TOP RIGHT CLOSE ICON */}
+              <button
+                type="button"
+                onClick={() => setShowNotificationPopup(false)}
+                className="absolute top-4 right-4 text-[#64748b] hover:text-[#0f172a] bg-[#eef2f7] h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold shadow-[3px_3px_6px_#d1d9e6,-3px_-3px_6px_#ffffff] active:shadow-[inset_2px_2px_4px_#d1d9e6] transition duration-150 cursor-pointer"
+                aria-label="Close"
+              >
+                ✕
+              </button>
 
+              {/* EMBOSSED TOP BADGE ICON */}
+              <div className="flex justify-center pt-1">
+                <div className="h-12 w-12 bg-gradient-to-br from-[#2563eb] to-[#1d4ed8] rounded-2xl flex items-center justify-center text-white shadow-[4px_4px_10px_#d1d9e6,-4px_-4px_10px_#ffffff] animate-bounce">
+                  <span className="text-xl">📢</span>
+                </div>
+              </div>
 
-        {/* --- DEMO MODE OVERLAY / CARD MODAL --- */}
+              {/* TITLE */}
+              <div className="space-y-1">
+                <span className="inline-flex items-center gap-1.5 bg-[#2563eb]/10 border border-[#2563eb]/25 px-4 py-1.5 rounded-full text-[12px] font-black text-[#2563eb] tracking-wide">
+                  📌 গুরুত্বপূর্ণ দিকনির্দেশনা
+                </span>
+              </div>
+
+              {/* MESSAGE CONTENT */}
+              <div className="bg-[#eef2f7] border border-white/90 rounded-2xl p-4 shadow-[inset_3px_3px_6px_#d1d9e6,inset_-3px_-3px_6px_#ffffff] space-y-2">
+                <p className="text-xs md:text-[13.5px] font-extrabold text-[#0f172a] leading-relaxed">
+                  সেমিনার মিটিংয়ে প্রবেশ করতে নিচে আপনার নাম লিখুন এবং <span className="text-[#2563eb] font-black underline decoration-2 underline-offset-2">“মিটিংয়ে প্রবেশ করুন”</span> বাটনে ক্লিক করুন।
+                </p>
+              </div>
+
+              {/* CLOSE / CONTINUE BUTTON */}
+              <button
+                type="button"
+                onClick={() => setShowNotificationPopup(false)}
+                className="w-full py-3.5 bg-gradient-to-r from-[#2563eb] to-[#1d4ed8] hover:from-[#1d4ed8] hover:to-[#1e40af] text-white font-black rounded-2xl shadow-[6px_6px_14px_rgba(37,99,235,0.35),-4px_-4px_10px_#ffffff] active:shadow-[inset_2px_2px_5px_rgba(0,0,0,0.3)] transition duration-155 text-[14px] cursor-pointer flex items-center justify-center gap-2"
+              >
+                <CheckCircle className="w-4 h-4 text-white shrink-0" />
+                <span>ঠিক আছে, প্রবেশ করুন</span>
+              </button>
+
+            </div>
+          </div>
+        )}
+
+        {/* DEMO MODE MODAL OVERLAY */}
         {demoModeStep !== null && (
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-5 font-sans animate-fade-in">
-            <div className="w-full max-w-sm bg-white rounded-3xl border border-slate-100 shadow-2xl p-6 relative overflow-hidden space-y-4 animate-scale-up">
-              {/* Decorative colors Accent */}
-              <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-emerald-400 via-teal-500 to-emerald-500"></div>
-
-              {/* Close Button */}
+          <div className="fixed inset-0 bg-[#0f172a]/60 backdrop-blur-sm z-[90] flex items-center justify-center p-4 font-sans animate-fade-in">
+            <div className="w-full max-w-sm bg-[#eef2f7] rounded-3xl border border-white/80 shadow-[10px_10px_20px_#b8c2d0,-10px_-10px_20px_#ffffff] p-6 relative overflow-hidden space-y-4 my-auto">
+              
               <button
                 type="button"
                 onClick={() => {
@@ -1065,35 +1042,34 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                   setDemoGmailInput("");
                   setDemoError(null);
                 }}
-                className="absolute top-4 right-4 text-slate-400 hover:text-slate-650 font-bold bg-slate-100 h-6 w-6 rounded-full flex items-center justify-center text-xs cursor-pointer"
+                className="absolute top-4 right-4 text-[#64748b] hover:text-[#0f172a] bg-[#eef2f7] h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold shadow-[3px_3px_6px_#d1d9e6,-3px_-3px_6px_#ffffff] active:shadow-[inset_2px_2px_4px_#d1d9e6] transition duration-150 cursor-pointer"
               >
                 ✕
               </button>
 
-              <div className="text-center space-y-1 pt-1">
-                <span className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full text-[10px] font-black text-emerald-800 shadow-xs uppercase">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <div className="text-center space-y-1.5 pt-1">
+                <span className="inline-flex items-center gap-1.5 bg-[#10b981]/10 border border-[#10b981]/30 px-3 py-1 rounded-full text-[10px] font-black text-[#059669] uppercase">
+                  <span className="h-2 w-2 rounded-full bg-[#10b981] animate-pulse"></span>
                   ডেমো ইউজার পোর্টাল
                 </span>
-                <h3 className="text-lg font-black text-slate-900 leading-tight">
+                <h3 className="text-lg font-black text-[#0f172a] leading-tight">
                   ইউনিক ডেমো সাইন-ইন
                 </h3>
-                <p className="text-[10px] text-slate-500 font-extrabold leading-relaxed">
-                  অ্যাডমিন প্যানেল কর্তৃক নির্ধারিত কোড দিয়ে প্রবেশ করুন।
+                <p className="text-[11px] text-[#64748b] font-medium leading-relaxed">
+                  অ্যাডমিন কর্তৃক নির্ধারিত কোড দিয়ে প্রবেশ করুন।
                 </p>
               </div>
 
               {demoError && (
-                <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-red-800 font-bold text-[10px] leading-relaxed text-center">
+                <div className="bg-[#fef2f2] border border-[#fecaca] rounded-2xl p-3 text-[#dc2626] font-bold text-[11px] leading-relaxed text-center shadow-[inset_2px_2px_4px_#fca5a5/20]">
                   ⚠️ {demoError}
                 </div>
               )}
 
-              {/* STEP 1: Enter Code */}
               {demoModeStep === "enter_code" && (
                 <form onSubmit={handleDemoCodeVerify} className="space-y-4">
-                  <div className="space-y-1.5 text-center">
-                    <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">
+                  <div className="space-y-2 text-center">
+                    <label className="text-[11px] font-black text-[#334155] uppercase tracking-wider block">
                       ৪ সংখ্যার কোড টাইপ করুন
                     </label>
                     <input
@@ -1106,28 +1082,24 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                       onChange={(e) =>
                         setDemoEnteredCode(e.target.value.replace(/\D/g, ""))
                       }
-                      className="w-32 mx-auto text-center px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 font-mono font-black text-2xl tracking-[0.5em] focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 focus:bg-white transition-all shadow-inner"
+                      className="w-36 mx-auto text-center px-4 py-3 bg-[#eef2f7] border border-white/60 rounded-2xl text-[#0f172a] font-mono font-black text-2xl tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-[#10b981] transition-all shadow-[inset_3px_3px_6px_#d1d9e6,inset_-3px_-3px_6px_#ffffff]"
                     />
-                    <p className="text-[9px] text-slate-400 font-semibold">
-                      অ্যাডমিন আইডি থেকে সেট করা ৪ সংখ্যার কোডটি দিন।
-                    </p>
                   </div>
 
                   <button
                     type="submit"
-                    className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-2xl shadow-[0_4px_12px_rgba(16,185,129,0.25)] transition duration-155 text-[12px] cursor-pointer"
+                    className="w-full py-3.5 bg-[#10b981] hover:bg-[#059669] text-white font-black rounded-2xl shadow-[5px_5px_10px_#b8c2d0,-5px_-5px_10px_#ffffff] active:shadow-[inset_2px_2px_5px_rgba(0,0,0,0.2)] transition duration-155 text-[12px] cursor-pointer"
                   >
                     কোড ভেরিফাই করুন
                   </button>
                 </form>
               )}
 
-              {/* STEP 2: Enter Student Name */}
               {demoModeStep === "enter_info" && (
                 <form onSubmit={handleDemoJoin} className="space-y-4">
                   <div className="space-y-3">
                     <div className="space-y-1">
-                      <label className="text-[10px] font-black text-slate-700 block uppercase">
+                      <label className="text-[11px] font-black text-[#334155] block uppercase">
                         আপনার সম্পূর্ণ নাম
                       </label>
                       <input
@@ -1136,7 +1108,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                         placeholder="যেমন: মোঃ সাকিব হাসান"
                         value={demoNameInput}
                         onChange={(e) => setDemoNameInput(e.target.value)}
-                        className="w-full px-4.5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                        className="w-full px-4 py-3 bg-[#eef2f7] border border-white/80 rounded-2xl text-xs font-semibold text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-[#10b981] shadow-[inset_3px_3px_6px_#d1d9e6,inset_-3px_-3px_6px_#ffffff]"
                       />
                     </div>
                   </div>
@@ -1144,7 +1116,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                   <button
                     type="submit"
                     disabled={isDemoSubmitting}
-                    className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-2xl shadow-[0_4px_12px_rgba(16,185,129,0.25)] transition duration-155 text-[12px] cursor-pointer flex items-center justify-center gap-2"
+                    className="w-full py-3.5 bg-[#10b981] hover:bg-[#059669] text-white font-black rounded-2xl shadow-[5px_5px_10px_#b8c2d0,-5px_-5px_10px_#ffffff] active:shadow-[inset_2px_2px_5px_rgba(0,0,0,0.2)] transition duration-155 text-[12px] cursor-pointer flex items-center justify-center gap-2"
                   >
                     {isDemoSubmitting ? (
                       <>
@@ -1164,68 +1136,68 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
           </div>
         )}
 
-        {/* LOADING STATE - Centered inside mobile frame */}
+        {/* LOADING STATE */}
         {isLoading && (
-          <div className="flex-1 flex flex-col items-center justify-center p-6 bg-slate-50 space-y-4 pt-14 text-center">
-            <div className="p-4 bg-white rounded-3xl shadow-md border border-slate-100 flex items-center justify-center">
-              <Loader2 className="h-9 w-9 animate-spin text-amber-500" />
+          <div className="flex-1 flex flex-col items-center justify-center p-6 bg-[#eef2f7] space-y-4 pt-14 text-center">
+            <div className="p-5 bg-[#eef2f7] rounded-3xl shadow-[8px_8px_16px_#d1d9e6,-8px_-8px_16px_#ffffff] border border-white/60 flex items-center justify-center">
+              <Loader2 className="h-9 w-9 animate-spin text-[#2563eb]" />
             </div>
             <div className="space-y-1">
-              <p className="text-slate-800 font-black text-sm">
+              <p className="text-[#0f172a] font-black text-sm">
                 ডিভাইস ভেরিফিকেশন চলছে
               </p>
-              <p className="text-slate-400 font-medium text-[10px]">
+              <p className="text-[#64748b] font-medium text-[11px]">
                 নিরাপত্তা ব্যবস্থা এবং আইপি অ্যাড্রেস সংযোগ পরীক্ষা হচ্ছে...
               </p>
             </div>
           </div>
         )}
 
-        {/* BLOCKED ACCESS-DENIED SCREEN - Center inside frame */}
+        {/* BLOCKED SCREEN */}
         {!isLoading && isBlocked && (
-          <div className="flex-1 flex flex-col justify-between p-6 bg-slate-50 pt-16">
+          <div className="flex-1 flex flex-col justify-between p-6 bg-[#eef2f7] pt-16">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.3 }}
               className="space-y-6 text-center pt-8"
             >
-              <div className="h-20 w-20 bg-rose-50 rounded-3xl shadow-inner flex items-center justify-center mx-auto border-2 border-rose-100">
-                <ShieldAlert className="h-11 w-11 text-rose-500" />
+              <div className="h-20 w-20 bg-[#eef2f7] rounded-3xl shadow-[8px_8px_16px_#d1d9e6,-8px_-8px_16px_#ffffff] flex items-center justify-center mx-auto border border-white/80">
+                <ShieldAlert className="h-10 w-10 text-[#dc2626]" />
               </div>
 
               <div className="space-y-3">
-                <h1 className="text-2xl font-black text-rose-600 tracking-tight">
+                <h1 className="text-2xl font-black text-[#dc2626] tracking-tight">
                   অ্যাক্সেস ব্লকড!
                 </h1>
 
                 {isVPN ? (
-                  <p className="text-slate-600 text-xs leading-relaxed px-2 font-medium">
+                  <p className="text-[#334155] text-xs leading-relaxed px-2 font-medium">
                     নিরাপত্তা জনিত কারণে{" "}
-                    <span className="font-extrabold text-rose-650 underline decoration-rose-400">
+                    <span className="font-extrabold text-[#dc2626] underline">
                       VPN বা প্রক্সি (Proxy Network)
                     </span>{" "}
                     ব্যবহার করে মিটিংয়ে জয়েন করা সম্পূর্ণরূপে নিষিদ্ধ। অনুগ্রহ
                     করে আপনার আসল ওয়াইফাই বা মোবাইল ইন্টারনেট ব্যবহার করুন।
                   </p>
                 ) : (
-                  <p className="text-slate-600 text-xs leading-relaxed px-2 font-medium">
+                  <p className="text-[#334155] text-xs leading-relaxed px-2 font-medium">
                     দুঃখিত, আমাদের সিকিউরিটি ফিল্টার আপনার{" "}
-                    <span className="font-extrabold text-rose-650">
+                    <span className="font-extrabold text-[#dc2626]">
                       ডিভাইস আইপি অথবা হার্ডওয়্যার আইডি
                     </span>{" "}
                     ব্লক করেছে। আপনি আর এই মিটিং সেশনের জন্য অ্যাক্সেস পাবেন না।
                   </p>
                 )}
 
-                <div className="bg-slate-200/80 border border-slate-300/40 px-4 py-2.5 rounded-2xl font-mono text-[10.5px] font-extrabold text-slate-700 mt-3 shadow-sm text-left space-y-1.5">
-                  <p className="flex justify-between border-b border-slate-300/50 pb-1.5">
+                <div className="bg-[#eef2f7] border border-white/80 px-4 py-3 rounded-2xl font-mono text-[11px] font-extrabold text-[#334155] mt-4 shadow-[inset_3px_3px_6px_#d1d9e6,inset_-3px_-3px_6px_#ffffff] text-left space-y-1.5">
+                  <p className="flex justify-between border-b border-[#cbd5e1]/40 pb-1.5">
                     <span>IP ADDRESS:</span>{" "}
-                    <span className="text-rose-600">{ipAddress}</span>
+                    <span className="text-[#dc2626]">{ipAddress}</span>
                   </p>
                   <p className="flex justify-between pt-0.5">
                     <span>USER ID (UID):</span>{" "}
-                    <span className="text-amber-600">{uid || "Unknown"}</span>
+                    <span className="text-[#2563eb]">{uid || "Unknown"}</span>
                   </p>
                 </div>
               </div>
@@ -1233,10 +1205,11 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
           </div>
         )}
 
+        {/* MARQUEE ANNOUNCEMENT */}
         {!isLoading && !isBlocked && noticeActive && noticeText.trim() && (
-          <div className="w-full bg-gradient-to-r from-[#02b396] to-[#1b6ffc] text-white py-2 px-3.5 overflow-hidden flex items-center gap-2 select-none shrink-0 z-40 shadow-md md:mt-10 mt-0">
-            <span className="inline-flex items-center gap-1.5 bg-white text-[#02b396] px-2 py-0.5 rounded-md text-[9px] font-black shrink-0 tracking-wide uppercase leading-none shadow-sm">
-              <Bell className="h-3 w-3 text-[#02b396] shrink-0 font-bold" />
+          <div className="w-full bg-[#1e293b] text-white py-2.5 px-4 overflow-hidden flex items-center gap-2 select-none shrink-0 z-40 shadow-[4px_4px_10px_#d1d9e6] md:mt-10 mt-0">
+            <span className="inline-flex items-center gap-1.5 bg-[#10b981] text-white px-2.5 py-0.5 rounded-md text-[9px] font-black shrink-0 tracking-wide uppercase leading-none shadow-sm">
+              <Bell className="h-3 w-3 shrink-0 font-bold" />
               <span>ঘোষণা</span>
             </span>
 
@@ -1244,26 +1217,24 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
               <marquee
                 scrollamount="3"
                 direction="left"
-                className="text-[11px] font-extrabold font-sans whitespace-nowrap text-white w-full"
+                className="text-[11.5px] font-extrabold font-sans whitespace-nowrap text-white/95 w-full"
               >
-                {noticeText} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ★ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {noticeText} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ★ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {noticeText}
+                {noticeText} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ★ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {noticeText}
               </marquee>
             </div>
           </div>
         )}
 
+        {/* MAIN FORM VIEW */}
         {!isLoading && !isBlocked && (
-          <div className="flex-1 overflow-y-auto pt-4 pb-8 flex flex-col bg-slate-50 relative animate-fade-in">
+          <div className="flex-1 overflow-y-auto pt-5 md:pt-3 pb-8 flex flex-col bg-[#eef2f7] relative animate-fade-in">
 
-            <div className="flex-1 flex flex-col justify-between space-y-6 px-5 mt-4">
-              {/* Premium Luxury Header Banner (Redesigned) */}
-              <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-[0_15px_35px_rgba(0,0,0,0.03)] space-y-5 shrink-0 relative overflow-hidden text-center">
-                {/* Decorative Premium Teal-Blue Elegant Top Gradient Line */}
-                <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-[#02b396] via-[#10b981] to-[#1b6ffc]"></div>
-                <div className="absolute -top-12 -right-12 w-28 h-28 bg-teal-500/[0.02] rounded-full blur-xl pointer-events-none"></div>
-                <div className="absolute -bottom-12 -left-12 w-28 h-28 bg-blue-500/[0.02] rounded-full blur-xl pointer-events-none"></div>
-
-                <div className="space-y-2.5">
+            <div className="flex-1 flex flex-col justify-between space-y-5 px-5 mt-2 md:mt-1">
+              
+              {/* NEOMORPHIC HEADER BRAND CARD */}
+              <div className="bg-[#eef2f7] rounded-3xl p-5 border border-white/80 shadow-[8px_8px_16px_#d1d9e6,-8px_-8px_16px_#ffffff] space-y-3.5 shrink-0 relative overflow-hidden text-center">
+                
+                <div className="space-y-1.5">
                   <div
                     onClick={() => {
                       setDemoModeStep("enter_code");
@@ -1272,60 +1243,90 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                       setDemoGmailInput("");
                       setDemoError(null);
                     }}
-                    className="inline-flex items-center gap-2 bg-gradient-to-r from-[#02b396]/8 to-[#1b6ffc]/8 border border-[#02b396]/25 px-4 py-1.5 rounded-full text-[10.5px] font-black text-[#02b396] shadow-[0_2px_12px_rgba(2,179,150,0.04)] uppercase tracking-widest select-none cursor-pointer hover:from-[#02b396]/15 hover:to-[#1b6ffc]/15 hover:border-[#02b396]/40 transition duration-150 active:scale-95"
+                    className="inline-flex items-center gap-2 bg-[#eef2f7] border border-white/90 px-4 py-1.5 rounded-full text-[11px] font-black text-[#10b981] shadow-[4px_4px_8px_#d1d9e6,-4px_-4px_8px_#ffffff] uppercase tracking-wider select-none cursor-pointer active:shadow-[inset_2px_2px_4px_#d1d9e6] transition duration-150"
                   >
-                    <span className="relative flex h-2 w-2">
-                      <span
-                        className="animate-custom-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"
-                      ></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500 shadow-[0_0_6px_#10b981]"></span>
+                    <span className="relative flex h-2.5 w-2.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#10b981] opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#10b981]"></span>
                     </span>
                     <span>সেশন লাইভ পোর্টাল</span>
                   </div>
 
-                  <h1 className="text-2xl font-black tracking-tight text-slate-900 font-sans">
-                    <span className="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 bg-clip-text text-transparent">
-                      UNITY
-                    </span>
-                    <span className="bg-gradient-to-r from-[#02b396] to-[#1b6ffc] bg-clip-text text-transparent ml-1.5">
-                      EARNING
-                    </span>
+                  <h1 className="text-2xl font-black tracking-tight text-[#0f172a] font-sans">
+                    UNITY <span className="text-[#2563eb]">EARNING</span>
                   </h1>
-                  <p className="text-[12px] font-bold text-slate-500 tracking-wide">
+                  <p className="text-[12px] font-extrabold text-[#64748b] tracking-wide">
                     অফিসিয়াল সেশন জয়েনিং পোর্টাল
                   </p>
                 </div>
 
-                {meetingDate && (
-                  <div className="inline-flex items-center gap-2.5 bg-blue-50/60 border border-blue-200 text-blue-900 px-4 py-2.5 rounded-2xl text-[12.5px] font-black shadow-sm">
-                    <span className="flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-full bg-[#1b6ffc] text-white shadow-sm">
-                      <Calendar className="h-4 w-4" />
-                    </span>
-                    <span>
-                      সেশন সময়:{" "}
-                      <span className="text-[#1b6ffc] font-black">
-                        {formatMeetingDateTime(meetingDate, meetingTime)}
-                      </span>
-                    </span>
-                  </div>
-                )}
+                {/* PROMINENT NEOMORPHIC MEETING SCHEDULE / TIME CARD */}
+                {(() => {
+                  const schedule = getMeetingDateAndParts(meetingDate, meetingTime);
+                  return (
+                    <div className="pt-2 w-full max-w-[340px] mx-auto select-none">
+                      <div className="bg-[#eef2f7] border border-white/90 rounded-2xl p-3 shadow-[inset_3px_3px_6px_#d1d9e6,inset_-3px_-3px_6px_#ffffff] space-y-2.5">
+                        
+                        {/* HEADER BADGE */}
+                        <div className="flex items-center justify-between px-1">
+                          <div className="flex items-center gap-1.5 text-[10.5px] font-black text-[#64748b] uppercase tracking-wider">
+                            <span className="relative flex h-2 w-2">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#2563eb] opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-[#2563eb]"></span>
+                            </span>
+                            <span>সেশন সময়সূচি</span>
+                          </div>
+                          <span className="text-[9.5px] font-black text-[#2563eb] bg-[#2563eb]/10 border border-[#2563eb]/20 px-2 py-0.5 rounded-full uppercase">
+                            অফিসিয়াল
+                          </span>
+                        </div>
+
+                        {/* 2-COLUMN NEOMORPHIC CARDS FOR DATE & TIME */}
+                        <div className="grid grid-cols-2 gap-2">
+                          {/* DATE BLOCK */}
+                          <div className="bg-[#eef2f7] border border-white/90 rounded-xl p-2.5 shadow-[4px_4px_8px_#d1d9e6,-4px_-4px_8px_#ffffff] flex flex-col items-center justify-center text-center space-y-1">
+                            <div className="flex items-center gap-1 text-[10px] font-extrabold text-[#64748b]">
+                              <Calendar className="h-3 w-3 text-[#2563eb]" />
+                              <span>তারিখ</span>
+                            </div>
+                            <span className="text-[11.5px] font-black text-[#0f172a] leading-tight">
+                              {schedule.formattedDate}
+                            </span>
+                          </div>
+
+                          {/* TIME BLOCK */}
+                          <div className="bg-[#eef2f7] border border-white/90 rounded-xl p-2.5 shadow-[4px_4px_8px_#d1d9e6,-4px_-4px_8px_#ffffff] flex flex-col items-center justify-center text-center space-y-1">
+                            <div className="flex items-center gap-1 text-[10px] font-extrabold text-[#64748b]">
+                              <Clock className="h-3 w-3 text-[#10b981] animate-pulse" />
+                              <span>সময়</span>
+                            </div>
+                            <span className="text-[11.5px] font-black text-[#2563eb] leading-tight">
+                              {schedule.formattedTime}
+                            </span>
+                          </div>
+                        </div>
+
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
-              {/* Warnings / System Information */}
-              <div className="space-y-4">
-                {errorMessage && (
-                  <div className="bg-red-50 border border-red-200 rounded-2xl p-3.5 flex items-start gap-2.5 shadow-sm">
-                    <AlertCircle className="h-4.5 w-4.5 text-red-500 shrink-0 mt-0.5" />
-                    <p className="text-xs text-red-800 font-bold leading-normal">
+              {/* WARNINGS & ALERTS */}
+              <div className="space-y-3.5">
+                {errorMessage && !errorMessage.includes("কোটা") && !errorMessage.includes("Quota") && !errorMessage.includes("ফায়ারবেস") && (
+                  <div className="bg-[#fef2f2] border border-[#fecaca] rounded-2xl p-4 flex items-start gap-2.5 shadow-[inset_2px_2px_4px_#fca5a5/20]">
+                    <AlertCircle className="h-5 w-5 text-[#dc2626] shrink-0 mt-0.5" />
+                    <p className="text-xs text-[#991b1b] font-bold leading-normal">
                       {errorMessage}
                     </p>
                   </div>
                 )}
 
                 {!meetingActive && (
-                  <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 flex items-start gap-2.5 shadow-sm">
-                    <AlertCircle className="h-4.5 w-4.5 text-amber-600 shrink-0 mt-0.5" />
-                    <p className="text-[10.5px] text-amber-900 leading-normal font-medium">
+                  <div className="bg-[#fffbe2] border border-[#fef08a] rounded-2xl p-4 flex items-start gap-2.5 shadow-[inset_2px_2px_4px_#fef08a/30]">
+                    <AlertCircle className="h-5 w-5 text-[#d97706] shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-[#78350f] leading-normal font-semibold">
                       এই কাউন্সেলিং সেশনটি বৰ্তমানে অ্যাডমিন কর্তৃক নিষ্ক্রিয়
                       রাখা হয়েছে। আপনি আপনার নাম সাবমিট করে রাখতে পারেন, কিন্তু
                       মিটিং লিংক অন না করা পর্যন্ত রিডাইরেক্ট হতে পারবেন না।
@@ -1334,111 +1335,91 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                 )}
 
                 {!publicLinkActive && (
-                  <div className="bg-[#fff1f2]/90 border-2 border-dashed border-[#f43f5e]/40 rounded-3xl p-5 shadow-sm text-center space-y-3.5 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-20 h-20 bg-[#f43f5e]/[0.02] rounded-full blur-xl pointer-events-none"></div>
-
-                    <div className="mx-auto w-12 h-12 bg-[#ffe4e6] rounded-full flex items-center justify-center animate-pulse">
-                      <ShieldAlert className="h-6 w-6 text-[#e11d48]" />
+                  <div className="bg-[#eef2f7] border border-[#fca5a5] rounded-3xl p-5 shadow-[inset_3px_3px_6px_#d1d9e6,inset_-3px_-3px_6px_#ffffff] text-center space-y-3">
+                    <div className="mx-auto w-10 h-10 bg-[#fee2e2] rounded-2xl flex items-center justify-center shadow-[3px_3px_6px_#d1d9e6]">
+                      <ShieldAlert className="h-5 w-5 text-[#dc2626]" />
                     </div>
 
-                    <div className="space-y-1.5">
-                      <h3 className="font-sans font-black text-[13.5px] text-[#9f1239] uppercase tracking-wide">
+                    <div className="space-y-1">
+                      <h3 className="font-black text-[13px] text-[#991b1b] uppercase tracking-wide">
                         ⚠️ জয়েনিং অপশন বর্তমানে বন্ধ রয়েছে
                       </h3>
-                      <p className="text-[11.5px] text-[#be123c] font-black leading-relaxed px-1">
+                      <p className="text-[11.5px] text-[#b91c1c] font-bold leading-relaxed">
                         সম্মানিত এডমিন বর্তমানে সাধারণ লিংকের মাধ্যমে নাম লিখে
                         জয়েন করার অপশনটি বন্ধ (অফ) করে রেখেছেন।
                       </p>
-                      <p className="text-[10px] text-slate-500 font-bold leading-normal px-2">
+                      <p className="text-[10px] text-[#64748b] font-medium leading-normal">
                         এডমিন জয়েন করার অপশন অন করার সাথে সাথে নাম টাইপ করার
-                        বক্সটি এখানে সচল হবে। অনুগ্রহ করে লাইভ সেশনের জন্য
-                        অপেক্ষা করুন।
+                        বক্সটি এখানে সচল হবে। অনুগ্রহ করে অপেক্ষা করুন।
                       </p>
                     </div>
 
-                    <div className="bg-white border border-[#ffe4e6] rounded-2xl py-2 px-4 shadow-inner text-[10px] font-black text-[#be123c] inline-flex items-center gap-1.5 select-none hover:scale-101 transition duration-155">
-                      <Clock className="h-3.5 w-3.5 text-[#e11d48] animate-spin" />
-                      <span>
-                        স্ট্যাটাস: অ্যাডমিন কর্তৃক সাধারণ জয়েন নিষ্ক্রিয়
-                      </span>
+                    <div className="bg-[#eef2f7] border border-white/80 rounded-2xl py-2 px-3 shadow-[3px_3px_6px_#d1d9e6,-3px_-3px_6px_#ffffff] text-[10px] font-black text-[#dc2626] inline-flex items-center gap-1.5 select-none">
+                      <Clock className="h-3.5 w-3.5 text-[#dc2626] animate-spin" />
+                      <span>স্ট্যাটাস: অ্যাডমিন কর্তৃক সাধারণ জয়েন নিষ্ক্রিয়</span>
                     </div>
                   </div>
                 )}
 
-                {/* Form Elements with Redesigned Name Input & Submission wrapper */}
-                <form onSubmit={handleJoin} className="space-y-6">
-                  {/* 1. Name Input Box with premium flashing glowing halo (লাইট জ্বলবে নিবে) */}
+                {/* FORM & INPUT - PROMINENT & HIGH-VISIBILITY */}
+                <form onSubmit={handleJoin} className="space-y-4">
                   {publicLinkActive && (
-                    <div className="relative">
-                      {/* Very gentle, soft, premium ambient glowing halo pulsing slowly (মৃদু লাইট আস্তে আস্তে জ্বলবে নিবে) */}
-                      <div
-                        className="absolute -inset-1 bg-[#02b396] rounded-[28px] blur-md opacity-25 pointer-events-none animate-pulse"
-                        style={{ animationDuration: "4s" }}
-                      ></div>
-
-                      <div className="relative bg-white rounded-3xl p-5 border border-[#02b396]/60 shadow-[0_8px_30px_rgba(2,179,150,0.06)] space-y-4 z-10 transition-all duration-300">
-                        <div className="flex items-center justify-between px-0.5">
-                          <div className="flex items-center gap-2">
-                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#02b396] text-white">
-                              <User className="h-3.5 w-3.5" />
-                            </span>
-                            <span className="text-slate-800 font-extrabold text-[13px] flex items-center gap-2">
-                              <span className="relative flex h-2 w-2">
-                                <span
-                                  className="absolute inline-flex h-full w-full rounded-full bg-[#02b396] opacity-50 animate-ping"
-                                  style={{ animationDuration: "3s" }}
-                                ></span>
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-[#02b396] shadow-[0_0_4px_#02b396]"></span>
-                              </span>
+                    <div className="bg-[#eef2f7] rounded-3xl p-5 border-2 border-[#10b981]/80 shadow-[10px_10px_20px_#d1d9e6,-10px_-10px_20px_#ffffff] space-y-4 relative overflow-hidden animate-container-glow">
+                      
+                      {/* Section Header */}
+                      <div className="flex items-center justify-between border-b border-[#cbd5e1]/50 pb-3">
+                        <div className="flex items-center gap-2.5">
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl bg-[#10b981] text-white shadow-[3px_3px_6px_#d1d9e6] animate-pulse">
+                            <User className="h-4.5 w-4.5" />
+                          </span>
+                          <div>
+                            <span className="text-[#0f172a] font-black text-sm flex items-center gap-1.5 leading-tight">
                               আপনার সঠিক নাম টাইপ করুন
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="relative group">
-                          {/* Extremely soft and gentle pulsing halo behind the input box */}
-                          <div
-                            className="absolute -inset-0.5 bg-[#02b396] rounded-2xl blur-sm opacity-20 pointer-events-none animate-pulse"
-                            style={{ animationDuration: "4s" }}
-                          ></div>
-
-                          <div className="relative">
-                            <span className="absolute inset-y-0 left-0 pl-4.5 flex items-center text-[#02b396]">
-                              <User className="h-5 w-5 opacity-70" />
-                            </span>
-                            <input
-                              type="text"
-                              required
-                              placeholder="আপনার নাম এখানে লিখুন..."
-                              value={fullName}
-                              onChange={(e) => setFullName(e.target.value)}
-                              className="w-full pl-12.5 pr-12 py-4 bg-[#f0fdfa]/30 border border-[#02b396] focus:bg-white text-slate-950 focus:border-[#1b6ffc] focus:ring-4 focus:ring-[#02b396]/15 rounded-2xl text-[15px] font-black transition-all shadow-inner"
-                            />
-                            {/* Gentle, soft breathing indicator inside the input box */}
-                            <span className="absolute inset-y-0 right-4 flex items-center pointer-events-none">
                               <span className="relative flex h-2 w-2">
-                                <span
-                                  className="absolute inline-flex h-full w-full rounded-full bg-[#02b396] opacity-40 animate-ping"
-                                  style={{ animationDuration: "3s" }}
-                                ></span>
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-[#02b396] shadow-[0_0_6px_#02b396]"></span>
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#10b981] opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-[#10b981]"></span>
                               </span>
                             </span>
+                            <p className="text-[10.5px] text-[#64748b] font-extrabold mt-0.5">অফিসিয়াল হাজিরা ও অনবোর্ডিং এর জন্য বাধ্যতামূলক</p>
                           </div>
                         </div>
+                      </div>
 
-                        <div className="bg-[#fff1f2] border border-[#ffe2e2] px-4 py-2.5 rounded-2xl flex items-center justify-center gap-2 select-none">
-                          <AlertTriangle className="h-4 w-4 text-[#f59e0b] shrink-0" />
-                          <p className="text-[11px] text-rose-600 font-extrabold leading-normal">
-                            নাম ভুল হলে মিটিং থেকে সরাসরি বের করে দেয়া হতে পারে।
-                          </p>
+                      {/* Large High-Contrast Name Input Field with Pulsing Glow */}
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none z-10">
+                          <div className="h-8 w-8 bg-[#10b981]/20 rounded-xl flex items-center justify-center text-[#10b981]">
+                            <User className="h-5 w-5 font-bold" />
+                          </div>
                         </div>
+                        <input
+                          type="text"
+                          required
+                          placeholder="আপনার নাম এখানে লিখুন.."
+                          value={fullName}
+                          onChange={(e) => setFullName(e.target.value)}
+                          className="w-full pl-13 pr-10 py-4 bg-[#eef2f7] border-2 border-[#10b981] text-[#0f172a] placeholder-[#64748b] focus:outline-none focus:ring-4 focus:ring-[#10b981]/35 focus:border-[#10b981] rounded-2xl text-[15px] font-black transition-all duration-200 animate-green-glow"
+                        />
+                        <span className="absolute inset-y-0 right-4 flex items-center pointer-events-none z-10">
+                          {fullName.trim() ? (
+                            <span className="h-5 w-5 bg-[#10b981] rounded-full flex items-center justify-center text-white text-[10px] font-black shadow-sm">✓</span>
+                          ) : (
+                            <span className="h-3 w-3 rounded-full bg-[#10b981] animate-ping"></span>
+                          )}
+                        </span>
+                      </div>
+
+                      <div className="bg-[#fef2f2] border border-[#fecaca] px-3.5 py-2 rounded-2xl flex items-center justify-center gap-2 select-none shadow-[inset_1px_1px_3px_#fca5a5/20]">
+                        <AlertTriangle className="h-4 w-4 text-[#dc2626] shrink-0" />
+                        <p className="text-[11px] text-[#dc2626] font-bold leading-normal">
+                          নাম ভুল হলে মিটিং থেকে সরাসরি বের করে দেয়া হতে পারে।
+                        </p>
                       </div>
                     </div>
                   )}
 
-                  {/* 2. Submit Trigger (Placed right under Name Input) */}
-                  <div className="relative">
+                  {/* SUBMIT BUTTON WITH LIGHTING GLOW */}
+                  <div>
                     <button
                       type="submit"
                       disabled={
@@ -1447,10 +1428,10 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                         ipAddress === "যাচাই হচ্ছে..." ||
                         !publicLinkActive
                       }
-                      className={`w-full py-5 text-white font-black rounded-2xl transition-all duration-300 cursor-pointer text-center flex items-center justify-center gap-2 text-[15px] border ${
+                      className={`w-full py-4 text-white font-black rounded-2xl transition-all duration-200 cursor-pointer text-center flex items-center justify-center gap-2 text-[15px] ${
                         publicLinkActive
-                          ? "bg-gradient-to-r from-[#02b396] to-[#1b6ffc] hover:from-[#02a085] hover:to-[#175ed4] shadow-[0_10px_25px_-5px_rgba(2,179,150,0.35)] hover:shadow-[0_12px_30px_-5px_rgba(2,179,150,0.45)] border-[#02b396]/20 active:scale-[0.98] disabled:opacity-50"
-                          : "bg-slate-200 text-slate-400 border-slate-300 cursor-not-allowed opacity-65 shadow-none"
+                          ? "bg-[#10b981] hover:bg-[#059669] shadow-[6px_6px_14px_rgba(16,185,129,0.35),-4px_-4px_10px_#ffffff] active:shadow-[inset_2px_2px_5px_rgba(0,0,0,0.2)] active:scale-[0.99] disabled:opacity-50 animate-button-lighting"
+                          : "bg-[#cbd5e1] text-[#64748b] cursor-not-allowed opacity-70 shadow-none"
                       }`}
                     >
                       {ipAddress === "যাচাই হচ্ছে..." ? (
@@ -1459,7 +1440,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                           <span>নিরাপত্তা ভেরিফাই করা হচ্ছে...</span>
                         </div>
                       ) : isSubmitting ? (
-                        <div className="flex flex-col items-center gap-1 py-0.5">
+                        <div className="flex flex-col items-center gap-1">
                           <Loader2 className="h-5 w-5 animate-spin text-white" />
                           <span className="text-[10px] font-bold animate-pulse">
                             লিঙ্ক রিকোয়েস্ট হচ্ছে, অপেক্ষা করুন...
@@ -1467,47 +1448,41 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                         </div>
                       ) : !publicLinkActive ? (
                         <div className="flex items-center justify-center gap-2 px-1">
-                          <AlertCircle className="h-5 w-5 text-white animate-pulse" />
-                          <span className="text-white/80">
-                            জয়েনিং সেশন অ্যাডমিন কর্তৃক নিষ্ক্রিয় (অফ)
-                          </span>
+                          <AlertCircle className="h-5 w-5 text-white" />
+                          <span>জয়েনিং সেশন অ্যাডমিন কর্তৃক নিষ্ক্রিয়</span>
                         </div>
                       ) : (
                         <div className="flex items-center justify-center gap-2 px-1">
-                          <CheckCircle
-                            className="h-5 w-5 text-white"
-                            strokeWidth={2.5}
-                          />
+                          <CheckCircle className="h-5 w-5 text-white" strokeWidth={2.5} />
                           <span>মিটিংয়ে প্রবেশ করুন</span>
                         </div>
                       )}
                     </button>
                   </div>
 
-                  {/* 3. Rules Container (Successfully relocated to the bottom of the form block) */}
-                  <div className="bg-gradient-to-br from-[#faf8ff] to-[#f4f1ff] border border-violet-200/80 rounded-3xl p-5.5 space-y-4 shadow-sm relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-24 h-24 bg-violet-500/[0.02] rounded-full blur-xl pointer-events-none"></div>
-
-                    <div className="flex items-center gap-2 font-black text-sm text-[#4c1d95] border-b border-violet-200/50 pb-2.5">
-                      <AlertCircle className="h-5 w-5 shrink-0 text-[#7c3aed]" />
+                  {/* RULES CONTAINER */}
+                  <div className="bg-[#eef2f7] border border-white/80 rounded-3xl p-5 space-y-3.5 shadow-[inset_3px_3px_6px_#d1d9e6,inset_-3px_-3px_6px_#ffffff]">
+                    
+                    <div className="flex items-center gap-2 font-black text-xs text-[#0f172a] border-b border-[#cbd5e1]/40 pb-2">
+                      <AlertCircle className="h-4.5 w-4.5 shrink-0 text-[#2563eb]" />
                       <h2>কাউন্সেলিং সেশন রুলস:</h2>
                     </div>
 
-                    <ul className="space-y-3.5 text-[12.5px] text-[#3f3b5c] list-none pl-0.5 leading-relaxed font-bold">
+                    <ul className="space-y-2.5 text-[12px] text-[#334155] list-none pl-0.5 leading-relaxed font-bold">
                       <li className="flex items-start gap-2.5">
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 text-[10px] font-black shadow-inner">
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#2563eb] text-white text-[10px] font-black shadow-sm">
                           ১
                         </span>
                         <span>
                           মিটিংয়ে ঢুকেই প্রথম একটি{" "}
-                          <strong className="text-red-700 font-extrabold underline decoration-red-300">
+                          <strong className="text-[#dc2626] font-black underline">
                             স্ক্রিনশট (Screenshot)
                           </strong>{" "}
                           নিয়ে কাউন্সেলরকে ইনবক্স করুন।
                         </span>
                       </li>
                       <li className="flex items-start gap-2.5">
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 text-[10px] font-black shadow-inner">
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#2563eb] text-white text-[10px] font-black shadow-sm">
                           ২
                         </span>
                         <span>
@@ -1516,7 +1491,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                         </span>
                       </li>
                       <li className="flex items-start gap-2.5">
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 text-[10px] font-black shadow-inner">
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#2563eb] text-white text-[10px] font-black shadow-sm">
                           ৩
                         </span>
                         <span>
@@ -1525,7 +1500,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                         </span>
                       </li>
                       <li className="flex items-start gap-2.5">
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 text-[10px] font-black shadow-inner">
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#2563eb] text-white text-[10px] font-black shadow-sm">
                           ৪
                         </span>
                         <span>
@@ -1533,7 +1508,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                         </span>
                       </li>
                       <li className="flex items-start gap-2.5">
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 text-[10px] font-black shadow-inner">
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#2563eb] text-white text-[10px] font-black shadow-sm">
                           ৫
                         </span>
                         <span>
@@ -1546,14 +1521,15 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                 </form>
               </div>
 
-              {/* Verified Badge */}
-              <div className="bg-white px-3.5 py-2.5 rounded-2xl border border-slate-200/60 flex flex-col sm:flex-row items-center justify-between text-[10px] text-slate-500 shadow-sm font-semibold select-none gap-2">
+              {/* FOOTER VERIFIED BADGE */}
+              <div className="bg-[#eef2f7] px-4 py-3 rounded-2xl border border-white/80 flex flex-col sm:flex-row items-center justify-between text-[11px] text-[#64748b] shadow-[4px_4px_8px_#d1d9e6,-4px_-4px_8px_#ffffff] font-bold select-none gap-2">
                 <div className="flex items-center gap-1.5">
+                  <Lock className="h-3.5 w-3.5 text-[#10b981]" />
                   <span>নিরাপদ সংযোগ কানেক্টেড</span>
                 </div>
                 <span>
                   IP:{" "}
-                  <code className="text-amber-600 font-mono font-bold">
+                  <code className="text-[#0f172a] font-mono font-black">
                     {ipAddress === "Unknown" ? "যাচাই করা অসম্ভব" : ipAddress}
                   </code>
                 </span>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { db } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
-import { ShieldCheck, LogIn, ArrowRight, Loader2, Video } from 'lucide-react';
+import { ShieldCheck, LogIn, ArrowRight, Loader2, Video, Lock } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface WelcomePageProps {
@@ -21,7 +21,7 @@ export default function WelcomePage({ onNavigateToAdmin, onNavigateToJoin }: Wel
 
     try {
       setIsVerifying(true);
-      const code = meetingCode.trim().replaceAll('join/', '').replaceAll('/', ''); // handles copy-paste of paths
+      const code = meetingCode.trim().replaceAll('join/', '').replaceAll('/', '');
       
       const meetRef = doc(db, 'meetings', code);
       const meetSnap = await getDoc(meetRef);
@@ -39,103 +39,106 @@ export default function WelcomePage({ onNavigateToAdmin, onNavigateToJoin }: Wel
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-900 flex flex-col justify-center items-center p-0 md:p-6 select-text overflow-x-hidden">
+    <div className="min-h-screen bg-[#eef2f7] text-[#1e293b] flex flex-col justify-center items-center p-0 md:p-6 select-text overflow-x-hidden font-sans">
       
       {/* PHONE FRAME CHASSIS (Desktop Only) */}
-      <div className="w-full min-h-screen md:min-h-[820px] md:max-w-[400px] md:h-[820px] md:border-[12px] md:border-slate-850 md:rounded-[48px] md:shadow-2xl bg-slate-50 flex flex-col relative overflow-hidden">
+      <div className="w-full min-h-screen md:min-h-[820px] md:max-w-[420px] md:h-[820px] md:border-[10px] md:border-[#334155] md:rounded-[48px] md:shadow-[14px_14px_28px_#d1d9e6,-14px_-14px_28px_#ffffff] bg-[#eef2f7] flex flex-col relative overflow-hidden transition-all duration-300">
         
         {/* PHONE NOTCH / STATUS BAR (Desktop Only) */}
-        <div className="hidden md:flex absolute top-0 inset-x-0 h-9 bg-slate-900 justify-between items-center px-6 z-50 text-[10px] text-slate-400 font-mono">
-          <span>09:21 AM</span>
-          <div className="w-24 h-4 bg-black rounded-b-2xl absolute left-1/2 -translate-x-1/2 flex items-center justify-center">
-            <div className="w-3 h-1.5 bg-[#1e293b] rounded-full"></div>
+        <div className="hidden md:flex absolute top-0 inset-x-0 h-10 bg-[#0f172a] justify-between items-center px-7 z-50 text-[10.5px] text-slate-300 font-mono select-none">
+          <span className="font-bold tracking-tight text-white/95">09:21 AM</span>
+          <div className="w-28 h-5 bg-[#020617] rounded-full absolute left-1/2 -translate-x-1/2 flex items-center justify-center border border-slate-800/80 shadow-inner">
+            <div className="w-2.5 h-2.5 bg-slate-900 rounded-full border border-slate-800 absolute left-3 flex items-center justify-center p-[1px]">
+              <div className="w-1 h-1 bg-[#2563eb] rounded-full"></div>
+            </div>
+            <div className="w-8 h-1 bg-slate-900 rounded-full absolute right-4"></div>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span>5G</span>
-            <div className="w-4 h-2 opacity-80 border border-slate-400 rounded-sm p-[1px] flex items-center">
-              <div className="bg-slate-400 h-full w-2"></div>
+          <div className="flex items-center gap-2">
+            <span className="font-black text-[9px] text-[#10b981]">5G</span>
+            <div className="w-5 h-2.5 border border-slate-400 rounded-sm p-[1px] flex items-center relative">
+              <div className="bg-[#10b981] h-full w-[85%] rounded-[1px]"></div>
             </div>
           </div>
         </div>
 
         {/* MAIN SCROLLABLE CONTENT */}
-        <div className="flex-1 overflow-y-auto pt-6 md:pt-14 pb-8 px-5 flex flex-col justify-between bg-slate-50">
+        <div className="flex-1 overflow-y-auto pt-6 md:pt-14 pb-8 px-5 flex flex-col justify-between bg-[#eef2f7]">
           
           <motion.div 
             initial={{ opacity: 0, scale: 0.97 }}
             animate={{ opacity: 1, scale: 1 }}
             className="flex-1 flex flex-col justify-between space-y-6"
           >
-            {/* Header / Brand */}
-            <div className="text-center space-y-3 pt-2">
-              <span className="inline-block px-3 py-1 bg-amber-500/10 border border-amber-500/20 text-amber-600 rounded-full text-[10px] font-black uppercase tracking-wider">
-                Unity Earning কাউন্সেলিং ওয়েবসাইট
+            {/* Header / Brand Card */}
+            <div className="bg-[#eef2f7] p-5 rounded-3xl border border-white/80 shadow-[8px_8px_16px_#d1d9e6,-8px_-8px_16px_#ffffff] text-center space-y-2.5 pt-4">
+              <span className="inline-block px-3 py-1 bg-[#eef2f7] border border-white/90 text-[#10b981] rounded-full text-[10px] font-black uppercase tracking-wider shadow-[3px_3px_6px_#d1d9e6,-3px_-3px_6px_#ffffff]">
+                UNITY EARNING
               </span>
-              <h1 className="text-2xl font-black text-slate-900 tracking-tight leading-short">
+              <h1 className="text-2xl font-black text-[#0f172a] tracking-tight leading-tight">
                 কাউন্সেলিং মিটিং সিস্টেম
               </h1>
-              <p className="text-xs text-slate-500 leading-relaxed max-w-[280px] mx-auto">
-                রিয়েল-টাইম সুরক্ষিত অনবোর্ডিং পোর্টাল। কাউন্সেলর এবং নিবন্ধিত শিক্ষার্থীদের জন্য অফিসিয়াল ওয়েবসাইট।
+              <p className="text-xs text-[#64748b] font-medium leading-relaxed max-w-[280px] mx-auto">
+                রিয়েল-টাইম সুরক্ষিত অনবোর্ডিং পোর্টাল। কাউন্সেলর এবং শিক্ষার্থীদের জন্য অফিসিয়াল প্ল্যাটফর্ম।
               </p>
             </div>
 
             {/* Form Segment */}
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-              <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
-                <Video className="h-4.5 w-4.5 text-amber-555 text-amber-500 shrink-0" />
-                <h2>সক্রিয় কাউন্সেলিং সেশনে যোগ দিন</h2>
+            <div className="bg-[#eef2f7] p-5 rounded-3xl border border-white/80 shadow-[8px_8px_16px_#d1d9e6,-8px_-8px_16px_#ffffff] space-y-4">
+              <div className="flex items-center gap-2 text-[#0f172a] font-black text-sm">
+                <Video className="h-5 w-5 text-[#2563eb] shrink-0" />
+                <h2>সক্রিয় সেশনে যোগ দিন</h2>
               </div>
               
               {errorMessage && (
-                <p className="text-xs text-red-600 font-medium bg-red-50 p-2.5 border border-red-200 rounded-lg">
+                <div className="bg-[#fef2f2] border border-[#fecaca] p-3 rounded-2xl text-xs text-[#dc2626] font-bold leading-relaxed shadow-[inset_2px_2px_4px_#fca5a5/20]">
                   {errorMessage}
-                </p>
+                </div>
               )}
 
-              <form onSubmit={handleVerifyAndJoin} className="space-y-3">
+              <form onSubmit={handleVerifyAndJoin} className="space-y-3.5">
                 <input
                   type="text"
                   required
                   placeholder="মিটিং কোড দিন (যেমন: meet_abc)"
                   value={meetingCode}
                   onChange={(e) => setMeetingCode(e.target.value)}
-                  className="w-full px-4 py-3 bg-[#fcfcfc] border border-slate-200 rounded-xl text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition animate-none"
+                  className="w-full px-4 py-3.5 bg-[#eef2f7] border border-white/80 text-[#0f172a] placeholder-[#94a3b8] text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#10b981] rounded-2xl shadow-[inset_3px_3px_6px_#d1d9e6,inset_-3px_-3px_6px_#ffffff] transition"
                 />
                 
                 <button
                   type="submit"
                   disabled={isVerifying || !meetingCode.trim()}
-                  className="w-full py-3 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-amber-400 text-xs font-black rounded-xl shadow transition duration-150 flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="w-full py-3.5 bg-[#10b981] hover:bg-[#059669] disabled:opacity-50 text-white text-xs font-black rounded-2xl shadow-[5px_5px_10px_#d1d9e6,-5px_-5px_10px_#ffffff] active:shadow-[inset_2px_2px_5px_rgba(0,0,0,0.2)] transition duration-150 flex items-center justify-center gap-2 cursor-pointer"
                 >
                   {isVerifying ? (
-                    <Loader2 className="h-4 w-4 animate-spin text-amber-400" />
+                    <Loader2 className="h-4 w-4 animate-spin text-white" />
                   ) : (
                     <>
                       <span>মিটিংয়ে প্রবেশ করুন</span>
-                      <ArrowRight className="h-3.5 w-3.5 text-amber-400" />
+                      <ArrowRight className="h-4 w-4 text-white" />
                     </>
                   )}
                 </button>
               </form>
             </div>
 
-            {/* Trust and Actions */}
-            <div className="space-y-4 pt-2">
+            {/* Trust and Admin Actions */}
+            <div className="space-y-3 pt-1">
               <button
                 onClick={onNavigateToAdmin}
-                className="w-full px-4 py-3 bg-white hover:bg-slate-50 hover:text-slate-900 transition text-slate-600 font-bold text-xs rounded-xl border border-slate-200 shadow-sm flex items-center justify-center gap-2 group cursor-pointer"
+                className="w-full px-4 py-3 bg-[#eef2f7] hover:bg-white text-[#334155] font-black text-xs rounded-2xl border border-white/80 shadow-[5px_5px_10px_#d1d9e6,-5px_-5px_10px_#ffffff] active:shadow-[inset_2px_2px_4px_#d1d9e6] flex items-center justify-center gap-2 group cursor-pointer transition"
               >
-                <LogIn className="h-4 w-4 text-slate-400 group-hover:text-amber-500 transition" />
+                <LogIn className="h-4 w-4 text-[#2563eb] group-hover:scale-110 transition" />
                 <span>ম্যানেজমেন্ট লগইন (অ্যাডমিন)</span>
               </button>
 
-              <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-200">
-                <div className="h-8 w-8 bg-blue-50 border border-blue-100 rounded-lg flex items-center justify-center shrink-0">
-                  <ShieldCheck className="h-4.5 w-4.5 text-blue-600" />
+              <div className="flex items-center gap-3 bg-[#eef2f7] p-3.5 rounded-2xl border border-white/80 shadow-[4px_4px_8px_#d1d9e6,-4px_-4px_8px_#ffffff]">
+                <div className="h-8 w-8 bg-[#eef2f7] border border-white rounded-xl flex items-center justify-center shrink-0 shadow-[2px_2px_4px_#d1d9e6]">
+                  <ShieldCheck className="h-4.5 w-4.5 text-[#10b981]" />
                 </div>
                 <div>
-                  <h3 className="text-xs font-bold text-slate-800">আইপি নিরাপত্তা সক্রিয় আছে</h3>
-                  <p className="text-[10px] text-slate-500 mt-0.5">যেকোনো অনাকাঙ্ক্ষিত অ্যাক্সেস প্রতিহত করা হয়</p>
+                  <h3 className="text-xs font-black text-[#0f172a]">আইপি নিরাপত্তা সক্রিয় আছে</h3>
+                  <p className="text-[10px] text-[#64748b] mt-0.5 font-medium">যেকোনো অনাকাঙ্ক্ষিত অ্যাক্সেস প্রতিহত করা হয়</p>
                 </div>
               </div>
             </div>

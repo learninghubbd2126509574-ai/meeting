@@ -9,7 +9,21 @@ interface RouteState {
 }
 
 export default function App() {
-  const [currentRoute, setCurrentRoute] = useState<RouteState>({ type: 'welcome' });
+  const [currentRoute, setCurrentRoute] = useState<RouteState>(() => {
+    // Initial evaluation right away on mount to avoid flashing WelcomePage
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const joinParam = params.get('join') || params.get('id') || params.get('meetingId') || params.get('meeting');
+      if (joinParam) {
+        return { type: 'join', meetingId: joinParam };
+      }
+      if (params.get('page') === 'welcome' || window.location.hash.startsWith('#/welcome')) {
+        return { type: 'welcome' };
+      }
+    }
+    // Default to admin login directly
+    return { type: 'admin' };
+  });
 
   // 1. Resilient Universal Route Extractor
   function parseRoute(): RouteState {
@@ -26,6 +40,9 @@ export default function App() {
       console.log("Parsed join route with meetingId:", joinParam);
       return { type: 'join', meetingId: joinParam };
     }
+    if (pageParam === 'welcome') {
+      return { type: 'welcome' };
+    }
     if (pageParam === 'admin') {
       return { type: 'admin' };
     }
@@ -34,24 +51,31 @@ export default function App() {
     }
 
     // Hash matching: #/admin, #/join/meet_123
-    if (hash.startsWith('#/admin')) {
-      return { type: 'admin' };
-    }
     if (hash.startsWith('#/join/')) {
       const meetingId = hash.substring(7).trim().split('?')[0];
       return { type: 'join', meetingId };
     }
-
-    // Standard path matching: /admin, /join/meet_123
-    if (path === '/admin' || path === '/admin/') {
+    if (hash.startsWith('#/welcome')) {
+      return { type: 'welcome' };
+    }
+    if (hash.startsWith('#/admin')) {
       return { type: 'admin' };
     }
+
+    // Standard path matching: /admin, /join/meet_123
     if (path.startsWith('/join/')) {
       const meetingId = path.substring(6).trim().split('/')[0];
       return { type: 'join', meetingId };
     }
+    if (path === '/welcome' || path === '/welcome/') {
+      return { type: 'welcome' };
+    }
+    if (path === '/admin' || path === '/admin/') {
+      return { type: 'admin' };
+    }
 
-    return { type: 'welcome' };
+    // Default route: DIRECTLY show Admin Login screen!
+    return { type: 'admin' };
   }
 
   // Handle address bar updates (popstate event listener)

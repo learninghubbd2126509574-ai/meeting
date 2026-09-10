@@ -6,6 +6,8 @@ import {
   handleFirestoreError,
   OperationType,
 } from "../firebase";
+import * as dbService from "../dbService";
+import { SUPABASE_SETUP_SQL, SUPABASE_URL } from "../supabase";
 import {
   signInAnonymously,
   signInWithPopup,
@@ -53,9 +55,19 @@ import {
   Laptop,
   Tablet,
   Monitor,
+  Trophy,
+  Crown,
+  Medal,
+  Award,
+  Plus,
+  Edit2,
+  UserPlus,
+  TrendingUp,
+  X,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { Meeting, Participant, BlockedIP } from "../types";
+import { Meeting, Participant, BlockedIP, LeaderboardMember } from "../types";
+
 
 // Helper function to extract user-friendly device info from userAgent
 function getDeviceDetails(uaString?: string) {
@@ -176,12 +188,42 @@ export default function AdminPanel() {
     text: string;
   } | null>(null);
 
-  // Real-time Data
-  const [meetings, setMeetings] = useState<Meeting[]>([]);
-  const [participants, setParticipants] = useState<Participant[]>([]);
-  const [demoParticipants, setDemoParticipants] = useState<any[]>([]);
-  const [blockedIPs, setBlockedIPs] = useState<BlockedIP[]>([]);
+  // Helper to load cached state from localStorage so figures appear instantly without 0 0 flashing
+  const getCachedArray = <T,>(key: string): T[] => {
+    try {
+      const data = localStorage.getItem(key);
+      return data ? JSON.parse(data) : [];
+    } catch {
+      return [];
+    }
+  };
+
+  // Real-time Data with instant local-storage cache hydration
+  const [meetings, setMeetings] = useState<Meeting[]>(() => getCachedArray<Meeting>("ue_cache_meetings"));
+  const [participants, setParticipants] = useState<Participant[]>(() => getCachedArray<Participant>("ue_cache_participants"));
+  const [demoParticipants, setDemoParticipants] = useState<any[]>(() => getCachedArray<any>("ue_cache_demo_participants"));
+  const [blockedIPs, setBlockedIPs] = useState<BlockedIP[]>(() => getCachedArray<BlockedIP>("ue_cache_blocked_ips"));
+  const [hasCachedData] = useState(() => {
+    try {
+      return !!(localStorage.getItem("ue_cache_meetings") || localStorage.getItem("ue_cache_participants"));
+    } catch {
+      return false;
+    }
+  });
   const [isDataLoading, setIsDataLoading] = useState(true);
+  const [quotaExceeded, setQuotaExceeded] = useState(false);
+  const [isDeletingAllMeetings, setIsDeletingAllMeetings] = useState(false);
+  const [isDeletingAllParticipants, setIsDeletingAllParticipants] = useState(false);
+
+  const checkQuotaError = (err: any) => {
+    const msg = err?.message || String(err || "");
+    const code = err?.code || "";
+    if (code === "resource-exhausted" || msg.includes("Quota") || msg.includes("quota")) {
+      setQuotaExceeded(true);
+      return true;
+    }
+    return false;
+  };
 
   // Meeting form
   const [meetInput, setMeetInput] = useState("");
@@ -189,6 +231,8 @@ export default function AdminPanel() {
   const [isSavingLink, setIsSavingLink] = useState(false);
   const [isMeetLinkActive, setIsMeetLinkActive] = useState(true);
   const [copysuccess, setCopysuccess] = useState(false);
+  const [showSupabaseModal, setShowSupabaseModal] = useState(false);
+  const [copiedSql, setCopiedSql] = useState(false);
 
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState("");
@@ -199,6 +243,14 @@ export default function AdminPanel() {
     useState(getTodayDateString);
   const [demoSearchQuery, setDemoSearchQuery] = useState("");
   const [demoDateFilter, setDemoDateFilter] = useState(getTodayDateString);
+
+  // Manual Block/Unblock tool states
+  const [manualBlockInput, setManualBlockInput] = useState("");
+  const [manualBlockLoading, setManualBlockLoading] = useState(false);
+  const [manualBlockMessage, setManualBlockMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
 
   // --- BULK ACTION STATES ---
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<
@@ -282,6 +334,7 @@ export default function AdminPanel() {
           setDemoCode("1234");
         }
       } catch (err) {
+        checkQuotaError(err);
         console.warn(
           "Settings lookup restricted before auth, using fallback.",
           err,
@@ -292,139 +345,82 @@ export default function AdminPanel() {
     fetchSettings();
   }, []);
 
-  // 2. Real-time Listeners for Dashboard UI
+  // 2. Real-time Listeners for Dashboard UI (Supabase Primary, Firestore Dual-write backup)
   useEffect(() => {
     if (!isAuthenticated) return;
 
     setIsDataLoading(true);
 
-    const qMeetings = query(
-      collection(db, "meetings"),
-      orderBy("createdAt", "desc"),
-    );
-    const unsubMeetings = onSnapshot(
-      qMeetings,
-      (snap) => {
-        const list: Meeting[] = [];
-        snap.forEach((doc) => {
-          list.push({ id: doc.id, ...doc.data() } as Meeting);
-        });
-        setMeetings(list);
-        // Pre-fill active link if present
+    // Supabase Subscriptions (No quota limits, high-speed realtime)
+    const unsubSupabaseMeetings = dbService.subscribeMeetings((list) => {
+      if (list) {
+        setMeetings(list as any);
+        try {
+          localStorage.setItem("ue_cache_meetings", JSON.stringify(list));
+        } catch (e) {}
         if (list.length > 0) {
           const activeItem = list.find((m) => m.active) || list[0];
           setMeetInput(activeItem.googleMeetLink);
           setIsMeetLinkActive(activeItem.active);
           const origin = window.location.origin.trim().replace(/\/$/, "");
           setGeneratedLink(`${origin}/?join=${activeItem.id}`);
+        } else {
+          setMeetInput("");
+          setIsMeetLinkActive(false);
+          setGeneratedLink(null);
         }
         setIsDataLoading(false);
-      },
-      (error) => {
-        handleFirestoreError(error, OperationType.LIST, "meetings");
-      },
-    );
+      }
+    });
 
-    const unsubParticipants = onSnapshot(
-      collection(db, "participants"),
-      (snap) => {
-        const list: Participant[] = [];
-        snap.forEach((doc) => {
-          list.push({ id: doc.id, ...doc.data() } as Participant);
-        });
-        // Sort in-memory descending by joinedAt safely to avoid potential Firestore index query bugs
-        list.sort((a, b) => {
-          const tA = a.joinedAt?.toDate
-            ? a.joinedAt.toDate().getTime()
-            : a.joinedAt
-              ? new Date(a.joinedAt).getTime()
-              : 0;
-          const tB = b.joinedAt?.toDate
-            ? b.joinedAt.toDate().getTime()
-            : b.joinedAt
-              ? new Date(b.joinedAt).getTime()
-              : 0;
-          return tB - tA;
-        });
-        setParticipants(list);
-      },
-      (error) => {
-        handleFirestoreError(error, OperationType.LIST, "participants");
-      },
-    );
+    const unsubSupabaseParticipants = dbService.subscribeParticipants((list) => {
+      if (list) {
+        setParticipants(list as any);
+        try {
+          localStorage.setItem("ue_cache_participants", JSON.stringify(list));
+        } catch (e) {}
+      }
+    });
 
-    const qBlocked = query(
-      collection(db, "blockedIPs"),
-      orderBy("blockedAt", "desc"),
-    );
-    const unsubBlocked = onSnapshot(
-      qBlocked,
-      (snap) => {
-        const list: BlockedIP[] = [];
-        snap.forEach((doc) => {
-          list.push({ ip: doc.id, ...doc.data() } as BlockedIP);
-        });
-        setBlockedIPs(list);
-      },
-      (error) => {
-        handleFirestoreError(error, OperationType.LIST, "blockedIPs");
-      },
-    );
+    const unsubSupabaseDemo = dbService.subscribeDemoParticipants((list) => {
+      if (list) {
+        setDemoParticipants(list as any);
+        try {
+          localStorage.setItem("ue_cache_demo_participants", JSON.stringify(list));
+        } catch (e) {}
+      }
+    });
 
-    // Real-time Settings Listener
-    const unsubSettings = onSnapshot(
-      doc(db, "adminSettings", "settings"),
-      (snap) => {
-        if (snap.exists()) {
-          const data = snap.data();
-          setSavedPassword(data.password || "4012");
-          setPreventRepeatJoins(data.preventRepeatJoins !== false);
-          setPublicLinkActive(data.publicLinkActive !== false);
-          setNoticeText(data.noticeText || "");
-          setNoticeActive(data.noticeActive === true);
-          setDemoModeActive(data.demoModeActive === true);
-          setDemoCode(data.demoCode || "1234");
-        }
-      },
-    );
+    const unsubSupabaseBlocked = dbService.subscribeBlockedIPs((list) => {
+      if (list) {
+        setBlockedIPs(list as any);
+        try {
+          localStorage.setItem("ue_cache_blocked_ips", JSON.stringify(list));
+        } catch (e) {}
+      }
+    });
 
-    // Real-time Demo Participants Listener
-    const unsubDemoParticipants = onSnapshot(
-      collection(db, "demoParticipants"),
-      (snap) => {
-        const list: any[] = [];
-        snap.forEach((doc) => {
-          list.push({ id: doc.id, ...doc.data() });
-        });
-        // Sort in-memory descending by joinedAt to prevent query error of index or missing field exclusions
-        list.sort((a, b) => {
-          const tA = a.joinedAt?.toDate
-            ? a.joinedAt.toDate().getTime()
-            : a.joinedAt
-              ? new Date(a.joinedAt).getTime()
-              : 0;
-          const tB = b.joinedAt?.toDate
-            ? b.joinedAt.toDate().getTime()
-            : b.joinedAt
-              ? new Date(b.joinedAt).getTime()
-              : 0;
-          return tB - tA;
-        });
-        setDemoParticipants(list);
-      },
-      (error) => {
-        console.warn("Failed to stream demoParticipants:", error);
-      },
-    );
+    const unsubSupabaseSettings = dbService.subscribeAdminSettings((data) => {
+      if (data) {
+        if (data.password) setSavedPassword(data.password);
+        if (data.preventRepeatJoins !== undefined) setPreventRepeatJoins(data.preventRepeatJoins);
+        if (data.publicLinkActive !== undefined) setPublicLinkActive(data.publicLinkActive);
+        if (data.noticeText !== undefined) setNoticeText(data.noticeText);
+        if (data.noticeActive !== undefined) setNoticeActive(data.noticeActive);
+        if (data.demoModeActive !== undefined) setDemoModeActive(data.demoModeActive);
+        if (data.demoCode) setDemoCode(data.demoCode);
+      }
+    });
 
     return () => {
-      unsubMeetings();
-      unsubParticipants();
-      unsubDemoParticipants();
-      unsubBlocked();
-      unsubSettings();
+      unsubSupabaseMeetings();
+      unsubSupabaseParticipants();
+      unsubSupabaseDemo();
+      unsubSupabaseBlocked();
+      unsubSupabaseSettings();
     };
   }, [isAuthenticated]);
+
 
   // 3. Handle Password Login
   async function handlePasswordLogin(e: React.FormEvent) {
@@ -446,8 +442,8 @@ export default function AdminPanel() {
             new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 2500))
           ]);
         } catch (authErr: any) {
-          console.error(
-            "Anonymous authentication failed or timed out:",
+          console.warn(
+            "Anonymous authentication notice or fallback:",
             authErr,
           );
           
@@ -480,7 +476,7 @@ export default function AdminPanel() {
             );
             setSavedPassword("4012");
           } catch (writeError) {
-            console.error(
+            console.warn(
               "Failed to sync Firestore settings to 4012",
               writeError,
             );
@@ -552,19 +548,38 @@ export default function AdminPanel() {
       const meetingId = `meet_${Math.random().toString(36).substring(2, 8)}`;
       const meetRef = doc(db, "meetings", meetingId);
 
-      await setDoc(meetRef, {
+      const meetingPayload = {
         googleMeetLink: meetInput.trim(),
         createdAt: serverTimestamp(),
         active: isMeetLinkActive,
         meetingDate: meetingDateInput,
         meetingTime: meetingTimeInput,
+      };
+
+      // Save to Supabase
+      await dbService.saveMeeting({
+        id: meetingId,
+        googleMeetLink: meetInput.trim(),
+        active: isMeetLinkActive,
+        meetingDate: meetingDateInput,
+        meetingTime: meetingTimeInput,
       });
+
+      const newMeetingObj = {
+        id: meetingId,
+        googleMeetLink: meetInput.trim(),
+        active: isMeetLinkActive,
+        meetingDate: meetingDateInput,
+        meetingTime: meetingTimeInput,
+        createdAt: new Date().toISOString(),
+      };
+      setMeetings((prev) => [newMeetingObj as any, ...prev.filter((m) => m.id !== meetingId)]);
 
       const origin = window.location.origin.trim().replace(/\/$/, "");
       const fullJoinUrl = `${origin}/?join=${meetingId}`;
       setGeneratedLink(fullJoinUrl);
     } catch (err: any) {
-      handleFirestoreError(err, OperationType.WRITE, "meetings/new");
+      console.warn("Save meeting notice:", err);
     } finally {
       setIsSavingLink(false);
     }
@@ -573,24 +588,59 @@ export default function AdminPanel() {
   // 6. Update individual active states of existing meeting
   async function toggleMeetingActive(mId: string, currentStatus: boolean) {
     try {
-      const docRef = doc(db, "meetings", mId);
-      await updateDoc(docRef, { active: !currentStatus });
+      await dbService.updateMeetingStatus(mId, !currentStatus);
+      setMeetings((prev) =>
+        prev.map((m) => (m.id === mId ? { ...m, active: !currentStatus } : m))
+      );
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `meetings/${mId}`);
+      console.warn("Toggle meeting active notice:", err);
     }
   }
 
   // 6.2. Permanent delete of meeting session
   async function handleDeleteMeeting(mId: string) {
     try {
-      const docRef = doc(db, "meetings", mId);
-      await deleteDoc(docRef);
+      await dbService.deleteMeeting(mId);
+      setMeetings((prev) => prev.filter((m) => m.id !== mId));
       if (generatedLink && generatedLink.includes(mId)) {
         setGeneratedLink(null);
       }
       setDeletingMeetingId(null);
     } catch (err: any) {
-      handleFirestoreError(err, OperationType.DELETE, `meetings/${mId}`);
+      console.warn("Delete meeting notice:", err);
+    }
+  }
+
+  // 6.3. Permanent delete of all created meeting links
+  async function handleDeleteAllMeetings() {
+    if (meetings.length === 0) {
+      alert("ডিলিট করার জন্য কোনো মিটিং লিংক পাওয়া যায়নি।");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `সতর্কতা: আপনি কি নিশ্চিতভাবে সমস্ত (${meetings.length}টি) তৈরি করা মিটিং লিংক ডিলিট করতে চান? লিংকগুলো মুছে ফেলা হলে শিক্ষার্থীরা পূর্বে তৈরি করা লিংকে প্রবেশ করতে পারবে না।`
+    );
+    if (!confirmed) return;
+
+    setIsDeletingAllMeetings(true);
+    try {
+      // Delete from Supabase
+      await dbService.deleteAllMeetings();
+
+      // Clear local state and cache instantly
+      setMeetings([]);
+      setGeneratedLink(null);
+      try {
+        localStorage.removeItem("ue_cache_meetings");
+      } catch (e) {}
+
+      alert("সমস্ত মিটিং লিংক সফলভাবে মুছে ফেলা হয়েছে।");
+    } catch (err: any) {
+      console.error("Failed to delete all meetings:", err);
+      alert("মিটিং লিংকগুলো ডিলিট করতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।");
+    } finally {
+      setIsDeletingAllMeetings(false);
     }
   }
 
@@ -690,7 +740,8 @@ export default function AdminPanel() {
     try {
       setIsUpdatingPwd(true);
       const docRef = doc(db, "adminSettings", "settings");
-      await setDoc(docRef, { password: newPassword }, { merge: true });
+      setDoc(docRef, { password: newPassword }, { merge: true }).catch((err) => checkQuotaError(err));
+      await dbService.saveAdminSettings({ password: newPassword });
       setSavedPassword(newPassword);
       setPwdMessage({
         type: "success",
@@ -701,7 +752,7 @@ export default function AdminPanel() {
     } catch (err: any) {
       setPwdMessage({
         type: "error",
-        text: "পাসওয়ার্ড আপডেট করতে ব্যর্থ হয়েছে। ফায়ারস্টোর কানেকশন চেক করুন।",
+        text: "পাসওয়ার্ড আপডেট করতে ব্যর্থ হয়েছে।",
       });
     } finally {
       setIsUpdatingPwd(false);
@@ -711,11 +762,11 @@ export default function AdminPanel() {
   // 8. Toggle Repeat Joins
   async function toggleRepeatJoinsSetting() {
     try {
-      // Toggle setting (Note: JoinPage no longer enforces this but we keep the DB updated)
       const nextVal = !preventRepeatJoins;
       setPreventRepeatJoins(nextVal);
       const docRef = doc(db, "adminSettings", "settings");
-      await setDoc(docRef, { preventRepeatJoins: nextVal }, { merge: true });
+      setDoc(docRef, { preventRepeatJoins: nextVal }, { merge: true }).catch(() => {});
+      await dbService.saveAdminSettings({ preventRepeatJoins: nextVal });
     } catch (err) {
       console.error("Failed to update repeat joins settings:", err);
     }
@@ -727,7 +778,8 @@ export default function AdminPanel() {
       const nextVal = !publicLinkActive;
       setPublicLinkActive(nextVal);
       const docRef = doc(db, "adminSettings", "settings");
-      await setDoc(docRef, { publicLinkActive: nextVal }, { merge: true });
+      setDoc(docRef, { publicLinkActive: nextVal }, { merge: true }).catch(() => {});
+      await dbService.saveAdminSettings({ publicLinkActive: nextVal });
     } catch (err) {
       console.error("Failed to update public link active settings:", err);
     }
@@ -740,14 +792,18 @@ export default function AdminPanel() {
     try {
       setIsUpdatingNotice(true);
       const docRef = doc(db, "adminSettings", "settings");
-      await setDoc(
+      setDoc(
         docRef,
         {
           noticeText: noticeText.trim(),
           noticeActive: noticeActive,
         },
         { merge: mergeFirestoreNotice() },
-      );
+      ).catch(() => {});
+      await dbService.saveAdminSettings({
+        noticeText: noticeText.trim(),
+        noticeActive,
+      });
       setNoticeMessage({
         type: "success",
         text: "চলমান নোটিশ এবং এর স্থিতি সফলভাবে সেভ করা হয়েছে!",
@@ -773,7 +829,8 @@ export default function AdminPanel() {
       const nextVal = !demoModeActive;
       setDemoModeActive(nextVal);
       const docRef = doc(db, "adminSettings", "settings");
-      await setDoc(docRef, { demoModeActive: nextVal }, { merge: true });
+      setDoc(docRef, { demoModeActive: nextVal }, { merge: true }).catch(() => {});
+      await dbService.saveAdminSettings({ demoModeActive: nextVal });
     } catch (err) {
       console.error("Failed to update demo mode status:", err);
     }
@@ -792,7 +849,8 @@ export default function AdminPanel() {
     try {
       setIsUpdatingDemoCode(true);
       const docRef = doc(db, "adminSettings", "settings");
-      await setDoc(docRef, { demoCode: demoCode }, { merge: true });
+      setDoc(docRef, { demoCode: demoCode }, { merge: true }).catch(() => {});
+      await dbService.saveAdminSettings({ demoCode });
       setDemoCodeMessage({
         type: "success",
         text: "ডেমো সিক্রেট কোড সফলভাবে আপডেট হয়েছে!",
@@ -860,46 +918,63 @@ export default function AdminPanel() {
     if (!window.confirm("আপনি কি নিশ্চিতভাবে এই ডেমো লগটি মুছে ফেলতে চান?"))
       return;
     try {
-      await deleteDoc(doc(db, "demoParticipants", id));
+      deleteDoc(doc(db, "demoParticipants", id)).catch((err) => checkQuotaError(err));
+      await dbService.deleteDemoParticipant(id);
+      setDemoParticipants((prev) => prev.filter((d) => d.id !== id));
     } catch (err) {
-      console.error("Failed to delete demo log:", err);
+      console.warn("Delete demo log notice:", err);
     }
   }
 
   // 9. Block user (adds IP to blockedIPs, blockedDevices, blockedUIDs and flags participant as blocked)
   async function handleBlockUser(participant: Participant) {
     try {
-      // Block the IP
+      // Block in Supabase
+      await dbService.blockIP({
+        ip: participant.ip,
+        deviceId: participant.deviceId,
+        uid: participant.uid || "Unknown",
+        browserFingerprint: participant.browserFingerprint || "",
+        name: participant.name,
+      });
+      if (participant.deviceId && participant.deviceId !== "Unknown") {
+        await dbService.blockDevice(participant.deviceId, participant.ip, participant.uid);
+      }
+      if (participant.uid && participant.uid !== "Unknown") {
+        await dbService.blockUID(participant.uid, participant.ip, participant.deviceId);
+      }
+
+      // Block the IP in Firestore
       const blockRef = doc(db, "blockedIPs", participant.ip);
-      await setDoc(blockRef, {
+      setDoc(blockRef, {
         ip: participant.ip,
         deviceId: participant.deviceId,
         uid: participant.uid || "Unknown",
         blockedAt: serverTimestamp(),
         name: participant.name,
-      });
+      }).catch((err) => checkQuotaError(err));
 
       // Also block the Device ID for persistent blocking (bypasses VPN)
       if (participant.deviceId && participant.deviceId !== "Unknown") {
         const deviceRef = doc(db, "blockedDevices", participant.deviceId);
-        await setDoc(deviceRef, {
+        setDoc(deviceRef, {
           deviceId: participant.deviceId,
           browserFingerprint: participant.browserFingerprint || "",
           uid: participant.uid || "Unknown",
           blockedAt: serverTimestamp(),
           name: participant.name,
-        });
+        }).catch(() => {});
       }
 
       // Also block the UID
       if (participant.uid && participant.uid !== "Unknown") {
         const uidRef = doc(db, "blockedUIDs", participant.uid);
-        await setDoc(uidRef, {
+        setDoc(uidRef, {
           uid: participant.uid,
           deviceId: participant.deviceId || "Unknown",
           blockedAt: serverTimestamp(),
           name: participant.name,
-        });
+        }).catch(() => {});
       }
 
       // Mark all participant entries with same IP, Device ID or UID as blocked
@@ -915,14 +990,17 @@ export default function AdminPanel() {
 
       for (const p of matchedParts) {
         const pRef = doc(db, "participants", p.id);
-        await updateDoc(pRef, { blocked: true });
+        updateDoc(pRef, { blocked: true }).catch(() => {});
       }
-    } catch (err: any) {
-      handleFirestoreError(
-        err,
-        OperationType.WRITE,
-        `blocks/${participant.ip}`,
+      setParticipants((prev) =>
+        prev.map((p) =>
+          p.ip === participant.ip || (p.deviceId !== "Unknown" && p.deviceId === participant.deviceId)
+            ? { ...p, blocked: true }
+            : p
+        )
       );
+    } catch (err: any) {
+      console.warn("Block user notice:", err);
     }
   }
 
@@ -1021,25 +1099,34 @@ export default function AdminPanel() {
   // 10. Unblock user (removes IP from blockedIPs, blockedDevices, blockedUIDs and updates participant flags)
   async function handleUnblockUser(
     targetIP: string,
-    targetDeviceId?: string,
-    targetUid?: string,
+    targetDeviceId?: string | null,
+    targetUid?: string | null,
   ) {
     try {
-      // Unblock IP
-      const blockRef = doc(db, "blockedIPs", targetIP);
-      await deleteDoc(blockRef);
-
-      // Unblock Device if exists
-      if (targetDeviceId && targetDeviceId !== "Unknown") {
-        const deviceRef = doc(db, "blockedDevices", targetDeviceId);
-        await deleteDoc(deviceRef);
+      // 1. Unblock IP in Supabase
+      if (targetIP) {
+        await dbService.unblockIP(targetIP);
+        const blockRef = doc(db, "blockedIPs", targetIP);
+        deleteDoc(blockRef).catch(() => {});
       }
 
-      // Unblock UID if exists
+      // 2. Unblock Device if exists
+      if (targetDeviceId && targetDeviceId !== "Unknown") {
+        await dbService.unblockDevice(targetDeviceId);
+        const deviceRef = doc(db, "blockedDevices", targetDeviceId);
+        deleteDoc(deviceRef).catch(() => {});
+      }
+
+      // 3. Unblock UID if exists
       let finalUid = targetUid;
       if (!finalUid) {
-        // Look up UID from participants list matching targetIP or targetDeviceId
         const found = participants.find(
+          (p) =>
+            p.ip === targetIP ||
+            (targetDeviceId &&
+              targetDeviceId !== "Unknown" &&
+              p.deviceId === targetDeviceId),
+        ) || demoParticipants.find(
           (p) =>
             p.ip === targetIP ||
             (targetDeviceId &&
@@ -1052,40 +1139,145 @@ export default function AdminPanel() {
       }
 
       if (finalUid && finalUid !== "Unknown") {
+        await dbService.unblockUID(finalUid);
         const uidRef = doc(db, "blockedUIDs", finalUid);
-        await deleteDoc(uidRef);
+        deleteDoc(uidRef).catch(() => {});
       }
 
+      // 4. Update participants in Firestore
       const matchedParts = participants.filter(
         (p) =>
-          p.ip === targetIP ||
-          (targetDeviceId &&
-            targetDeviceId !== "Unknown" &&
-            p.deviceId === targetDeviceId) ||
+          (targetIP && p.ip === targetIP) ||
+          (targetDeviceId && targetDeviceId !== "Unknown" && p.deviceId === targetDeviceId) ||
           (finalUid && finalUid !== "Unknown" && p.uid === finalUid),
       );
 
       for (const p of matchedParts) {
         const pRef = doc(db, "participants", p.id);
-        await updateDoc(pRef, { blocked: false });
+        updateDoc(pRef, { blocked: false }).catch(() => {});
       }
 
-      // Also unblock matched demo participants
+      // 5. Also unblock matched demo participants
       const matchedDemoParts = demoParticipants.filter(
         (p) =>
-          p.ip === targetIP ||
-          (targetDeviceId &&
-            targetDeviceId !== "Unknown" &&
-            p.deviceId === targetDeviceId) ||
+          (targetIP && p.ip === targetIP) ||
+          (targetDeviceId && targetDeviceId !== "Unknown" && p.deviceId === targetDeviceId) ||
           (finalUid && finalUid !== "Unknown" && p.uid === finalUid),
       );
 
       for (const p of matchedDemoParts) {
         const demoRef = doc(db, "demoParticipants", p.id);
-        await updateDoc(demoRef, { blocked: false });
+        updateDoc(demoRef, { blocked: false }).catch(() => {});
       }
+
+      // 6. Update local react state
+      setBlockedIPs((prev) =>
+        prev.filter(
+          (b) =>
+            b.ip !== targetIP &&
+            (!targetDeviceId || b.deviceId !== targetDeviceId) &&
+            (!finalUid || b.uid !== finalUid)
+        )
+      );
+      setParticipants((prev) =>
+        prev.map((p) =>
+          (targetIP && p.ip === targetIP) ||
+          (targetDeviceId && p.deviceId === targetDeviceId) ||
+          (finalUid && p.uid === finalUid)
+            ? { ...p, blocked: false }
+            : p
+        )
+      );
+      setDemoParticipants((prev) =>
+        prev.map((p) =>
+          (targetIP && p.ip === targetIP) ||
+          (targetDeviceId && p.deviceId === targetDeviceId) ||
+          (finalUid && p.uid === finalUid)
+            ? { ...p, blocked: false }
+            : p
+        )
+      );
     } catch (err: any) {
-      handleFirestoreError(err, OperationType.DELETE, `blocks/${targetIP}`);
+      console.warn("Unblock user notice:", err);
+    }
+  }
+
+  // 10.5 Manual Block or Unblock by IP, UID, or Device ID directly
+  async function handleManualUnblockOrBlock(action: "unblock" | "block") {
+    const rawVal = manualBlockInput.trim();
+    if (!rawVal) return;
+    setManualBlockLoading(true);
+    setManualBlockMessage(null);
+
+    try {
+      let targetIP = "";
+      let targetDeviceId = "";
+      let targetUid = "";
+
+      if (rawVal.toLowerCase().startsWith("uid-")) {
+        targetUid = rawVal;
+      } else if (rawVal.toLowerCase().startsWith("dev_")) {
+        targetDeviceId = rawVal;
+      } else {
+        targetIP = rawVal;
+      }
+
+      if (action === "unblock") {
+        await handleUnblockUser(targetIP, targetDeviceId, targetUid);
+        setManualBlockMessage({
+          type: "success",
+          text: `সফলভাবে আনব্লক করা হয়েছে: ${rawVal}`,
+        });
+      } else {
+        if (targetIP) {
+          await dbService.blockIP({
+            ip: targetIP,
+            name: "ম্যানুয়াল ব্লক",
+            deviceId: targetDeviceId,
+            uid: targetUid,
+          });
+          const blockRef = doc(db, "blockedIPs", targetIP);
+          await setDoc(blockRef, {
+            ip: targetIP,
+            deviceId: targetDeviceId || "Unknown",
+            uid: targetUid || "Unknown",
+            name: "ম্যানুয়াল ব্লক",
+            blockedAt: serverTimestamp(),
+          });
+        }
+        if (targetDeviceId) {
+          await dbService.blockDevice(targetDeviceId, targetIP, targetUid);
+          const deviceRef = doc(db, "blockedDevices", targetDeviceId);
+          await setDoc(deviceRef, {
+            deviceId: targetDeviceId,
+            uid: targetUid || "Unknown",
+            name: "ম্যানুয়াল ব্লক",
+            blockedAt: serverTimestamp(),
+          });
+        }
+        if (targetUid) {
+          await dbService.blockUID(targetUid, targetIP, targetDeviceId);
+          const uidRef = doc(db, "blockedUIDs", targetUid);
+          await setDoc(uidRef, {
+            uid: targetUid,
+            deviceId: targetDeviceId || "Unknown",
+            name: "ম্যানুয়াল ব্লক",
+            blockedAt: serverTimestamp(),
+          });
+        }
+        setManualBlockMessage({
+          type: "success",
+          text: `সফলভাবে স্থায়ী ব্লক করা হয়েছে: ${rawVal}`,
+        });
+      }
+      setManualBlockInput("");
+    } catch (err: any) {
+      setManualBlockMessage({
+        type: "error",
+        text: `অপারেশন ব্যর্থ হয়েছে: ${err?.message || "Error"}`,
+      });
+    } finally {
+      setManualBlockLoading(false);
     }
   }
 
@@ -1093,10 +1285,87 @@ export default function AdminPanel() {
   async function handleDeleteParticipant(pId: string) {
     try {
       const pRef = doc(db, "participants", pId);
-      await deleteDoc(pRef);
+      deleteDoc(pRef).catch((err) => checkQuotaError(err));
+      await dbService.deleteParticipant(pId);
+      setParticipants((prev) => prev.filter((p) => p.id !== pId));
       setDeletingParticipantId(null);
     } catch (err: any) {
-      handleFirestoreError(err, OperationType.DELETE, `participants/${pId}`);
+      console.warn("Delete participant notice:", err);
+    }
+  }
+
+  // 11.2. Delete All Participants and Demo Participants records from database
+  async function handleDeleteAllParticipants(targetType: "all" | "regular" | "demo" = "all") {
+    const regularCount = participants.length;
+    const demoCount = demoParticipants.length;
+    const totalCount =
+      targetType === "regular"
+        ? regularCount
+        : targetType === "demo"
+        ? demoCount
+        : regularCount + demoCount;
+
+    if (totalCount === 0) {
+      alert("ডিলিট করার মতো কোনো জয়েনিং রেকর্ড পাওয়া যায়নি।");
+      return;
+    }
+
+    let confirmMsg = "";
+    if (targetType === "regular") {
+      confirmMsg = `সতর্কতা: আপনি কি নিশ্চিতভাবে সমস্ত (${regularCount} জন) শিক্ষার্থীর জয়েনিং হিস্ট্রি ও বিবরণ ডাটাবেস থেকে ডিলিট করতে চান?\n\n(মনে রাখবেন: ব্লক লিস্টের কোনো ডাটা ডিলিট হবে না, ব্লক ডাটা সুরক্ষিত থাকবে)`;
+    } else if (targetType === "demo") {
+      confirmMsg = `সতর্কতা: আপনি কি নিশ্চিতভাবে সমস্ত (${demoCount} জন) ডেমো ব্যবহারকারীর জয়েনিং রেকর্ড ডাটাবেস থেকে ডিলিট করতে চান?\n\n(মনে রাখবেন: ব্লক লিস্টের কোনো ডাটা ডিলিট হবে না, ব্লক ডাটা সুরক্ষিত থাকবে)`;
+    } else {
+      confirmMsg = `সতর্কতা: আপনি কি নিশ্চিতভাবে ডাটাবেস থেকে এ যাবতকালের সমস্ত (${regularCount} জন ইউজার ও ${demoCount} জন ডেমো) জয়েনিং ডাটা মুছে ফেলতে চান?\n\n(মনে রাখবেন: ব্লক লিস্টে Delete All হবে না, ব্লক লিস্ট সম্পূর্ণ অক্ষত ও সুরক্ষিত থাকবে)`;
+    }
+
+    if (!window.confirm(confirmMsg)) return;
+
+    setIsDeletingAllParticipants(true);
+    try {
+      // 1. Delete from Supabase (instant and unthrottled)
+      if (targetType === "all" || targetType === "regular") {
+        await dbService.deleteAllParticipants();
+      }
+      if (targetType === "all" || targetType === "demo") {
+        await dbService.deleteAllDemoParticipants();
+      }
+
+      // 2. Clear local states and cache instantly
+      if (targetType === "regular" || targetType === "all") {
+        setParticipants([]);
+        setSelectedParticipantIds([]);
+        try {
+          localStorage.removeItem("ue_cache_participants");
+        } catch (e) {}
+      }
+
+      if (targetType === "demo" || targetType === "all") {
+        setDemoParticipants([]);
+        try {
+          localStorage.removeItem("ue_cache_demo_participants");
+        } catch (e) {}
+      }
+
+      // 3. Fire-and-forget Firestore deletions asynchronously in the background (do not block)
+      if (targetType === "all" || targetType === "regular") {
+        participants.forEach((p) => {
+          deleteDoc(doc(db, "participants", p.id)).catch(() => {});
+        });
+      }
+
+      if (targetType === "all" || targetType === "demo") {
+        demoParticipants.forEach((dp) => {
+          deleteDoc(doc(db, "demoParticipants", dp.id)).catch(() => {});
+        });
+      }
+
+      alert("জয়েনিং রেকর্ডসমূহ সফলভাবে মুছে ফেলা হয়েছে। ব্লকড তালিকা অক্ষত রয়েছে।");
+    } catch (err: any) {
+      console.error("Failed to delete records:", err);
+      alert("রেকর্ড মুছতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।");
+    } finally {
+      setIsDeletingAllParticipants(false);
     }
   }
 
@@ -1266,14 +1535,13 @@ export default function AdminPanel() {
             >
               <div className="text-center space-y-3">
                 <span className="inline-block px-3 py-1 bg-amber-500/10 border border-amber-500/20 text-amber-600 rounded-full text-[10px] font-black uppercase tracking-wider">
-                  ম্যানেজমেন্ট পোর্টাল (অ্যাডমিন)
+                  ম্যানেজমেন্ট পোর্টাল
                 </span>
                 <h1 className="text-2xl font-black text-slate-900 tracking-tight leading-short">
-                  অ্যাডমিন প্যানেল লগইন
+                  Admin Login
                 </h1>
                 <p className="text-xs text-slate-500 leading-relaxed max-w-[280px] mx-auto">
-                  Unity Earning মিটিং সিস্টেম কনফিগার করতে অনুগ্রহ করে পাসওয়ার্ড
-                  দিয়ে প্রবেশ করুন।
+                  অ্যাডমিন প্যানেলে প্রবেশ করতে পাসওয়ার্ড টাইপ করে সরাসরি Admin Login বাটনে ক্লিক করুন।
                 </p>
               </div>
 
@@ -1298,11 +1566,12 @@ export default function AdminPanel() {
                       <input
                         type="password"
                         required
+                        autoFocus
                         autoComplete="new-password"
                         placeholder="পাসওয়ার্ড টাইপ করুন"
                         value={passwordInput}
                         onChange={(e) => setPasswordInput(e.target.value)}
-                        className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-sm transition text-center"
+                        className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-sm transition text-center shadow-xs font-medium"
                       />
                     </div>
                   </div>
@@ -1311,49 +1580,21 @@ export default function AdminPanel() {
                 <button
                   type="submit"
                   disabled={isLoggingIn}
-                  className="w-full py-3 bg-[#0f172a] hover:bg-slate-800 text-amber-400 text-xs font-black rounded-xl shadow-lg transition duration-150 flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="w-full py-3.5 bg-[#0f172a] hover:bg-slate-800 text-amber-400 text-xs font-black rounded-xl shadow-lg transition duration-150 flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
                 >
                   {isLoggingIn ? (
-                    <Loader2 className="h-4 w-4 animate-spin text-amber-500" />
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin text-amber-400" />
+                      <span>লগইন হচ্ছে...</span>
+                    </>
                   ) : (
-                    <span>লগইন করুন</span>
+                    <>
+                      <Lock className="h-4 w-4 text-amber-400" />
+                      <span>Admin Login</span>
+                    </>
                   )}
                 </button>
               </form>
-
-              <div className="relative flex py-2 items-center">
-                <div className="flex-grow border-t border-slate-200"></div>
-                <span className="flex-shrink mx-3 text-[9px] text-slate-400 font-bold tracking-wider uppercase">
-                  অন্যান্য মাধ্যম
-                </span>
-                <div className="flex-grow border-t border-slate-200"></div>
-              </div>
-
-              <button
-                onClick={handleGoogleLogin}
-                disabled={isLoggingIn}
-                className="w-full py-3 border border-slate-200 bg-white text-slate-700 hover:text-slate-950 font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shadow-sm"
-              >
-                <svg className="h-4.5 w-4.5 shrink-0" viewBox="0 0 24 24">
-                  <path
-                    fill="#4285F4"
-                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l3.66-2.84z"
-                  />
-                  <path
-                    fill="#EA4335"
-                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                  />
-                </svg>
-                <span>গুগল অ্যাকাউন্ট দিয়ে লগইন</span>
-              </button>
             </motion.div>
           </div>
         ) : (
@@ -1527,7 +1768,11 @@ export default function AdminPanel() {
                         আজকের জয়েনিং
                       </p>
                       <h3 className="text-xl font-black text-slate-900">
-                        {todayParticipantsCount} জন
+                        {isDataLoading && !hasCachedData ? (
+                          <span className="inline-block w-12 h-6 bg-slate-200 animate-pulse rounded"></span>
+                        ) : (
+                          `${todayParticipantsCount} জন`
+                        )}
                       </h3>
                     </div>
 
@@ -1540,7 +1785,11 @@ export default function AdminPanel() {
                         ব্লকড আইপি
                       </p>
                       <h3 className="text-xl font-black text-slate-900">
-                        {blockedIPs.length} টি
+                        {isDataLoading && !hasCachedData ? (
+                          <span className="inline-block w-12 h-6 bg-slate-200 animate-pulse rounded"></span>
+                        ) : (
+                          `${blockedIPs.length} টি`
+                        )}
                       </h3>
                     </div>
                   </div>
@@ -1554,8 +1803,11 @@ export default function AdminPanel() {
                         মিটিং সেশন কন্ট্রোল
                       </p>
                       <h3 className="text-sm font-extrabold text-slate-900">
-                        সক্রিয় মিটিং: {meetings.filter((m) => m.active).length}{" "}
-                        টি
+                        {isDataLoading && !hasCachedData ? (
+                          <span className="inline-block w-28 h-4 bg-slate-200 animate-pulse rounded"></span>
+                        ) : (
+                          `সক্রিয় মিটিং: ${meetings.filter((m) => m.active).length} টি`
+                        )}
                       </h3>
                     </div>
                     <span className="p-2 bg-emerald-50 text-emerald-600 rounded-full flex items-center">
@@ -1564,6 +1816,7 @@ export default function AdminPanel() {
                   </div>
                 </div>
               )}
+
 
               {/* --- TAB 2: MEETING LINK GENERATION --- */}
               {activeTab === "meeting" && (
@@ -1768,9 +2021,27 @@ export default function AdminPanel() {
                   {/* Sessions logs preview */}
                   <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-2 border-b border-slate-100">
-                      <h3 className="text-xs font-black text-slate-900 uppercase">
-                        পূর্বে তৈরি করা সেশন লগস ({filteredMeetings.length})
-                      </h3>
+                      <div className="flex items-center justify-between w-full sm:w-auto gap-2">
+                        <h3 className="text-xs font-black text-slate-900 uppercase">
+                          পূর্বে তৈরি করা সেশন লগস ({filteredMeetings.length})
+                        </h3>
+                        {meetings.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleDeleteAllMeetings}
+                            disabled={isDeletingAllMeetings}
+                            className="px-2.5 py-1 bg-red-50 hover:bg-red-600 text-red-600 hover:text-white border border-red-200 hover:border-red-600 rounded-lg text-[9.5px] font-black transition flex items-center gap-1 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
+                            title="ডাটাবেস থেকে পূর্বে তৈরি করা সমস্ত মিটিং লিংক ডিলিট করুন"
+                          >
+                            {isDeletingAllMeetings ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-3 w-3" />
+                            )}
+                            <span>Delete All</span>
+                          </button>
+                        )}
+                      </div>
 
                       {/* Interactive Meeting date filter requested at top */}
                       <div className="flex items-center gap-1.5">
@@ -1947,9 +2218,27 @@ export default function AdminPanel() {
 
                   {/* Participants table alternative layout for phone */}
                   <div className="space-y-3">
-                    <h3 className="text-xs font-extrabold text-slate-800">
-                      অংশগ্রহণকারীদের বিবরণ ({filteredParticipants.length})
-                    </h3>
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xs font-extrabold text-slate-800">
+                        অংশগ্রহণকারীদের বিবরণ ({filteredParticipants.length})
+                      </h3>
+                      {(participants.length > 0 || demoParticipants.length > 0) && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteAllParticipants("all")}
+                          disabled={isDeletingAllParticipants}
+                          className="px-2.5 py-1 bg-red-50 hover:bg-red-600 text-red-600 hover:text-white border border-red-200 hover:border-red-600 rounded-lg text-[9.5px] font-black transition flex items-center gap-1 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
+                          title="সমস্ত ইউজার ও ডেমো জয়েনিং লগ ডিলিট করুন (ব্লক লিস্ট সংরক্ষিত থাকবে)"
+                        >
+                          {isDeletingAllParticipants ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3 w-3" />
+                          )}
+                          <span>Delete All</span>
+                        </button>
+                      )}
+                    </div>
 
                     {/* BULK SELECTION CONTROLS (All Block / Select All) */}
                     {filteredParticipants.length > 0 && (
@@ -2259,19 +2548,37 @@ export default function AdminPanel() {
                       <h3 className="text-xs font-extrabold text-slate-800">
                         ডেমো ব্যবহারকারী লগ ({filteredDemoParticipants.length})
                       </h3>
-                      <button
-                        onClick={() => {
-                          const currentFilter = demoDateFilter;
-                          setDemoDateFilter("");
-                          setTimeout(
-                            () => setDemoDateFilter(currentFilter),
-                            10,
-                          );
-                        }}
-                        className="text-[9px] font-black text-emerald-600 bg-emerald-50 border border-emerald-100 hover:bg-emerald-100 px-2 py-1 rounded-lg cursor-pointer"
-                      >
-                        রিফ্রেশ করুন ↻
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        {demoParticipants.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteAllParticipants("demo")}
+                            disabled={isDeletingAllParticipants}
+                            className="px-2 py-1 bg-red-50 hover:bg-red-600 text-red-600 hover:text-white border border-red-200 hover:border-red-600 rounded-lg text-[9px] font-black transition flex items-center gap-1 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-xs"
+                            title="ডাটাবেস থেকে সমস্ত ডেমো রেকর্ড ডিলিট করুন (ব্লক লিস্ট অক্ষত থাকবে)"
+                          >
+                            {isDeletingAllParticipants ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-3 w-3" />
+                            )}
+                            <span>Delete All</span>
+                          </button>
+                        )}
+                        <button
+                          onClick={() => {
+                            const currentFilter = demoDateFilter;
+                            setDemoDateFilter("");
+                            setTimeout(
+                              () => setDemoDateFilter(currentFilter),
+                              10,
+                            );
+                          }}
+                          className="text-[9px] font-black text-emerald-600 bg-emerald-50 border border-emerald-100 hover:bg-emerald-100 px-2 py-1 rounded-lg cursor-pointer"
+                        >
+                          রিফ্রেশ করুন ↻
+                        </button>
+                      </div>
                     </div>
 
                     <div className="space-y-2">
@@ -2421,13 +2728,65 @@ export default function AdminPanel() {
                     <div className="space-y-4 animate-fadeIn">
                       <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm space-y-1">
                         <h3 className="text-xs font-black text-slate-900 uppercase">
-                          ব্লকড ডিভাইস আইপি রেকর্ডস
+                          ব্লকড ডিভাইস আইপি ও ইউআইডি রেকর্ডস
                         </h3>
                         <p className="text-[10px] text-slate-500 leading-normal">
-                          এই ডিভাইস আইপি থেকে গুগলে জয়েন করা সম্পূর্ণ নিষিদ্ধ।
+                          এই ডিভাইস আইপি বা ইউআইডি থেকে জয়েন করা সম্পূর্ণ নিষিদ্ধ।
                           এরা পুনরায় জয়েন লিংক চেষ্টা করলে অ্যাক্সেস অস্বীকৃত
                           স্ক্রিন দেখাবে।
                         </p>
+                      </div>
+
+                      {/* DIRECT MANUAL UNBLOCK / BLOCK TOOL */}
+                      <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200/80 rounded-xl p-3.5 shadow-sm space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-[11px] font-black text-amber-900 uppercase flex items-center gap-1.5">
+                            ⚡ সরাসরি আইপি / ইউআইডি (UID) / ডিভাইস আইডি আনব্লক বা ব্লক করুন
+                          </h4>
+                        </div>
+                        <p className="text-[9.5px] text-amber-800 leading-tight font-medium">
+                          যেকোনো ডিভাইস আইপি (যেমন <strong>202.47.164.169</strong>), ইউআইডি (যেমন <strong>UID-852424</strong>) বা ডিভাইস আইডি (যেমন <strong>dev_...</strong>) পেস্ট করে সরাসরি আনব্লক বা ব্লক করুন।
+                        </p>
+
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <input
+                            type="text"
+                            placeholder="আইপি (e.g. 202.47.164.169) বা ইউআইডি (e.g. UID-852424) লিখুন..."
+                            value={manualBlockInput}
+                            onChange={(e) => setManualBlockInput(e.target.value)}
+                            className="flex-1 text-[11px] px-3 py-2 border border-amber-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white font-mono font-bold text-slate-900"
+                          />
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleManualUnblockOrBlock("unblock")}
+                              disabled={manualBlockLoading || !manualBlockInput.trim()}
+                              className="flex-1 sm:flex-none px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10.5px] rounded-lg shadow-xs transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+                            >
+                              ✓ আনব্লক করুন
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleManualUnblockOrBlock("block")}
+                              disabled={manualBlockLoading || !manualBlockInput.trim()}
+                              className="flex-1 sm:flex-none px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-black text-[10.5px] rounded-lg shadow-xs transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+                            >
+                              ✕ ব্লক করুন
+                            </button>
+                          </div>
+                        </div>
+
+                        {manualBlockMessage && (
+                          <div
+                            className={`p-2 rounded-lg text-[10px] font-extrabold ${
+                              manualBlockMessage.type === "success"
+                                ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                                : "bg-rose-100 text-rose-800 border border-rose-200"
+                            }`}
+                          >
+                            {manualBlockMessage.text}
+                          </div>
+                        )}
                       </div>
 
                       {/* Filter controls section */}
@@ -2615,6 +2974,7 @@ export default function AdminPanel() {
 
               {/* --- TAB 5: SETTINGS --- */}
               {activeTab === "settings" && (
+
                 <div className="space-y-4">
                   {/* Preferences config */}
                   <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3">
@@ -2961,6 +3321,7 @@ export default function AdminPanel() {
                     : "text-slate-400 hover:text-slate-600"
                 }`}
               >
+
                 <Ban className="h-4.5 w-4.5 mb-0.5" />
                 <span className="text-[8px] font-black">ব্লকলিস্ট</span>
                 {blockedIPs.length > 0 && (
@@ -2982,6 +3343,86 @@ export default function AdminPanel() {
                 <span className="text-[8px] font-black">সেটিংস</span>
               </button>
             </nav>
+
+            {/* SUPABASE SQL & INSTRUCTIONS MODAL */}
+            {showSupabaseModal && (
+              <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div className="bg-slate-900 border-2 border-emerald-500 rounded-2xl max-w-lg w-full p-5 text-white space-y-4 max-h-[85vh] flex flex-col shadow-2xl">
+                  <div className="flex items-center justify-between border-b border-slate-700 pb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="h-3 w-3 rounded-full bg-emerald-400 animate-pulse"></div>
+                      <h3 className="text-sm font-black text-emerald-400">
+                        Supabase ডাটাবেজ ইন্টিগ্রেশন
+                      </h3>
+                    </div>
+                    <button
+                      onClick={() => setShowSupabaseModal(false)}
+                      className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  <div className="space-y-3 overflow-y-auto text-[11px] text-slate-300 pr-1">
+                    <div className="bg-emerald-950/60 border border-emerald-500/40 rounded-xl p-3 space-y-1 text-emerald-200">
+                      <p className="font-bold">✅ প্রজেক্ট ইউআরএল ও কি সফলভাবে সেট হয়েছে:</p>
+                      <p className="text-[10px] font-mono break-all text-emerald-300">{SUPABASE_URL}</p>
+                    </div>
+
+                    <p className="leading-relaxed">
+                      যদি আপনি Supabase এ টেবিলগুলো এখনও তৈরি না করে থাকেন, তবে নিচের SQL স্ক্রিপ্টটি কপি করে আপনার Supabase ড্যাশবোর্ডের <strong>SQL Editor</strong>-এ পেস্ট করে <strong>Run</strong> করুন। মাত্র ৫ সেকেন্ডে সব টেবিল তৈরি হয়ে যাবে।
+                    </p>
+
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-slate-200">Supabase SQL স্ক্রিপ্ট:</span>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(SUPABASE_SETUP_SQL);
+                            setCopiedSql(true);
+                            setTimeout(() => setCopiedSql(false), 2000);
+                          }}
+                          className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-lg text-[10px] transition cursor-pointer flex items-center gap-1"
+                        >
+                          {copiedSql ? "✓ কপি হয়েছে!" : "📋 SQL কোড কপি করুন"}
+                        </button>
+                      </div>
+                      <pre className="bg-slate-950 border border-slate-800 rounded-xl p-3 text-[10px] font-mono text-emerald-300 overflow-x-auto max-h-48 custom-scrollbar">
+                        {SUPABASE_SETUP_SQL}
+                      </pre>
+                    </div>
+
+                    <div className="bg-slate-800/80 rounded-xl p-3 space-y-1.5 border border-slate-700">
+                      <p className="font-bold text-amber-300">💡 ধাপসমূহ:</p>
+                      <ol className="list-decimal pl-4 space-y-1 text-[10px] text-slate-300">
+                        <li>উপরে <strong>"SQL কোড কপি করুন"</strong> বাটনে চাপ দিন।</li>
+                        <li>
+                          <a
+                            href="https://supabase.com/dashboard"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-emerald-400 underline"
+                          >
+                            Supabase Dashboard ↗
+                          </a>
+                          -এ গিয়ে বাম পাশের মেনু থেকে <strong>SQL Editor</strong>-এ যান।
+                        </li>
+                        <li>নতুন কুয়েরি খুলে কপি করা কোড পেস্ট করে <strong>Run</strong> বাটনে চাপুন।</li>
+                      </ol>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-800 flex justify-end">
+                    <button
+                      onClick={() => setShowSupabaseModal(false)}
+                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition cursor-pointer"
+                    >
+                      বন্ধ করুন
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

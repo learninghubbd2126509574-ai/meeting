@@ -78,5 +78,14 @@ service cloud.firestore {
       // Public users can get/view settings to read declarations/notices, repeat join configurations, or verify passwords
       allow get: if true;
     }
+
+    // Leaderboard & Ranking Rules
+    match /leaderboard/{memberId} {
+      // Everyone can read rankings for team leaders and trainers
+      allow get, list: if true;
+      // Admins can manage leaderboard
+      allow create, update, delete: if isAdmin();
+    }
   }
 }
+

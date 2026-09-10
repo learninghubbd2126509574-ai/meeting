@@ -56,3 +56,15 @@ export interface DemoParticipant {
   joinedAt: any;
   blocked?: boolean;
 }
+
+export interface LeaderboardMember {
+  id: string;
+  name: string;
+  role: "leader" | "trainer";
+  totalConverts: number;
+  todayConverts: number;
+  designation?: string;
+  badge?: string;
+  updatedAt?: any;
+}
+
