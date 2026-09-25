@@ -1231,10 +1231,12 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
 
             <div className="flex-1 flex flex-col justify-between space-y-5 px-5 mt-2 md:mt-1">
               
-              {/* NEOMORPHIC HEADER BRAND CARD */}
-              <div className="bg-[#eef2f7] rounded-3xl p-5 border border-white/80 shadow-[8px_8px_16px_#d1d9e6,-8px_-8px_16px_#ffffff] space-y-3.5 shrink-0 relative overflow-hidden text-center">
-                
-                <div className="space-y-1.5">
+              {/* NEOMORPHIC HEADER BRAND CARD - VIBRANT GRADIENT THEME */}
+              <div className="bg-gradient-to-b from-[#dbe7f9] via-[#eef4fb] to-[#e1ecfa] rounded-3xl p-5 border-2 border-[#2563eb]/30 shadow-[0_12px_28px_-6px_rgba(37,99,235,0.22),8px_8px_18px_#c5d3e8,-8px_-8px_18px_#ffffff] space-y-3.5 shrink-0 relative overflow-hidden text-center transition-all duration-300">
+                {/* TOP VIBRANT GRADIENT BAR */}
+                <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-[#2563eb] via-[#3b82f6] to-[#10b981]"></div>
+
+                <div className="space-y-1.5 pt-1">
                   <div
                     onClick={() => {
                       setDemoModeStep("enter_code");
@@ -1243,7 +1245,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                       setDemoGmailInput("");
                       setDemoError(null);
                     }}
-                    className="inline-flex items-center gap-2 bg-[#eef2f7] border border-white/90 px-4 py-1.5 rounded-full text-[11px] font-black text-[#10b981] shadow-[4px_4px_8px_#d1d9e6,-4px_-4px_8px_#ffffff] uppercase tracking-wider select-none cursor-pointer active:shadow-[inset_2px_2px_4px_#d1d9e6] transition duration-150"
+                    className="inline-flex items-center gap-2 bg-gradient-to-r from-emerald-50 to-teal-50 border-2 border-emerald-400/40 px-4 py-1.5 rounded-full text-[11px] font-black text-emerald-700 shadow-[2px_4px_10px_rgba(16,185,129,0.15),4px_4px_8px_#c5d3e8,-4px_-4px_8px_#ffffff] uppercase tracking-wider select-none cursor-pointer active:scale-95 transition duration-150"
                   >
                     <span className="relative flex h-2.5 w-2.5">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#10b981] opacity-75"></span>
@@ -1252,10 +1254,10 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                     <span>সেশন লাইভ পোর্টাল</span>
                   </div>
 
-                  <h1 className="text-2xl font-black tracking-tight text-[#0f172a] font-sans">
+                  <h1 className="text-2xl font-black tracking-tight text-[#0f172a] font-sans drop-shadow-xs">
                     UNITY <span className="text-[#2563eb]">EARNING</span>
                   </h1>
-                  <p className="text-[12px] font-extrabold text-[#64748b] tracking-wide">
+                  <p className="text-[12px] font-extrabold text-[#475569] tracking-wide">
                     অফিসিয়াল সেশন জয়েনিং পোর্টাল
                   </p>
                 </div>
@@ -1264,19 +1266,19 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                 {(() => {
                   const schedule = getMeetingDateAndParts(meetingDate, meetingTime);
                   return (
-                    <div className="pt-2 w-full max-w-[340px] mx-auto select-none">
-                      <div className="bg-[#eef2f7] border border-white/90 rounded-2xl p-3 shadow-[inset_3px_3px_6px_#d1d9e6,inset_-3px_-3px_6px_#ffffff] space-y-2.5">
+                    <div className="pt-1 w-full max-w-[340px] mx-auto select-none">
+                      <div className="bg-white/85 backdrop-blur-md border-2 border-[#2563eb]/25 rounded-2xl p-3 shadow-[0_6px_16px_rgba(37,99,235,0.12),inset_2px_2px_6px_rgba(255,255,255,0.9)] space-y-2.5">
                         
                         {/* HEADER BADGE */}
                         <div className="flex items-center justify-between px-1">
-                          <div className="flex items-center gap-1.5 text-[10.5px] font-black text-[#64748b] uppercase tracking-wider">
+                          <div className="flex items-center gap-1.5 text-[10.5px] font-black text-[#334155] uppercase tracking-wider">
                             <span className="relative flex h-2 w-2">
                               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#2563eb] opacity-75"></span>
                               <span className="relative inline-flex rounded-full h-2 w-2 bg-[#2563eb]"></span>
                             </span>
                             <span>সেশন সময়সূচি</span>
                           </div>
-                          <span className="text-[9.5px] font-black text-[#2563eb] bg-[#2563eb]/10 border border-[#2563eb]/20 px-2 py-0.5 rounded-full uppercase">
+                          <span className="text-[9.5px] font-black text-[#2563eb] bg-[#2563eb]/10 border border-[#2563eb]/30 px-2 py-0.5 rounded-full uppercase shadow-2xs">
                             অফিসিয়াল
                           </span>
                         </div>
@@ -1284,9 +1286,9 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                         {/* 2-COLUMN NEOMORPHIC CARDS FOR DATE & TIME */}
                         <div className="grid grid-cols-2 gap-2">
                           {/* DATE BLOCK */}
-                          <div className="bg-[#eef2f7] border border-white/90 rounded-xl p-2.5 shadow-[4px_4px_8px_#d1d9e6,-4px_-4px_8px_#ffffff] flex flex-col items-center justify-center text-center space-y-1">
-                            <div className="flex items-center gap-1 text-[10px] font-extrabold text-[#64748b]">
-                              <Calendar className="h-3 w-3 text-[#2563eb]" />
+                          <div className="bg-gradient-to-br from-[#f0f5ff] to-[#e4edfe] border-2 border-[#2563eb]/20 rounded-xl p-2.5 shadow-[3px_3px_8px_rgba(37,99,235,0.08)] flex flex-col items-center justify-center text-center space-y-1">
+                            <div className="flex items-center gap-1 text-[10px] font-extrabold text-[#475569]">
+                              <Calendar className="h-3.5 w-3.5 text-[#2563eb]" />
                               <span>তারিখ</span>
                             </div>
                             <span className="text-[11.5px] font-black text-[#0f172a] leading-tight">
@@ -1295,12 +1297,12 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                           </div>
 
                           {/* TIME BLOCK */}
-                          <div className="bg-[#eef2f7] border border-white/90 rounded-xl p-2.5 shadow-[4px_4px_8px_#d1d9e6,-4px_-4px_8px_#ffffff] flex flex-col items-center justify-center text-center space-y-1">
-                            <div className="flex items-center gap-1 text-[10px] font-extrabold text-[#64748b]">
-                              <Clock className="h-3 w-3 text-[#10b981] animate-pulse" />
+                          <div className="bg-gradient-to-br from-[#ecfdf5] to-[#d1fae5] border-2 border-[#10b981]/30 rounded-xl p-2.5 shadow-[3px_3px_8px_rgba(16,185,129,0.08)] flex flex-col items-center justify-center text-center space-y-1">
+                            <div className="flex items-center gap-1 text-[10px] font-extrabold text-[#047857]">
+                              <Clock className="h-3.5 w-3.5 text-[#10b981] animate-pulse" />
                               <span>সময়</span>
                             </div>
-                            <span className="text-[11.5px] font-black text-[#2563eb] leading-tight">
+                            <span className="text-[11.5px] font-black text-[#047857] leading-tight">
                               {schedule.formattedTime}
                             </span>
                           </div>

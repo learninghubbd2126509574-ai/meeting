@@ -28,6 +28,7 @@ export interface BlockedIP {
   uid?: string;
   blockedAt: Timestamp | any;
   name: string;
+  reason?: string;
 }
 
 export interface BlockedDevice {

@@ -143,6 +143,25 @@ function getDeviceDetails(uaString?: string) {
   return { name, iconType };
 }
 
+function formatBlockTime(timestampVal: any) {
+  if (!timestampVal) return "আজকে";
+  try {
+    const d = timestampVal.toDate ? timestampVal.toDate() : new Date(timestampVal);
+    if (isNaN(d.getTime())) return String(timestampVal);
+    return d.toLocaleString("bn-BD", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "numeric",
+      second: "numeric",
+      hour12: true,
+    });
+  } catch (e) {
+    return String(timestampVal);
+  }
+}
+
 function getTodayDateString() {
   const today = new Date();
   const yyyy = today.getFullYear();
@@ -2888,15 +2907,16 @@ export default function AdminPanel() {
 
                   const unifiedList = Array.from(map.values());
 
-                  // Filter by search query (Name, IP, or UID) & Date filter
+                  // Filter by search query (Name, IP, UID, DeviceId, UserType) & Date filter
                   const filteredBlockedList = unifiedList.filter((b) => {
                     if (blockedSearchQuery) {
-                      const queryLower = blockedSearchQuery.toLowerCase();
+                      const queryLower = blockedSearchQuery.toLowerCase().trim();
                       const ipMatch = b.ip?.toLowerCase().includes(queryLower);
                       const nameMatch = b.name?.toLowerCase().includes(queryLower);
                       const uidMatch = b.uid?.toLowerCase().includes(queryLower);
                       const devMatch = b.deviceId?.toLowerCase().includes(queryLower);
-                      if (!ipMatch && !nameMatch && !uidMatch && !devMatch)
+                      const typeMatch = b.userType?.toLowerCase().includes(queryLower);
+                      if (!ipMatch && !nameMatch && !uidMatch && !devMatch && !typeMatch)
                         return false;
                     }
 
