@@ -1633,63 +1633,79 @@ export default function AdminPanel() {
 
   // --- RENDERING CHASSIS ---
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-900 flex flex-col justify-start md:justify-center items-center p-0 sm:p-4 md:p-6 lg:p-8 select-text overflow-x-hidden font-sans">
-      {/* RESPONSIVE APP-CONTAINER (Desktop & Mobile Optimized) */}
-      <div className={`w-full ${!isAuthenticated ? "max-w-md my-auto" : "max-w-5xl my-0 md:my-4"} min-h-screen md:min-h-[88vh] bg-slate-50 md:rounded-3xl md:border md:border-slate-800 shadow-2xl flex flex-col relative overflow-hidden transition-all duration-200`}>
+    <div className="h-[100dvh] md:min-h-screen bg-slate-950 text-slate-900 flex flex-col justify-center items-center p-0 md:p-6 select-text overflow-x-hidden">
+      {/* PHONE FRAME CHASSIS (Desktop Only) */}
+      <div className="w-full h-[100dvh] md:h-[820px] md:min-h-[820px] md:max-w-[400px] md:border-[12px] md:border-slate-850 md:rounded-[48px] md:shadow-2xl bg-slate-50 flex flex-col relative overflow-hidden">
+        {/* PHONE NOTCH / STATUS BAR (Desktop Only) */}
+        <div className="hidden md:flex absolute top-0 inset-x-0 h-9 bg-slate-900 justify-between items-center px-6 z-50 text-[10px] text-slate-400 font-mono select-none">
+          <span>09:21 AM</span>
+          <div className="w-24 h-4 bg-black rounded-b-2xl absolute left-1/2 -translate-x-1/2 flex items-center justify-center">
+            <div className="w-3 h-1.5 bg-[#1e293b] rounded-full"></div>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span>5G</span>
+            <div className="w-4 h-2 opacity-80 border border-slate-400 rounded-sm p-[1px] flex items-center">
+              <div className="bg-slate-400 h-full w-2"></div>
+            </div>
+          </div>
+        </div>
 
         {/* 1. LOGIN SCREEN (If not authenticated) */}
         {!isAuthenticated ? (
-          <div className="flex-1 overflow-y-auto p-6 sm:p-8 flex flex-col justify-center bg-slate-50">
+          <div className="flex-1 overflow-y-auto pt-6 md:pt-14 pb-8 px-5 flex flex-col justify-between bg-slate-50">
             <motion.div
-              initial={{ opacity: 0, scale: 0.98, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              className="flex-1 flex flex-col justify-center space-y-6 max-w-sm mx-auto w-full"
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="flex-1 flex flex-col justify-center space-y-6"
             >
-              <div className="text-center space-y-2.5">
-                <span className="inline-block px-3 py-1 bg-amber-500/10 border border-amber-500/20 text-amber-600 rounded-full text-xs font-bold tracking-wide">
+              <div className="text-center space-y-3">
+                <span className="inline-block px-3 py-1 bg-amber-500/10 border border-amber-500/20 text-amber-600 rounded-full text-[10px] font-black uppercase tracking-wider">
                   ম্যানেজমেন্ট পোর্টাল
                 </span>
-                <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+                <h1 className="text-2xl font-black text-slate-900 tracking-tight leading-short">
                   Admin Login
                 </h1>
-                <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">
+                <p className="text-xs text-slate-500 leading-relaxed max-w-[280px] mx-auto">
                   অ্যাডমিন প্যানেলে প্রবেশ করতে পাসওয়ার্ড টাইপ করে সরাসরি Admin Login বাটনে ক্লিক করুন।
                 </p>
               </div>
 
               {loginError && (
-                <div className="bg-rose-50 border border-rose-200 rounded-xl p-3.5 flex gap-2.5 text-xs text-rose-700 font-semibold leading-relaxed">
-                  <AlertTriangle className="h-5 w-5 text-rose-500 shrink-0" />
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex gap-2.5 text-xs text-red-600 font-semibold leading-relaxed">
+                  <AlertTriangle className="h-5 w-5 text-red-500 shrink-0" />
                   <p>{loginError}</p>
                 </div>
               )}
 
               <form onSubmit={handlePasswordLogin} className="space-y-4">
-                <div className="space-y-2 w-full">
-                  <label className="block text-xs font-bold text-slate-700">
-                    অ্যাডমিন পাসওয়ার্ড
-                  </label>
-                  <div className="relative">
-                    <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400">
-                      <Lock className="h-4.5 w-4.5" />
-                    </span>
-                    <input
-                      type="password"
-                      required
-                      autoFocus
-                      autoComplete="new-password"
-                      placeholder="পাসওয়ার্ড টাইপ করুন"
-                      value={passwordInput}
-                      onChange={(e) => setPasswordInput(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/25 focus:border-amber-500 text-sm transition shadow-xs font-medium"
-                    />
+                <div className="space-y-4 flex flex-col items-center">
+                  {/* Password Field */}
+                  <div className="space-y-1.5 w-full">
+                    <label className="block text-xs font-bold text-slate-700 text-center">
+                      অ্যাডমিন পাসওয়ার্ড
+                    </label>
+                    <div className="relative">
+                      <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400">
+                        <Lock className="h-4.5 w-4.5" />
+                      </span>
+                      <input
+                        type="password"
+                        required
+                        autoFocus
+                        autoComplete="new-password"
+                        placeholder="পাসওয়ার্ড টাইপ করুন"
+                        value={passwordInput}
+                        onChange={(e) => setPasswordInput(e.target.value)}
+                        className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-sm transition text-center shadow-xs font-medium"
+                      />
+                    </div>
                   </div>
                 </div>
 
                 <button
                   type="submit"
                   disabled={isLoggingIn}
-                  className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-amber-400 text-sm font-bold rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
+                  className="w-full py-3.5 bg-[#0f172a] hover:bg-slate-800 text-amber-400 text-xs font-black rounded-xl shadow-lg transition duration-150 flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
                 >
                   {isLoggingIn ? (
                     <>
@@ -1707,8 +1723,8 @@ export default function AdminPanel() {
             </motion.div>
           </div>
         ) : (
-          // 2. MAIN LOGGED-IN ADMIN PANEL (Responsive App Layout)
-          <div className="flex-1 flex flex-col bg-slate-50 pt-0 relative min-h-0 overflow-hidden w-full">
+          // 2. MAIN LOGGED-IN ADMIN PANEL (Phone Layout)
+          <div className="flex-1 flex flex-col bg-slate-50 pt-0 md:pt-9 relative min-h-0 overflow-hidden w-full">
             {/* INNER HEADER ACCENTS */}
             <header className="px-4 py-3 bg-[#0f172a] text-white flex justify-between items-center shrink-0 border-b-2 border-amber-500 shadow-sm z-30">
               <div className="truncate">
@@ -3522,44 +3538,44 @@ export default function AdminPanel() {
               )}
             </div>
 
-            {/* --- BOTTOM MOBILE & DESKTOP APP NAV BAR --- */}
-            <nav className="h-16 bg-white border-t border-slate-200 flex justify-around items-center shrink-0 shadow-lg px-2 sm:px-6 select-none select-text">
+            {/* --- BOTTOM MOBILE-STYLE NAV BAR --- */}
+            <nav className="h-14 bg-white border-t border-slate-200 flex justify-around items-center shrink-0 shadow-lg px-2 select-none select-text">
               <button
                 onClick={() => setActiveTab("dashboard")}
-                className={`flex flex-col items-center justify-center py-1.5 px-2.5 rounded-xl cursor-pointer transition ${
+                className={`flex flex-col items-center justify-center p-1 cursor-pointer transition ${
                   activeTab === "dashboard"
-                    ? "text-amber-600 bg-amber-50 font-extrabold"
-                    : "text-slate-500 hover:text-slate-800 font-semibold"
+                    ? "text-amber-500 scale-105"
+                    : "text-slate-400 hover:text-slate-600"
                 }`}
               >
-                <LayoutDashboard className="h-5 w-5 mb-0.5" />
-                <span className="text-[10px] sm:text-xs">ড্যাশবোর্ড</span>
+                <LayoutDashboard className="h-4.5 w-4.5 mb-0.5" />
+                <span className="text-[8px] font-black">ড্যাশবোর্ড</span>
               </button>
 
               <button
                 onClick={() => setActiveTab("meeting")}
-                className={`flex flex-col items-center justify-center py-1.5 px-2.5 rounded-xl cursor-pointer transition ${
+                className={`flex flex-col items-center justify-center p-1 cursor-pointer transition ${
                   activeTab === "meeting"
-                    ? "text-amber-600 bg-amber-50 font-extrabold"
-                    : "text-slate-500 hover:text-slate-800 font-semibold"
+                    ? "text-amber-500 scale-105"
+                    : "text-slate-400 hover:text-slate-600"
                 }`}
               >
-                <LinkIcon className="h-5 w-5 mb-0.5" />
-                <span className="text-[10px] sm:text-xs">লিংক তৈরি</span>
+                <LinkIcon className="h-4.5 w-4.5 mb-0.5" />
+                <span className="text-[8px] font-black">লিংক তৈরি</span>
               </button>
 
               <button
                 onClick={() => setActiveTab("data")}
-                className={`flex flex-col items-center justify-center py-1.5 px-2.5 rounded-xl cursor-pointer transition relative ${
+                className={`flex flex-col items-center justify-center p-1 cursor-pointer transition relative ${
                   activeTab === "data"
-                    ? "text-amber-600 bg-amber-50 font-extrabold"
-                    : "text-slate-500 hover:text-slate-800 font-semibold"
+                    ? "text-amber-500 scale-105"
+                    : "text-slate-400 hover:text-slate-600"
                 }`}
               >
-                <Users className="h-5 w-5 mb-0.5" />
-                <span className="text-[10px] sm:text-xs">ইউজার লগ</span>
+                <Users className="h-4.5 w-4.5 mb-0.5" />
+                <span className="text-[8px] font-black">ইউজার লগ</span>
                 {displayUserCount > 0 && (
-                  <span className="absolute -top-1 -right-0.5 px-1.5 py-0.2 bg-amber-500 text-slate-950 font-bold rounded-full text-[9px] shadow-xs">
+                  <span className="absolute -top-1 -right-1 px-1 py-0.5 bg-amber-500 text-slate-950 font-black rounded-full text-[6px]">
                     {displayUserCount}
                   </span>
                 )}
@@ -3567,16 +3583,16 @@ export default function AdminPanel() {
 
               <button
                 onClick={() => setActiveTab("demo")}
-                className={`flex flex-col items-center justify-center py-1.5 px-2.5 rounded-xl cursor-pointer transition relative ${
+                className={`flex flex-col items-center justify-center p-1 cursor-pointer transition relative ${
                   activeTab === "demo"
-                    ? "text-amber-600 bg-amber-50 font-extrabold"
-                    : "text-slate-500 hover:text-slate-800 font-semibold"
+                    ? "text-amber-500 scale-105"
+                    : "text-slate-400 hover:text-slate-600"
                 }`}
               >
-                <UserCheck className="h-5 w-5 mb-0.5" />
-                <span className="text-[10px] sm:text-xs">ডেমো লগ</span>
+                <UserCheck className="h-4.5 w-4.5 mb-0.5" />
+                <span className="text-[8px] font-black">ডেমো লগ</span>
                 {displayDemoCount > 0 && (
-                  <span className="absolute -top-1 -right-0.5 px-1.5 py-0.2 bg-amber-500 text-slate-950 font-bold rounded-full text-[9px] shadow-xs">
+                  <span className="absolute -top-1 -right-1 px-1 py-0.5 bg-amber-500 text-slate-950 font-black rounded-full text-[6px]">
                     {displayDemoCount}
                   </span>
                 )}
@@ -3584,16 +3600,17 @@ export default function AdminPanel() {
 
               <button
                 onClick={() => setActiveTab("blocked")}
-                className={`flex flex-col items-center justify-center py-1.5 px-2.5 rounded-xl cursor-pointer transition relative ${
+                className={`flex flex-col items-center justify-center p-1 cursor-pointer transition relative ${
                   activeTab === "blocked"
-                    ? "text-amber-600 bg-amber-50 font-extrabold"
-                    : "text-slate-500 hover:text-slate-800 font-semibold"
+                    ? "text-amber-500 scale-105"
+                    : "text-slate-400 hover:text-slate-600"
                 }`}
               >
-                <Ban className="h-5 w-5 mb-0.5" />
-                <span className="text-[10px] sm:text-xs">ব্লকলিস্ট</span>
+
+                <Ban className="h-4.5 w-4.5 mb-0.5" />
+                <span className="text-[8px] font-black">ব্লকলিস্ট</span>
                 {blockedIPs.length > 0 && (
-                  <span className="absolute -top-1 -right-0.5 px-1.5 py-0.2 bg-rose-500 text-white font-bold rounded-full text-[9px] shadow-xs">
+                  <span className="absolute -top-1 -right-1 px-1 py-0.5 bg-red-500 text-white font-black rounded-full text-[6px]">
                     {blockedIPs.length}
                   </span>
                 )}
@@ -3601,14 +3618,14 @@ export default function AdminPanel() {
 
               <button
                 onClick={() => setActiveTab("settings")}
-                className={`flex flex-col items-center justify-center py-1.5 px-2.5 rounded-xl cursor-pointer transition ${
+                className={`flex flex-col items-center justify-center p-1 cursor-pointer transition ${
                   activeTab === "settings"
-                    ? "text-amber-600 bg-amber-50 font-extrabold"
-                    : "text-slate-500 hover:text-slate-800 font-semibold"
+                    ? "text-amber-500 scale-105"
+                    : "text-slate-400 hover:text-slate-600"
                 }`}
               >
-                <SettingsIcon className="h-5 w-5 mb-0.5" />
-                <span className="text-[10px] sm:text-xs">সেটিংস</span>
+                <SettingsIcon className="h-4.5 w-4.5 mb-0.5" />
+                <span className="text-[8px] font-black">সেটিংস</span>
               </button>
             </nav>
 
@@ -3693,6 +3710,9 @@ export default function AdminPanel() {
             )}
           </div>
         )}
+
+        {/* HOME INDICATOR (Desktop Only) */}
+        <div className="hidden md:block absolute bottom-1.5 left-1/2 -translate-x-1/2 w-32 h-1 bg-slate-400 rounded-full opacity-60"></div>
       </div>
     </div>
   );

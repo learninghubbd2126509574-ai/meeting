@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { db } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
-import { ShieldCheck, LogIn, ArrowRight, Loader2, Video, KeyRound, Sparkles } from 'lucide-react';
+import { ShieldCheck, LogIn, ArrowRight, Loader2, Video, Lock } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface WelcomePageProps {
@@ -29,84 +29,89 @@ export default function WelcomePage({ onNavigateToAdmin, onNavigateToJoin }: Wel
       if (meetSnap.exists()) {
         onNavigateToJoin(code);
       } else {
-        setErrorMessage("মিটিং কোডটি পাওয়া যায়নি। অনুগ্রহ করে সঠিক কোড দিন অথবা আপনার লিংকে সরাসরি প্রবেশ করুন।");
+        setErrorMessage("মিটিং কোডটি সঠিক নয়। অনুগ্রহ করে কোডটি পুনরায় যাচাই করে আবার চেষ্টা করুন।");
       }
     } catch (err) {
-      setErrorMessage("নেটওয়ার্ক সমস্যার কারণে ভেরিফিকেশন সম্পন্ন হয়নি। দয়া করে আবার চেষ্টা করুন।");
+      setErrorMessage("নেটওয়ার্ক কানেকশন সমস্যা। অনুগ্রহ করে আবার চেষ্টা করুন।");
     } finally {
       setIsVerifying(false);
     }
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-100 via-slate-50 to-slate-100 text-slate-800 flex flex-col justify-center items-center p-4 sm:p-6 md:p-8 select-text font-sans">
-      <div className="w-full max-w-md mx-auto">
-        <motion.div 
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, ease: "easeOut" }}
-          className="bg-white rounded-3xl border border-slate-200/90 shadow-xl shadow-slate-200/60 overflow-hidden"
-        >
-          {/* Top Brand Accent Bar */}
-          <div className="h-1.5 w-full bg-gradient-to-r from-emerald-500 via-teal-500 to-blue-600" />
+    <div className="min-h-screen bg-[#eef2f7] text-[#1e293b] flex flex-col justify-center items-center p-0 md:p-6 select-text overflow-x-hidden font-sans">
+      
+      {/* PHONE FRAME CHASSIS (Desktop Only) */}
+      <div className="w-full min-h-screen md:min-h-[820px] md:max-w-[420px] md:h-[820px] md:border-[10px] md:border-[#334155] md:rounded-[48px] md:shadow-[14px_14px_28px_#d1d9e6,-14px_-14px_28px_#ffffff] bg-[#eef2f7] flex flex-col relative overflow-hidden transition-all duration-300">
+        
+        {/* PHONE NOTCH / STATUS BAR (Desktop Only) */}
+        <div className="hidden md:flex absolute top-0 inset-x-0 h-10 bg-[#0f172a] justify-between items-center px-7 z-50 text-[10.5px] text-slate-300 font-mono select-none">
+          <span className="font-bold tracking-tight text-white/95">09:21 AM</span>
+          <div className="w-28 h-5 bg-[#020617] rounded-full absolute left-1/2 -translate-x-1/2 flex items-center justify-center border border-slate-800/80 shadow-inner">
+            <div className="w-2.5 h-2.5 bg-slate-900 rounded-full border border-slate-800 absolute left-3 flex items-center justify-center p-[1px]">
+              <div className="w-1 h-1 bg-[#2563eb] rounded-full"></div>
+            </div>
+            <div className="w-8 h-1 bg-slate-900 rounded-full absolute right-4"></div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="font-black text-[9px] text-[#10b981]">5G</span>
+            <div className="w-5 h-2.5 border border-slate-400 rounded-sm p-[1px] flex items-center relative">
+              <div className="bg-[#10b981] h-full w-[85%] rounded-[1px]"></div>
+            </div>
+          </div>
+        </div>
 
-          <div className="p-6 sm:p-8 space-y-6">
-            {/* Header / Brand Identity */}
-            <div className="text-center space-y-2.5">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 border border-emerald-200/80 text-emerald-700 rounded-full text-xs font-bold tracking-wide">
-                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>UNITY EARNING</span>
-              </div>
-
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight leading-tight">
+        {/* MAIN SCROLLABLE CONTENT */}
+        <div className="flex-1 overflow-y-auto pt-6 md:pt-14 pb-8 px-5 flex flex-col justify-between bg-[#eef2f7]">
+          
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.97 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex-1 flex flex-col justify-between space-y-6"
+          >
+            {/* Header / Brand Card */}
+            <div className="bg-[#eef2f7] p-5 rounded-3xl border border-white/80 shadow-[8px_8px_16px_#d1d9e6,-8px_-8px_16px_#ffffff] text-center space-y-2.5 pt-4">
+              <span className="inline-block px-3 py-1 bg-[#eef2f7] border border-white/90 text-[#10b981] rounded-full text-[10px] font-black uppercase tracking-wider shadow-[3px_3px_6px_#d1d9e6,-3px_-3px_6px_#ffffff]">
+                UNITY EARNING
+              </span>
+              <h1 className="text-2xl font-black text-[#0f172a] tracking-tight leading-tight">
                 কাউন্সেলিং মিটিং সিস্টেম
               </h1>
-              
-              <p className="text-sm text-slate-500 leading-relaxed max-w-xs mx-auto">
-                রিয়েল-টাইম সুরক্ষিত অনবোর্ডিং প্ল্যাটফর্ম। কাউন্সেলর ও শিক্ষার্থীদের জন্য অফিসিয়াল সেশন পোর্টাল।
+              <p className="text-xs text-[#64748b] font-medium leading-relaxed max-w-[280px] mx-auto">
+                রিয়েল-টাইম সুরক্ষিত অনবোর্ডিং পোর্টাল। কাউন্সেলর এবং শিক্ষার্থীদের জন্য অফিসিয়াল প্ল্যাটফর্ম।
               </p>
             </div>
 
-            {/* Main Interactive Join Card */}
-            <div className="bg-slate-50/80 rounded-2xl p-5 border border-slate-200/80 space-y-4">
-              <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
-                <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
-                  <Video className="h-4 w-4" />
-                </div>
-                <span>সেশনে সরাসরি যোগ দিন</span>
+            {/* Form Segment */}
+            <div className="bg-[#eef2f7] p-5 rounded-3xl border border-white/80 shadow-[8px_8px_16px_#d1d9e6,-8px_-8px_16px_#ffffff] space-y-4">
+              <div className="flex items-center gap-2 text-[#0f172a] font-black text-sm">
+                <Video className="h-5 w-5 text-[#2563eb] shrink-0" />
+                <h2>সক্রিয় সেশনে যোগ দিন</h2>
               </div>
               
               {errorMessage && (
-                <div className="bg-rose-50 border border-rose-200/90 p-3 rounded-xl text-xs text-rose-700 font-medium leading-relaxed">
+                <div className="bg-[#fef2f2] border border-[#fecaca] p-3 rounded-2xl text-xs text-[#dc2626] font-bold leading-relaxed shadow-[inset_2px_2px_4px_#fca5a5/20]">
                   {errorMessage}
                 </div>
               )}
 
-              <form onSubmit={handleVerifyAndJoin} className="space-y-3">
-                <div className="relative">
-                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                    <KeyRound className="h-4 w-4" />
-                  </span>
-                  <input
-                    type="text"
-                    required
-                    placeholder="মিটিং কোড টাইপ করুন (যেমন: meet_abc)"
-                    value={meetingCode}
-                    onChange={(e) => setMeetingCode(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 text-slate-900 placeholder-slate-400 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/25 focus:border-emerald-500 rounded-xl transition shadow-xs"
-                  />
-                </div>
+              <form onSubmit={handleVerifyAndJoin} className="space-y-3.5">
+                <input
+                  type="text"
+                  required
+                  placeholder="মিটিং কোড দিন (যেমন: meet_abc)"
+                  value={meetingCode}
+                  onChange={(e) => setMeetingCode(e.target.value)}
+                  className="w-full px-4 py-3.5 bg-[#eef2f7] border border-white/80 text-[#0f172a] placeholder-[#94a3b8] text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#10b981] rounded-2xl shadow-[inset_3px_3px_6px_#d1d9e6,inset_-3px_-3px_6px_#ffffff] transition"
+                />
                 
                 <button
                   type="submit"
                   disabled={isVerifying || !meetingCode.trim()}
-                  className="w-full py-3.5 px-4 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 disabled:opacity-50 disabled:pointer-events-none text-white text-sm font-bold rounded-xl shadow-md shadow-emerald-600/20 transition flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full py-3.5 bg-[#10b981] hover:bg-[#059669] disabled:opacity-50 text-white text-xs font-black rounded-2xl shadow-[5px_5px_10px_#d1d9e6,-5px_-5px_10px_#ffffff] active:shadow-[inset_2px_2px_5px_rgba(0,0,0,0.2)] transition duration-150 flex items-center justify-center gap-2 cursor-pointer"
                 >
                   {isVerifying ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin text-white" />
-                      <span>যাচাই করা হচ্ছে...</span>
-                    </>
+                    <Loader2 className="h-4 w-4 animate-spin text-white" />
                   ) : (
                     <>
                       <span>মিটিংয়ে প্রবেশ করুন</span>
@@ -117,35 +122,34 @@ export default function WelcomePage({ onNavigateToAdmin, onNavigateToJoin }: Wel
               </form>
             </div>
 
-            {/* Quick Links & Trust Actions */}
+            {/* Trust and Admin Actions */}
             <div className="space-y-3 pt-1">
               <button
-                type="button"
                 onClick={onNavigateToAdmin}
-                className="w-full px-4 py-3 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-xl border border-slate-200/90 shadow-xs flex items-center justify-center gap-2 transition cursor-pointer"
+                className="w-full px-4 py-3 bg-[#eef2f7] hover:bg-white text-[#334155] font-black text-xs rounded-2xl border border-white/80 shadow-[5px_5px_10px_#d1d9e6,-5px_-5px_10px_#ffffff] active:shadow-[inset_2px_2px_4px_#d1d9e6] flex items-center justify-center gap-2 group cursor-pointer transition"
               >
-                <LogIn className="h-4 w-4 text-blue-600" />
+                <LogIn className="h-4 w-4 text-[#2563eb] group-hover:scale-110 transition" />
                 <span>ম্যানেজমেন্ট লগইন (অ্যাডমিন)</span>
               </button>
 
-              <div className="flex items-center gap-3 p-3 bg-slate-50/60 rounded-xl border border-slate-200/60">
-                <div className="h-8 w-8 bg-emerald-100 text-emerald-700 rounded-lg flex items-center justify-center shrink-0">
-                  <ShieldCheck className="h-4 w-4" />
+              <div className="flex items-center gap-3 bg-[#eef2f7] p-3.5 rounded-2xl border border-white/80 shadow-[4px_4px_8px_#d1d9e6,-4px_-4px_8px_#ffffff]">
+                <div className="h-8 w-8 bg-[#eef2f7] border border-white rounded-xl flex items-center justify-center shrink-0 shadow-[2px_2px_4px_#d1d9e6]">
+                  <ShieldCheck className="h-4.5 w-4.5 text-[#10b981]" />
                 </div>
-                <div className="text-left">
-                  <h3 className="text-xs font-bold text-slate-800">স্বয়ংক্রিয় আইপি নিরাপত্তা সক্রিয়</h3>
-                  <p className="text-[11px] text-slate-500 font-medium">নিরাপদ ও অনুমোদিত সংযোগ দ্বারা সুরক্ষিত</p>
+                <div>
+                  <h3 className="text-xs font-black text-[#0f172a]">আইপি নিরাপত্তা সক্রিয় আছে</h3>
+                  <p className="text-[10px] text-[#64748b] mt-0.5 font-medium">যেকোনো অনাকাঙ্ক্ষিত অ্যাক্সেস প্রতিহত করা হয়</p>
                 </div>
               </div>
             </div>
 
-          </div>
-        </motion.div>
+          </motion.div>
+          
+        </div>
 
-        {/* Quiet Footer */}
-        <p className="text-center text-xs text-slate-400 mt-5 font-medium">
-          © {new Date().getFullYear()} Unity Earning. সর্বস্বত্ব সংরক্ষিত।
-        </p>
+        {/* HOME INDICATOR (Desktop Only) */}
+        <div className="hidden md:block absolute bottom-1.5 left-1/2 -translate-x-1/2 w-32 h-1 bg-slate-400 rounded-full opacity-60"></div>
+
       </div>
     </div>
   );
