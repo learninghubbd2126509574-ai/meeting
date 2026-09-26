@@ -1,7 +1,9 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, setPersistence, browserLocalPersistence, inMemoryPersistence } from 'firebase/auth';
 import { 
+  initializeFirestore,
   getFirestore, 
+  setLogLevel,
   collection, 
   doc, 
   getDoc, 
@@ -18,7 +20,25 @@ import firebaseConfig from '../firebase-applet-config.json';
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+
+// Silence Firestore connection logs in production/offline environments
+try {
+  setLogLevel('error');
+} catch (e) {}
+
+// Initialize Firestore with experimentalForceLongPolling to ensure reliable connectivity
+// across all proxy, firewall, in-app browser, and mobile network environments.
+export const db = (() => {
+  try {
+    return initializeFirestore(app, {
+      experimentalForceLongPolling: true,
+    }, firebaseConfig.firestoreDatabaseId);
+  } catch (e) {
+    console.warn("initializeFirestore fallback to getFirestore:", e);
+    return getFirestore(app, firebaseConfig.firestoreDatabaseId);
+  }
+})();
+
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
