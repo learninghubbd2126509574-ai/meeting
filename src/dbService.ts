@@ -55,6 +55,7 @@ export interface AdminSettingsDoc {
   noticeActive?: boolean;
   demoModeActive?: boolean;
   demoCode?: string;
+  blockSystemActive?: boolean; // When true: block system filters users; When false: ANY blocked user can join!
 }
 
 // -------------------------------------------------------------
@@ -602,6 +603,41 @@ export async function unblockUID(uid: string): Promise<boolean> {
     console.warn("Supabase unblockUID notice:", err);
     return true;
   }
+}
+
+export async function resetAllBlocks(): Promise<boolean> {
+  try {
+    localStorage.removeItem("ue_cache_blocked_ips");
+    localStorage.removeItem("ue_cache_blocked_devices");
+    localStorage.removeItem("ue_cache_blocked_uids");
+    
+    // Clear blocked flags from cached participants
+    try {
+      const pStr = localStorage.getItem("ue_cache_participants");
+      if (pStr) {
+        const pList = JSON.parse(pStr).map((p: any) => ({ ...p, blocked: false }));
+        localStorage.setItem("ue_cache_participants", JSON.stringify(pList));
+      }
+      const dStr = localStorage.getItem("ue_cache_demo_participants");
+      if (dStr) {
+        const dList = JSON.parse(dStr).map((d: any) => ({ ...d, blocked: false }));
+        localStorage.setItem("ue_cache_demo_participants", JSON.stringify(dList));
+      }
+    } catch (cacheErr) {}
+  } catch (e) {}
+
+  try {
+    // Delete all records from blocked tables in Supabase
+    await supabase.from("blocked_ips").delete().neq("ip", "___impossible_reset_val___");
+    await supabase.from("blocked_devices").delete().neq("deviceId", "___impossible_reset_val___");
+    await supabase.from("blocked_uids").delete().neq("uid", "___impossible_reset_val___");
+    // Also reset blocked flag in participants
+    await supabase.from("participants").update({ blocked: false }).eq("blocked", true);
+    await supabase.from("demo_participants").update({ blocked: false }).eq("blocked", true);
+  } catch (err) {
+    console.warn("resetAllBlocks notice:", err);
+  }
+  return true;
 }
 
 export async function isIPBlocked(ip: string): Promise<boolean> {

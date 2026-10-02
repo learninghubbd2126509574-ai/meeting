@@ -66,13 +66,23 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
     useState<boolean>(false);
   const [isUidBlocked, setIsUidBlocked] = useState<boolean>(false);
   const [isVPN, setIsVPN] = useState<boolean>(false);
+  const [blockSystemActive, setBlockSystemActive] = useState<boolean>(() => {
+    try {
+      const cached = localStorage.getItem("ue_cache_settings");
+      if (cached) {
+        const s = JSON.parse(cached);
+        return s.blockSystemActive !== false;
+      }
+    } catch {}
+    return true;
+  });
 
   const isBlocked =
-    isIpBlocked ||
-    isDeviceBlockedById ||
-    isDeviceBlockedByFp ||
-    isUidBlocked ||
-    isVPN;
+    blockSystemActive &&
+    (isIpBlocked ||
+      isDeviceBlockedById ||
+      isDeviceBlockedByFp ||
+      isUidBlocked);
   const [alreadyJoined, setAlreadyJoined] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -439,6 +449,9 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
             setPublicLinkActive(sData.publicLinkActive !== false);
             setDemoModeActive(sData.demoModeActive === true);
             setDemoCode(sData.demoCode || "1234");
+            if (sData.blockSystemActive !== undefined) {
+              setBlockSystemActive(sData.blockSystemActive !== false);
+            }
           }
           setIsLoading(false);
         });
@@ -568,12 +581,12 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
       setIsSubmitting(true);
       setErrorMessage(null);
 
-      if (isBlocked) {
+      if (blockSystemActive && isBlocked) {
         setIsSubmitting(false);
         return;
       }
 
-      if (finalIp && finalIp !== "Unknown") {
+      if (blockSystemActive && finalIp && finalIp !== "Unknown") {
         try {
           if (await dbService.isIPBlocked(finalIp)) {
             setIsIpBlocked(true);
@@ -583,7 +596,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
         } catch (e) {}
       }
 
-      if (deviceId && deviceId !== "Unknown") {
+      if (blockSystemActive && deviceId && deviceId !== "Unknown") {
         try {
           if (await dbService.isDeviceBlocked(deviceId)) {
             setIsDeviceBlockedById(true);
@@ -593,7 +606,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
         } catch (e) {}
       }
 
-      if (uid && uid !== "Unknown") {
+      if (blockSystemActive && uid && uid !== "Unknown") {
         try {
           if (await dbService.isUIDBlocked(uid)) {
             setIsUidBlocked(true);
@@ -736,7 +749,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
       setIsDemoSubmitting(true);
       setDemoError(null);
 
-      if (isIpBlocked || isDeviceBlockedById || isDeviceBlockedByFp) {
+      if (blockSystemActive && (isIpBlocked || isDeviceBlockedById || isDeviceBlockedByFp || isUidBlocked)) {
         setIsDemoSubmitting(false);
         setDemoError(
           "দুঃখিত, আইপি বা ডিভাইস ব্লক থাকার কারণে আপনি জয়েন করতে পারছেন না।",
@@ -744,7 +757,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
         return;
       }
 
-      if (finalIp && finalIp !== "Unknown") {
+      if (blockSystemActive && finalIp && finalIp !== "Unknown") {
         try {
           if (await dbService.isIPBlocked(finalIp)) {
             setIsIpBlocked(true);
@@ -755,7 +768,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
         } catch (e) {}
       }
 
-      if (deviceId && deviceId !== "Unknown") {
+      if (blockSystemActive && deviceId && deviceId !== "Unknown") {
         try {
           if (await dbService.isDeviceBlocked(deviceId)) {
             setIsDeviceBlockedById(true);
@@ -766,7 +779,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
         } catch (e) {}
       }
 
-      if (uid && uid !== "Unknown") {
+      if (blockSystemActive && uid && uid !== "Unknown") {
         try {
           if (await dbService.isUIDBlocked(uid)) {
             setIsUidBlocked(true);
