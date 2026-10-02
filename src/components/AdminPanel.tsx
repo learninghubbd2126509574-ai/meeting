@@ -3012,86 +3012,16 @@ export default function AdminPanel() {
 
                   return (
                     <div className="space-y-4 animate-fadeIn">
-                      {/* HEADER WITH RESET ALL BLOCKS BUTTON */}
-                      <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-sm space-y-2">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                      <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm space-y-1">
+                        <div className="flex items-center justify-between">
                           <h3 className="text-xs font-black text-slate-900 uppercase flex items-center gap-1.5">
                             <ShieldAlert className="h-4 w-4 text-rose-600" />
                             ব্লকড ইউজার, আইপি ও ইউআইডি তালিকা ({filteredBlockedList.length})
                           </h3>
-
-                          {/* RESET ALL BLOCKS BUTTON */}
-                          <button
-                            type="button"
-                            onClick={() => setShowResetBlockConfirm(true)}
-                            disabled={isResettingAllBlocks}
-                            className="self-start sm:self-auto px-3 py-1.5 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 active:scale-95 text-white font-black text-[10px] rounded-lg shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                            title="পূর্বে ব্লক হওয়া সমস্ত আইপি ও ডিভাইস এক ক্লিকে আনব্লক করুন"
-                          >
-                            <RotateCcw className={`h-3.5 w-3.5 ${isResettingAllBlocks ? "animate-spin" : ""}`} />
-                            <span>সব ব্লক রিসেট করুন</span>
-                          </button>
                         </div>
                         <p className="text-[10px] text-slate-500 leading-normal">
-                          ব্লককৃত ইউজারদের আইপি, নাম, ইউআইডি এবং ব্লক করার সময় নিচে উল্লেখ রয়েছে। যেকোনো নির্দিষ্ট ইউজারকে আনব্লক করতে <strong>আনব্লক করুন</strong> বাটন অথবা পূর্বে ব্লক হওয়া সবাইকে একসাথে আনব্লক করতে <strong>সব ব্লক রিসেট করুন</strong> বাটনে চাপ দিন।
+                          ব্লককৃত ইউজারদের আইপি, নাম, ইউআইডি এবং ব্লক করার সময় নিচে উল্লেখ রয়েছে। যেকোনো ইউজারকে আনব্লক করতে ডানপাশের <strong>আনব্লক করুন</strong> বাটনে ক্লিক করুন।
                         </p>
-                      </div>
-
-                      {/* MASTER BLOCK ENFORCEMENT CONTROLLER CARD */}
-                      <div className={`rounded-xl p-3.5 border transition shadow-xs ${
-                        blockSystemActive 
-                          ? "bg-gradient-to-r from-rose-50/90 via-white to-rose-50/40 border-rose-200" 
-                          : "bg-gradient-to-r from-emerald-50/90 via-white to-teal-50/40 border-emerald-200"
-                      }`}>
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              <ShieldAlert className={`h-4 w-4 ${blockSystemActive ? "text-rose-600" : "text-emerald-600"}`} />
-                              <h4 className="text-[11.5px] font-black text-slate-900 uppercase tracking-tight">
-                                ব্লক সিস্টেম সুরক্ষা ব্যবস্থা
-                              </h4>
-                              <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9.5px] font-black uppercase ${
-                                blockSystemActive 
-                                  ? "bg-rose-100 text-rose-800 border border-rose-200" 
-                                  : "bg-emerald-100 text-emerald-800 border border-emerald-200"
-                              }`}>
-                                <span className={`h-2 w-2 rounded-full ${blockSystemActive ? "bg-rose-500 animate-pulse" : "bg-emerald-500"}`}></span>
-                                {blockSystemActive ? "সিস্টেম অন (ব্লক কার্যকর)" : "সিস্টেম অফ (ব্লক নিষ্ক্রিয়/উন্মুক্ত)"}
-                              </span>
-                            </div>
-                            <p className="text-[10px] text-slate-600 font-medium leading-relaxed">
-                              {blockSystemActive ? (
-                                <>
-                                  <strong className="text-rose-700">অন করা আছে:</strong> যাদেরকে ব্লক করা হয়েছে তাদের আইপি বা ডিভাইস দিয়ে মিটিংয়ে ঢুকতে পারবে না।
-                                </>
-                              ) : (
-                                <>
-                                  <strong className="text-emerald-700">অফ করা আছে:</strong> কাউকে ব্লক করা থাকলেও সে সরাসরি মিটিংয়ে ঢুকতে পারবে এবং সবার এক্সেস সচল থাকবে।
-                                </>
-                              )}
-                            </p>
-                          </div>
-
-                          <div className="flex items-center gap-2.5 self-end sm:self-center shrink-0 bg-white/90 border border-slate-200/80 px-3 py-1.5 rounded-xl shadow-xs">
-                            <span className="text-[10px] font-bold text-slate-600 uppercase">
-                              {blockSystemActive ? "সুরক্ষা অন" : "সুরক্ষা অফ"}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={toggleBlockSystemSetting}
-                              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                                blockSystemActive ? "bg-rose-600" : "bg-emerald-500"
-                              }`}
-                              title={blockSystemActive ? "ব্লক সিস্টেম বন্ধ করতে ক্লিক করুন" : "ব্লক সিস্টেম চালু করতে ক্লিক করুন"}
-                            >
-                              <span
-                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                                  blockSystemActive ? "translate-x-5" : "translate-x-0"
-                                }`}
-                              />
-                            </button>
-                          </div>
-                        </div>
                       </div>
 
                       {/* DIRECT MANUAL UNBLOCK / BLOCK TOOL */}
@@ -3413,44 +3343,77 @@ export default function AdminPanel() {
                       </button>
                     </div>
 
-                    <div className="flex flex-col gap-2.5 p-3.5 bg-slate-50 rounded-xl border border-slate-200">
-                      <div className="flex items-center justify-between">
-                        <div className="max-w-[200px] sm:max-w-[240px]">
+                    {/* MASTER SECURITY BLOCK & RESET ALL BLOCKS SECTION INSIDE SETTINGS */}
+                    <div className={`flex flex-col gap-3 p-4 rounded-xl border transition shadow-xs ${
+                      blockSystemActive 
+                        ? "bg-gradient-to-br from-rose-50/70 via-white to-rose-50/30 border-rose-200" 
+                        : "bg-gradient-to-br from-emerald-50/70 via-white to-teal-50/30 border-emerald-200"
+                    }`}>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                        <div className="space-y-1">
                           <div className="flex items-center gap-1.5">
                             <ShieldAlert className={`h-4 w-4 shrink-0 ${blockSystemActive ? "text-rose-600" : "text-emerald-600"}`} />
-                            <p className="text-[10px] font-black text-slate-800">
+                            <p className="text-[11px] font-black text-slate-900 uppercase">
                               সিকিউরিটি ব্লক সিস্টেম
                             </p>
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.2 rounded-full text-[9px] font-black uppercase ${
+                              blockSystemActive 
+                                ? "bg-rose-100 text-rose-800 border border-rose-200" 
+                                : "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                            }`}>
+                              <span className={`h-1.5 w-1.5 rounded-full ${blockSystemActive ? "bg-rose-500 animate-pulse" : "bg-emerald-500"}`}></span>
+                              {blockSystemActive ? "অন (ব্লক কার্যকর)" : "অফ (ব্লক শিথিল)"}
+                            </span>
                           </div>
-                          <p className="text-[9px] text-slate-500 leading-relaxed mt-0.5">
-                            {blockSystemActive
-                              ? "অন আছে: ব্লক করা ইউজার বা আইপি মিটিংয়ে ঢুকতে পারবে না।"
-                              : "অফ আছে: কাউকে ব্লক করা থাকলেও সে সরাসরি মিটিংয়ে ঢুকতে পারবে (সবাই এক্সেস পাবে)।"}
+                          <p className="text-[9.5px] text-slate-600 leading-relaxed font-medium">
+                            {blockSystemActive ? (
+                              <>
+                                <strong className="text-rose-700">অন করা আছে:</strong> যাদের ব্লক করা হবে তারা মিটিংয়ে ঢুকতে পারবে না।
+                              </>
+                            ) : (
+                              <>
+                                <strong className="text-emerald-700">অফ করা আছে:</strong> কাউকে ব্লক করা হলেও সে সরাসরি মিটিংয়ে ঢুকতে পারবে এবং সবার এক্সেস সচল থাকবে।
+                              </>
+                            )}
                           </p>
                         </div>
-                        <button
-                          onClick={toggleBlockSystemSetting}
-                          className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                            blockSystemActive ? "bg-rose-600" : "bg-emerald-500"
-                          }`}
-                        >
-                          <span
-                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                              blockSystemActive ? "translate-x-5" : "translate-x-0"
+                        <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                          <span className="text-[10px] font-bold text-slate-600">
+                            {blockSystemActive ? "ON" : "OFF"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={toggleBlockSystemSetting}
+                            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                              blockSystemActive ? "bg-rose-600" : "bg-emerald-500"
                             }`}
-                          />
-                        </button>
+                            title={blockSystemActive ? "ব্লক সিস্টেম বন্ধ করতে ক্লিক করুন" : "ব্লক সিস্টেম চালু করতে ক্লিক করুন"}
+                          >
+                            <span
+                              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                blockSystemActive ? "translate-x-5" : "translate-x-0"
+                              }`}
+                            />
+                          </button>
+                        </div>
                       </div>
 
-                      <div className="pt-2 border-t border-slate-200/80 flex items-center justify-between">
-                        <span className="text-[9px] font-bold text-slate-500">
-                          পূর্বে ব্লক হওয়া সমস্ত আইপি/ডিভাইস আনব্লক করতে:
-                        </span>
+                      {/* RESET ALL BLOCKS IN SETTINGS */}
+                      <div className="pt-2.5 border-t border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="space-y-0.5">
+                          <p className="text-[10px] font-black text-slate-800 flex items-center gap-1">
+                            <RotateCcw className="h-3 w-3 text-red-600" />
+                            <span>সকল ব্লক ডাটা রিসেট করুন</span>
+                          </p>
+                          <p className="text-[9px] text-slate-500 leading-tight">
+                            যাদের যে সময় ব্লক করা হয়েছে, সব ব্লক এক ক্লিকে তুলে নিতে এই অপশনটি ব্যবহার করুন।
+                          </p>
+                        </div>
                         <button
                           type="button"
                           onClick={() => setShowResetBlockConfirm(true)}
                           disabled={isResettingAllBlocks}
-                          className="px-2.5 py-1 bg-red-600 hover:bg-red-700 active:scale-95 text-white font-extrabold text-[9px] rounded-lg transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                          className="self-start sm:self-auto px-3 py-1.5 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 active:scale-95 text-white font-black text-[9.5px] rounded-lg shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0"
                         >
                           <RotateCcw className={`h-3 w-3 ${isResettingAllBlocks ? "animate-spin" : ""}`} />
                           <span>সব ব্লক রিসেট করুন</span>
