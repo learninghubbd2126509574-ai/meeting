@@ -350,27 +350,67 @@ export async function deleteAllMeetings(): Promise<boolean> {
 }
 
 export function subscribeMeetings(onUpdate: (meetings: MeetingDoc[]) => void) {
-  getMeetings().then((list) => {
-    if (list) onUpdate(list);
-  });
+  let latestSupabase: MeetingDoc[] | null = null;
+  let latestFirestore: MeetingDoc[] | null = null;
+
+  const emitMerged = () => {
+    if (latestSupabase === null && latestFirestore === null) return;
+    const merged = dedupeByKey(
+      [...(latestSupabase || []), ...(latestFirestore || [])],
+      (m) => m.id
+    );
+    merged.sort(
+      (a, b) => toTimestampMs(b.createdAt) - toTimestampMs(a.createdAt)
+    );
+    try {
+      localStorage.setItem("ue_cache_meetings", JSON.stringify(merged));
+    } catch (e) {}
+    onUpdate(merged);
+  };
+
+  const fetchSupabaseOnly = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("meetings")
+        .select("*")
+        .order("createdAt", { ascending: false });
+      if (!error && data) {
+        latestSupabase = data as MeetingDoc[];
+        emitMerged();
+      }
+    } catch (err) {
+      console.warn("Supabase subscribeMeetings notice:", err);
+    }
+  };
+
+  fetchSupabaseOnly();
 
   const channel = supabase
     .channel("realtime_meetings")
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "meetings" },
-      async () => {
-        const updated = await getMeetings();
-        onUpdate(updated);
+      () => {
+        fetchSupabaseOnly();
       }
     )
     .subscribe();
 
   const unsubFirestore = onSnapshot(
     collection(db, "meetings"),
-    async () => {
-      const updated = await getMeetings();
-      onUpdate(updated);
+    (snap) => {
+      latestFirestore = snap.docs.map((d) => {
+        const data = d.data() as any;
+        return {
+          id: d.id,
+          googleMeetLink: data.googleMeetLink || "",
+          active: data.active !== false,
+          meetingDate: data.meetingDate || null,
+          meetingTime: data.meetingTime || null,
+          createdAt: normalizeIsoTimestamp(data.createdAt),
+        };
+      });
+      emitMerged();
     },
     () => {}
   );
@@ -627,18 +667,41 @@ export async function deleteAllParticipants(): Promise<boolean> {
 export function subscribeParticipants(
   onUpdate: (participants: ParticipantDoc[]) => void
 ) {
-  getParticipants().then((list) => {
-    if (list) onUpdate(list);
-  });
+  let latestSupabase: ParticipantDoc[] | null = null;
+  let latestFirestore: ParticipantDoc[] | null = null;
+
+  const emitMerged = () => {
+    if (latestSupabase === null && latestFirestore === null) return;
+    const merged = dedupeByKey(
+      [...(latestSupabase || []), ...(latestFirestore || [])],
+      (p) => p.id
+    );
+    merged.sort(
+      (a, b) => toTimestampMs(b.joinedAt) - toTimestampMs(a.joinedAt)
+    );
+    try {
+      localStorage.setItem("ue_cache_participants", JSON.stringify(merged));
+    } catch (e) {}
+    onUpdate(merged);
+  };
+
+  const fetchSupabaseOnly = async () => {
+    const rows = await fetchAllRows<ParticipantDoc>("participants", "joinedAt");
+    if (rows !== null) {
+      latestSupabase = rows;
+      emitMerged();
+    }
+  };
+
+  fetchSupabaseOnly();
 
   const channel = supabase
     .channel("realtime_participants")
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "participants" },
-      async () => {
-        const updated = await getParticipants();
-        onUpdate(updated);
+      () => {
+        fetchSupabaseOnly();
       }
     )
     .subscribe();
@@ -647,9 +710,23 @@ export function subscribeParticipants(
   if (auth.currentUser) {
     unsubFirestore = onSnapshot(
       collection(db, "participants"),
-      async () => {
-        const updated = await getParticipants();
-        onUpdate(updated);
+      (snap) => {
+        latestFirestore = snap.docs.map((d) => {
+          const data = d.data() as any;
+          return {
+            id: d.id,
+            name: data.name || "",
+            meetingId: data.meetingId || undefined,
+            ip: data.ip || "Unknown",
+            deviceId: data.deviceId || "Unknown",
+            uid: data.uid || "Unknown",
+            browserFingerprint: data.browserFingerprint || "",
+            userAgent: data.userAgent || "",
+            joinedAt: normalizeIsoTimestamp(data.joinedAt),
+            blocked: data.blocked === true,
+          };
+        });
+        emitMerged();
       },
       () => {}
     );
@@ -873,18 +950,44 @@ export async function deleteAllDemoParticipants(): Promise<boolean> {
 export function subscribeDemoParticipants(
   onUpdate: (demoList: DemoParticipantDoc[]) => void
 ) {
-  getDemoParticipants().then((list) => {
-    if (list) onUpdate(list);
-  });
+  let latestSupabase: DemoParticipantDoc[] | null = null;
+  let latestFirestore: DemoParticipantDoc[] | null = null;
+
+  const emitMerged = () => {
+    if (latestSupabase === null && latestFirestore === null) return;
+    const merged = dedupeByKey(
+      [...(latestSupabase || []), ...(latestFirestore || [])],
+      (p) => p.id
+    );
+    merged.sort(
+      (a, b) => toTimestampMs(b.joinedAt) - toTimestampMs(a.joinedAt)
+    );
+    try {
+      localStorage.setItem("ue_cache_demo_participants", JSON.stringify(merged));
+    } catch (e) {}
+    onUpdate(merged);
+  };
+
+  const fetchSupabaseOnly = async () => {
+    const rows = await fetchAllRows<DemoParticipantDoc>(
+      "demo_participants",
+      "joinedAt"
+    );
+    if (rows !== null) {
+      latestSupabase = rows;
+      emitMerged();
+    }
+  };
+
+  fetchSupabaseOnly();
 
   const channel = supabase
     .channel("realtime_demo_participants")
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "demo_participants" },
-      async () => {
-        const updated = await getDemoParticipants();
-        onUpdate(updated);
+      () => {
+        fetchSupabaseOnly();
       }
     )
     .subscribe();
@@ -893,9 +996,24 @@ export function subscribeDemoParticipants(
   if (auth.currentUser) {
     unsubFirestore = onSnapshot(
       collection(db, "demoParticipants"),
-      async () => {
-        const updated = await getDemoParticipants();
-        onUpdate(updated);
+      (snap) => {
+        latestFirestore = snap.docs.map((d) => {
+          const data = d.data() as any;
+          return {
+            id: d.id,
+            name: data.name || "",
+            meetingId: data.meetingId || undefined,
+            gmail: data.gmail || "",
+            ip: data.ip || "Unknown",
+            deviceId: data.deviceId || "Unknown",
+            uid: data.uid || "Unknown",
+            browserFingerprint: data.browserFingerprint || "",
+            userAgent: data.userAgent || "",
+            joinedAt: normalizeIsoTimestamp(data.joinedAt),
+            blocked: data.blocked === true,
+          };
+        });
+        emitMerged();
       },
       () => {}
     );
@@ -1230,30 +1348,25 @@ export async function isIPBlocked(ip: string): Promise<boolean> {
   if (!isValidIdentifier(ip)) return false;
   const cleanIp = ip.trim();
 
-  const [sbBlocked, fsBlocked] = await Promise.all([
-    (async () => {
-      try {
-        const { data } = await supabase
-          .from("blocked_ips")
-          .select("ip")
-          .eq("ip", cleanIp)
-          .maybeSingle();
-        return Boolean(data);
-      } catch {
-        return false;
-      }
-    })(),
-    (async () => {
-      try {
-        const snap = await getDoc(doc(db, "blockedIPs", safeDocId(cleanIp)));
-        return snap.exists();
-      } catch {
-        return false;
-      }
-    })(),
-  ]);
+  let sbQuerySucceeded = false;
+  try {
+    const { data, error } = await supabase
+      .from("blocked_ips")
+      .select("ip")
+      .eq("ip", cleanIp)
+      .maybeSingle();
+    if (!error) {
+      sbQuerySucceeded = true;
+      if (data) return true;
+    }
+  } catch {}
 
-  if (sbBlocked || fsBlocked) return true;
+  if (!sbQuerySucceeded) {
+    try {
+      const snap = await getDoc(doc(db, "blockedIPs", safeDocId(cleanIp)));
+      if (snap.exists()) return true;
+    } catch {}
+  }
 
   try {
     const cached = localStorage.getItem("ue_cache_blocked_ips");
@@ -1269,32 +1382,27 @@ export async function isDeviceBlocked(deviceId: string): Promise<boolean> {
   if (!isValidIdentifier(deviceId)) return false;
   const cleanDev = deviceId.trim();
 
-  const [sbBlocked, fsBlocked] = await Promise.all([
-    (async () => {
-      try {
-        const { data } = await supabase
-          .from("blocked_devices")
-          .select("deviceId")
-          .eq("deviceId", cleanDev)
-          .maybeSingle();
-        return Boolean(data);
-      } catch {
-        return false;
-      }
-    })(),
-    (async () => {
-      try {
-        const snap = await getDoc(
-          doc(db, "blockedDevices", safeDocId(cleanDev))
-        );
-        return snap.exists();
-      } catch {
-        return false;
-      }
-    })(),
-  ]);
+  let sbQuerySucceeded = false;
+  try {
+    const { data, error } = await supabase
+      .from("blocked_devices")
+      .select("deviceId")
+      .eq("deviceId", cleanDev)
+      .maybeSingle();
+    if (!error) {
+      sbQuerySucceeded = true;
+      if (data) return true;
+    }
+  } catch {}
 
-  if (sbBlocked || fsBlocked) return true;
+  if (!sbQuerySucceeded) {
+    try {
+      const snap = await getDoc(
+        doc(db, "blockedDevices", safeDocId(cleanDev))
+      );
+      if (snap.exists()) return true;
+    } catch {}
+  }
 
   try {
     const cached = localStorage.getItem("ue_cache_blocked_devices");
@@ -1310,30 +1418,25 @@ export async function isUIDBlocked(uid: string): Promise<boolean> {
   if (!isValidIdentifier(uid)) return false;
   const cleanUid = uid.trim();
 
-  const [sbBlocked, fsBlocked] = await Promise.all([
-    (async () => {
-      try {
-        const { data } = await supabase
-          .from("blocked_uids")
-          .select("uid")
-          .eq("uid", cleanUid)
-          .maybeSingle();
-        return Boolean(data);
-      } catch {
-        return false;
-      }
-    })(),
-    (async () => {
-      try {
-        const snap = await getDoc(doc(db, "blockedUIDs", safeDocId(cleanUid)));
-        return snap.exists();
-      } catch {
-        return false;
-      }
-    })(),
-  ]);
+  let sbQuerySucceeded = false;
+  try {
+    const { data, error } = await supabase
+      .from("blocked_uids")
+      .select("uid")
+      .eq("uid", cleanUid)
+      .maybeSingle();
+    if (!error) {
+      sbQuerySucceeded = true;
+      if (data) return true;
+    }
+  } catch {}
 
-  if (sbBlocked || fsBlocked) return true;
+  if (!sbQuerySucceeded) {
+    try {
+      const snap = await getDoc(doc(db, "blockedUIDs", safeDocId(cleanUid)));
+      if (snap.exists()) return true;
+    } catch {}
+  }
 
   try {
     const cached = localStorage.getItem("ue_cache_blocked_uids");
@@ -1346,18 +1449,44 @@ export async function isUIDBlocked(uid: string): Promise<boolean> {
 }
 
 export function subscribeBlockedIPs(onUpdate: (list: BlockedIPDoc[]) => void) {
-  getBlockedIPs().then((list) => {
-    if (list) onUpdate(list);
-  });
+  let latestSupabase: BlockedIPDoc[] | null = null;
+  let latestFirestore: BlockedIPDoc[] | null = null;
+
+  const emitMerged = () => {
+    if (latestSupabase === null && latestFirestore === null) return;
+    const merged = dedupeByKey(
+      [...(latestSupabase || []), ...(latestFirestore || [])].filter((b) =>
+        isValidIdentifier(b.ip)
+      ),
+      (b) => b.ip
+    );
+    try {
+      localStorage.setItem("ue_cache_blocked_ips", JSON.stringify(merged));
+    } catch (e) {}
+    onUpdate(merged);
+  };
+
+  const fetchSupabaseOnly = async () => {
+    try {
+      const { data, error } = await supabase.from("blocked_ips").select("*");
+      if (!error && data) {
+        latestSupabase = data as BlockedIPDoc[];
+        emitMerged();
+      }
+    } catch (err) {
+      console.warn("Supabase subscribeBlockedIPs notice:", err);
+    }
+  };
+
+  fetchSupabaseOnly();
 
   const channel = supabase
     .channel("realtime_blocked_ips")
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "blocked_ips" },
-      async () => {
-        const updated = await getBlockedIPs();
-        onUpdate(updated);
+      () => {
+        fetchSupabaseOnly();
       }
     )
     .subscribe();
@@ -1366,9 +1495,20 @@ export function subscribeBlockedIPs(onUpdate: (list: BlockedIPDoc[]) => void) {
   if (auth.currentUser) {
     unsubFirestore = onSnapshot(
       collection(db, "blockedIPs"),
-      async () => {
-        const updated = await getBlockedIPs();
-        onUpdate(updated);
+      (snap) => {
+        latestFirestore = snap.docs.map((d) => {
+          const data = d.data() as any;
+          return {
+            ip: data.ip || d.id,
+            name: data.name || undefined,
+            deviceId: data.deviceId || undefined,
+            uid: data.uid || undefined,
+            browserFingerprint: data.browserFingerprint || undefined,
+            reason: data.reason || "Blocked by Admin",
+            blockedAt: normalizeIsoTimestamp(data.blockedAt),
+          };
+        });
+        emitMerged();
       },
       () => {}
     );
@@ -1436,18 +1576,44 @@ export async function getBlockedDevices(): Promise<{ deviceId: string }[]> {
 export function subscribeBlockedDevices(
   onUpdate: (list: { deviceId: string }[]) => void
 ) {
-  getBlockedDevices().then((list) => {
-    if (list) onUpdate(list);
-  });
+  let latestSupabase: { deviceId: string }[] | null = null;
+  let latestFirestore: { deviceId: string }[] | null = null;
+
+  const emitMerged = () => {
+    if (latestSupabase === null && latestFirestore === null) return;
+    const merged = dedupeByKey(
+      [...(latestSupabase || []), ...(latestFirestore || [])].filter((d) =>
+        isValidIdentifier(d.deviceId)
+      ),
+      (d) => d.deviceId
+    );
+    try {
+      localStorage.setItem("ue_cache_blocked_devices", JSON.stringify(merged));
+    } catch (e) {}
+    onUpdate(merged);
+  };
+
+  const fetchSupabaseOnly = async () => {
+    try {
+      const { data, error } = await supabase.from("blocked_devices").select("*");
+      if (!error && data) {
+        latestSupabase = data as { deviceId: string }[];
+        emitMerged();
+      }
+    } catch (err) {
+      console.warn("Supabase subscribeBlockedDevices notice:", err);
+    }
+  };
+
+  fetchSupabaseOnly();
 
   const channel = supabase
     .channel("realtime_blocked_devices")
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "blocked_devices" },
-      async () => {
-        const updated = await getBlockedDevices();
-        onUpdate(updated);
+      () => {
+        fetchSupabaseOnly();
       }
     )
     .subscribe();
@@ -1456,9 +1622,12 @@ export function subscribeBlockedDevices(
   if (auth.currentUser) {
     unsubFirestore = onSnapshot(
       collection(db, "blockedDevices"),
-      async () => {
-        const updated = await getBlockedDevices();
-        onUpdate(updated);
+      (snap) => {
+        latestFirestore = snap.docs.map((d) => ({
+          deviceId: (d.data() as any)?.deviceId || d.id,
+          ...(d.data() as any),
+        }));
+        emitMerged();
       },
       () => {}
     );
@@ -1524,18 +1693,44 @@ export async function getBlockedUIDs(): Promise<{ uid: string }[]> {
 }
 
 export function subscribeBlockedUIDs(onUpdate: (list: { uid: string }[]) => void) {
-  getBlockedUIDs().then((list) => {
-    if (list) onUpdate(list);
-  });
+  let latestSupabase: { uid: string }[] | null = null;
+  let latestFirestore: { uid: string }[] | null = null;
+
+  const emitMerged = () => {
+    if (latestSupabase === null && latestFirestore === null) return;
+    const merged = dedupeByKey(
+      [...(latestSupabase || []), ...(latestFirestore || [])].filter((u) =>
+        isValidIdentifier(u.uid)
+      ),
+      (u) => u.uid
+    );
+    try {
+      localStorage.setItem("ue_cache_blocked_uids", JSON.stringify(merged));
+    } catch (e) {}
+    onUpdate(merged);
+  };
+
+  const fetchSupabaseOnly = async () => {
+    try {
+      const { data, error } = await supabase.from("blocked_uids").select("*");
+      if (!error && data) {
+        latestSupabase = data as { uid: string }[];
+        emitMerged();
+      }
+    } catch (err) {
+      console.warn("Supabase subscribeBlockedUIDs notice:", err);
+    }
+  };
+
+  fetchSupabaseOnly();
 
   const channel = supabase
     .channel("realtime_blocked_uids")
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "blocked_uids" },
-      async () => {
-        const updated = await getBlockedUIDs();
-        onUpdate(updated);
+      () => {
+        fetchSupabaseOnly();
       }
     )
     .subscribe();
@@ -1544,9 +1739,12 @@ export function subscribeBlockedUIDs(onUpdate: (list: { uid: string }[]) => void
   if (auth.currentUser) {
     unsubFirestore = onSnapshot(
       collection(db, "blockedUIDs"),
-      async () => {
-        const updated = await getBlockedUIDs();
-        onUpdate(updated);
+      (snap) => {
+        latestFirestore = snap.docs.map((d) => ({
+          uid: (d.data() as any)?.uid || d.id,
+          ...(d.data() as any),
+        }));
+        emitMerged();
       },
       () => {}
     );
@@ -1569,35 +1767,37 @@ export async function getAdminSettings(): Promise<AdminSettingsDoc | null> {
   } catch (e) {}
 
   let sbData: AdminSettingsDoc | null = null;
+  try {
+    const { data, error } = await supabase
+      .from("admin_settings")
+      .select("*")
+      .eq("id", "settings")
+      .maybeSingle();
+    if (!error && data) {
+      sbData = data as AdminSettingsDoc;
+    }
+  } catch (err) {
+    console.warn("Supabase getAdminSettings notice:", err);
+  }
+
+  if (sbData) {
+    const merged = { ...cached, ...sbData };
+    try {
+      localStorage.setItem("ue_cache_settings", JSON.stringify(merged));
+    } catch (e) {}
+    return merged as AdminSettingsDoc;
+  }
+
   let fsData: AdminSettingsDoc | null = null;
+  try {
+    const snap = await getDoc(doc(db, "adminSettings", "settings"));
+    if (snap.exists()) {
+      fsData = snap.data() as AdminSettingsDoc;
+    }
+  } catch (err) {}
 
-  await Promise.all([
-    (async () => {
-      try {
-        const { data, error } = await supabase
-          .from("admin_settings")
-          .select("*")
-          .eq("id", "settings")
-          .maybeSingle();
-        if (!error && data) {
-          sbData = data as AdminSettingsDoc;
-        }
-      } catch (err) {
-        console.warn("Supabase getAdminSettings notice:", err);
-      }
-    })(),
-    (async () => {
-      try {
-        const snap = await getDoc(doc(db, "adminSettings", "settings"));
-        if (snap.exists()) {
-          fsData = snap.data() as AdminSettingsDoc;
-        }
-      } catch (err) {}
-    })(),
-  ]);
-
-  if (sbData || fsData) {
-    const merged = { ...cached, ...(sbData || {}), ...(fsData || {}) };
+  if (fsData) {
+    const merged = { ...cached, ...fsData };
     try {
       localStorage.setItem("ue_cache_settings", JSON.stringify(merged));
     } catch (e) {}
@@ -1659,27 +1859,63 @@ export async function saveAdminSettings(
 export function subscribeAdminSettings(
   onUpdate: (settings: AdminSettingsDoc) => void
 ) {
-  getAdminSettings().then((s) => {
-    if (s) onUpdate(s);
-  });
+  let latestSupabase: AdminSettingsDoc | null = null;
+  let latestFirestore: AdminSettingsDoc | null = null;
+
+  const emitMerged = () => {
+    if (!latestSupabase && !latestFirestore) return;
+    let cached: AdminSettingsDoc | null = null;
+    try {
+      const cachedStr = localStorage.getItem("ue_cache_settings");
+      if (cachedStr) cached = JSON.parse(cachedStr);
+    } catch (e) {}
+    const merged = {
+      ...(cached || {}),
+      ...(latestSupabase || {}),
+      ...(latestFirestore || {}),
+    } as AdminSettingsDoc;
+    try {
+      localStorage.setItem("ue_cache_settings", JSON.stringify(merged));
+    } catch (e) {}
+    onUpdate(merged);
+  };
+
+  const fetchSupabaseOnly = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("admin_settings")
+        .select("*")
+        .eq("id", "settings")
+        .maybeSingle();
+      if (!error && data) {
+        latestSupabase = data as AdminSettingsDoc;
+        emitMerged();
+      }
+    } catch (err) {
+      console.warn("Supabase subscribeAdminSettings notice:", err);
+    }
+  };
+
+  fetchSupabaseOnly();
 
   const channel = supabase
     .channel("realtime_admin_settings")
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "admin_settings" },
-      async () => {
-        const updated = await getAdminSettings();
-        if (updated) onUpdate(updated);
+      () => {
+        fetchSupabaseOnly();
       }
     )
     .subscribe();
 
   const unsubFirestore = onSnapshot(
     doc(db, "adminSettings", "settings"),
-    async () => {
-      const updated = await getAdminSettings();
-      if (updated) onUpdate(updated);
+    (snap) => {
+      if (snap.exists()) {
+        latestFirestore = snap.data() as AdminSettingsDoc;
+        emitMerged();
+      }
     },
     () => {}
   );

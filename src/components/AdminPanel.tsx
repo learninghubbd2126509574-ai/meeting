@@ -373,6 +373,19 @@ export default function AdminPanel() {
 
     async function fetchSettings() {
       try {
+        const sbOrCached = await dbService.getAdminSettings();
+        if (sbOrCached) {
+          setSavedPassword(sbOrCached.password || "4012");
+          setPreventRepeatJoins(sbOrCached.preventRepeatJoins !== false);
+          setPublicLinkActive(sbOrCached.publicLinkActive !== false);
+          setBlockSystemActive(sbOrCached.blockSystemActive !== false);
+          setNoticeText(sbOrCached.noticeText || "");
+          setNoticeActive(sbOrCached.noticeActive === true);
+          setDemoModeActive(sbOrCached.demoModeActive === true);
+          setDemoCode(sbOrCached.demoCode || "1234");
+          return;
+        }
+
         const docRef = doc(db, "adminSettings", "settings");
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
@@ -386,7 +399,7 @@ export default function AdminPanel() {
           setDemoModeActive(data.demoModeActive === true);
           setDemoCode(data.demoCode || "1234");
         } else {
-          await setDoc(docRef, {
+          await dbService.saveAdminSettings({
             password: "4012",
             preventRepeatJoins: true,
             publicLinkActive: true,
@@ -2391,11 +2404,21 @@ export default function AdminPanel() {
 
         {/* Firestore Quota Fallback Notice */}
         {quotaExceeded && (
-          <div className="bg-[#fff8e6] border border-[#fde6b0] rounded-2xl px-4 py-3 flex items-start gap-2.5 text-xs text-[#78350f]">
-            <AlertTriangle className="h-4 w-4 text-[#f59e0b] shrink-0 mt-0.5" />
-            <p className="font-medium leading-relaxed">
-              Secondary backup quota reached. All records continue to save safely in the primary database.
-            </p>
+          <div className="bg-[#fff8e6] border border-[#fde6b0] rounded-2xl px-4 py-3 flex items-center justify-between gap-2.5 text-xs text-[#78350f]">
+            <div className="flex items-start gap-2.5">
+              <AlertTriangle className="h-4 w-4 text-[#f59e0b] shrink-0 mt-0.5" />
+              <p className="font-medium leading-relaxed">
+                Secondary backup daily quota reached. All records continue to save safely in your primary Supabase database.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setQuotaExceeded(false)}
+              className="p-1 rounded-lg hover:bg-black/5 cursor-pointer shrink-0"
+              aria-label="Dismiss notice"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
           </div>
         )}
 
