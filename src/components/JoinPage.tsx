@@ -19,20 +19,21 @@ import {
   Loader2,
   CheckCircle,
   ShieldAlert,
+  ShieldCheck,
   Bell,
   Clock,
   Calendar,
   AlertTriangle,
   Lock,
-  Sparkles,
   ArrowRight,
+  ChevronRight,
 } from "lucide-react";
 import { motion } from "motion/react";
 
 function getBrowserFingerprint(): string {
   const parts = [
     navigator.userAgent,
-    navigator.language || "bn",
+    navigator.language || "en",
     screen.width,
     screen.height,
     screen.colorDepth,
@@ -56,7 +57,7 @@ interface JoinPageProps {
 
 export default function JoinPage({ meetingId }: JoinPageProps) {
   const [fullName, setFullName] = useState("");
-  const [ipAddress, setIpAddress] = useState<string>("যাচাই হচ্ছে...");
+  const [ipAddress, setIpAddress] = useState<string>("যাচাই চলছে...");
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [uid, setUid] = useState<string | null>(null);
   const [isIpBlocked, setIsIpBlocked] = useState<boolean>(false);
@@ -145,10 +146,11 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
     let unsubSettings: (() => void) | null = null;
 
     // Fast parallel IP fetching with timeout to guarantee responsiveness under slow connections
-    async function getIpWithTimeout(): Promise<string> {
+    async function getIpWithTimeout(timeoutMs = 5000): Promise<string> {
       const endpoints = [
         "https://api.ipify.org?format=json",
         "https://api64.ipify.org?format=json",
+        "https://www.cloudflare.com/cdn-cgi/trace",
         "https://ipinfo.io/json",
         "https://ipapi.co/json/",
         "https://api.db-ip.com/v2/free/self",
@@ -169,6 +171,13 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
               if (!trimmed) {
                 reject(new Error("Empty response"));
                 return;
+              }
+              if (url.includes("cdn-cgi/trace")) {
+                const match = trimmed.match(/^ip=(.+)$/m);
+                if (match && match[1]) {
+                  resolve(match[1].trim());
+                  return;
+                }
               }
               try {
                 const data = JSON.parse(trimmed);
@@ -193,7 +202,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
         });
       };
 
-      const promises = endpoints.map((url) => fetchWithTimeout(url, 5000));
+      const promises = endpoints.map((url) => fetchWithTimeout(url, timeoutMs));
 
       try {
         if (typeof Promise.any === "function") {
@@ -220,7 +229,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                 resolved = true;
                 resolve("Unknown");
               }
-            }, 6000);
+            }, timeoutMs + 500);
           });
         }
       } catch (err) {
@@ -304,7 +313,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
         const detectedIp = await getIpWithTimeout();
         setIpAddress(detectedIp);
 
-        if (detectedIp !== "Unknown" && detectedIp !== "যাচাই হচ্ছে...") {
+        if (detectedIp !== "Unknown" && detectedIp !== "যাচাই চলছে...") {
           fetch(`https://ipapi.co/${detectedIp}/json/`)
             .then((res) => res.json())
             .then((meta) => {
@@ -460,7 +469,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
       } catch (err: any) {
         console.error("Initialization error in setupListeners:", err);
         setErrorMessage(
-          "নিরাপত্তা ব্যবস্থা যাচাই করতে ব্যর্থ হয়েছে। পেজ রিফ্রেশ করুন।",
+          "নিরাপত্তা যাচাই সম্পন্ন করা যায়নি। অনুগ্রহ করে পেজটি রিফ্রেশ (Refresh) করে আবার চেষ্টা করুন।",
         );
         setIsLoading(false);
       }
@@ -491,19 +500,38 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
   useEffect(() => {
     if (
       !ipAddress ||
-      ipAddress === "যাচাই হচ্ছে..." ||
+      ipAddress === "যাচাই চলছে..." ||
       ipAddress === "Unknown"
     ) {
       setIsIpBlocked(false);
       return;
     }
 
+    const safeIp = ipAddress.trim().replace(/\//g, "_");
+    let sbBlocked = false;
+    let fsBlocked = false;
+
     const unsubBlockIP = dbService.subscribeBlockedIPs((list) => {
-      setIsIpBlocked(list.some((b) => b.ip === ipAddress));
+      sbBlocked = list.some((b) => b.ip === ipAddress);
+      setIsIpBlocked(sbBlocked || fsBlocked);
+    });
+
+    const unsubFsIP = onSnapshot(
+      doc(db, "blockedIPs", safeIp),
+      (snap) => {
+        fsBlocked = snap.exists();
+        setIsIpBlocked(sbBlocked || fsBlocked);
+      },
+      () => {}
+    );
+
+    dbService.isIPBlocked(ipAddress).then((blocked) => {
+      if (blocked) setIsIpBlocked(true);
     });
 
     return () => {
       unsubBlockIP();
+      unsubFsIP();
     };
   }, [ipAddress]);
 
@@ -513,12 +541,27 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
       return;
     }
 
+    const safeDev = deviceId.trim().replace(/\//g, "_");
+    let sbBlocked = false;
+    let fsBlocked = false;
+
     const unsubBlockDevice = dbService.subscribeBlockedDevices((list) => {
-      setIsDeviceBlockedById(list.some((b) => b.deviceId === deviceId));
+      sbBlocked = list.some((b) => b.deviceId === deviceId);
+      setIsDeviceBlockedById(sbBlocked || fsBlocked);
     });
+
+    const unsubFsDev = onSnapshot(
+      doc(db, "blockedDevices", safeDev),
+      (snap) => {
+        fsBlocked = snap.exists();
+        setIsDeviceBlockedById(sbBlocked || fsBlocked);
+      },
+      () => {}
+    );
 
     return () => {
       unsubBlockDevice();
+      unsubFsDev();
     };
   }, [deviceId]);
 
@@ -528,14 +571,83 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
       return;
     }
 
+    const safeUid = uid.trim().replace(/\//g, "_");
+    let sbBlocked = false;
+    let fsBlocked = false;
+
     const unsubBlockUid = dbService.subscribeBlockedUIDs((list) => {
-      setIsUidBlocked(list.some((b) => b.uid === uid));
+      sbBlocked = list.some((b) => b.uid === uid);
+      setIsUidBlocked(sbBlocked || fsBlocked);
     });
+
+    const unsubFsUid = onSnapshot(
+      doc(db, "blockedUIDs", safeUid),
+      (snap) => {
+        fsBlocked = snap.exists();
+        setIsUidBlocked(sbBlocked || fsBlocked);
+      },
+      () => {}
+    );
 
     return () => {
       unsubBlockUid();
+      unsubFsUid();
     };
   }, [uid]);
+
+  async function resolveIpQuickly(): Promise<string> {
+    if (
+      ipAddress &&
+      ipAddress !== "যাচাই চলছে..." &&
+      ipAddress !== "Unknown"
+    ) {
+      return ipAddress;
+    }
+
+    const tryJsonIp = (url: string) =>
+      fetch(url).then(async (r) => {
+        if (!r.ok) throw new Error("HTTP error");
+        const data = await r.json();
+        const ip = (data?.ip || data?.ipAddress || "").trim();
+        if (!ip) throw new Error("Empty IP");
+        return ip;
+      });
+
+    const tryCloudflareIp = () =>
+      fetch("https://www.cloudflare.com/cdn-cgi/trace").then(async (r) => {
+        if (!r.ok) throw new Error("HTTP error");
+        const t = await r.text();
+        const m = t.match(/^ip=(.+)$/m);
+        const ip = m?.[1]?.trim() || "";
+        if (!ip) throw new Error("Empty IP");
+        return ip;
+      });
+
+    try {
+      const lookupPromise =
+        typeof Promise.any === "function"
+          ? Promise.any([
+              tryJsonIp("https://api.ipify.org?format=json"),
+              tryCloudflareIp(),
+              tryJsonIp("https://api64.ipify.org?format=json"),
+              tryJsonIp("https://ipinfo.io/json"),
+            ])
+          : tryJsonIp("https://api.ipify.org?format=json");
+
+      const resolved = await Promise.race([
+        lookupPromise.catch(() => "Unknown"),
+        new Promise<string>((resolve) =>
+          setTimeout(() => resolve("Unknown"), 1800)
+        ),
+      ]);
+
+      if (resolved && resolved !== "Unknown") {
+        setIpAddress(resolved);
+        return resolved;
+      }
+    } catch {}
+    return "Unknown";
+  }
 
   const withTimeout = <T,>(
     promise: Promise<T>,
@@ -555,31 +667,30 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
     if (!fullName.trim()) return;
     if (!publicLinkActive) {
       setErrorMessage(
-        "দুঃখিত, সাধারণ লিংকের মাধ্যমে জয়েন করা বর্তমানে বন্ধ রাখা হয়েছে।",
+        "দুঃখিত, এই পাবলিক লিংকের মাধ্যমে মিটিংয়ে জয়েনিং বর্তমানে বন্ধ রয়েছে।",
       );
       return;
     }
 
     if (!googleMeetLink) {
       setErrorMessage(
-        "গুগল মিট (Google Meet) লিংকটি এখনও কাউন্সেলিং সেশনে যুক্ত করা হয়নি।",
+        "এই সেশনের জন্য এখনো Google Meet লিংক যুক্ত করা হয়নি।",
       );
       return;
     }
 
     if (!meetingActive) {
       setErrorMessage(
-        "এই কাউন্সেলিং সেশনটি বৰ্তমানে নিষ্ক্রিয় বা সম্পন্ন করা হয়েছে।",
+        "এই কাউন্সেলিং সেশনটি বর্তমানে বন্ধ রয়েছে অথবা সমাপ্ত হয়েছে।",
       );
       return;
     }
 
-    const finalIp =
-      !ipAddress || ipAddress === "যাচাই হচ্ছে..." ? "Unknown" : ipAddress;
-
     try {
       setIsSubmitting(true);
       setErrorMessage(null);
+
+      const finalIp = await resolveIpQuickly();
 
       if (blockSystemActive && isBlocked) {
         setIsSubmitting(false);
@@ -625,7 +736,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
 
           if (duplicate) {
             setErrorMessage(
-              "দুঃখিত, এই আইপি অ্যাড্রেস (IP Address) দিয়ে ইতিপূর্বে অন্য একটি ডিভাইস থেকে মিটিংয়ে জয়েন করা হয়েছে। একই ওয়াইফাই বা ইন্টারনেট সংযোগ দিয়ে দ্বিতীয় কেউ মিটিংয়ে অংশগ্রহণ করতে পারবেন না।",
+              "দুঃখিত, এই IP Address থেকে ইতিমধ্যেই অন্য একটি ডিভাইসে মিটিংয়ে জয়েন করা হয়েছে। একই Wi-Fi বা ইন্টারনেট সংযোগ থেকে একাধিক ডিভাইস দিয়ে জয়েন করা যাবে না।",
             );
             setIsSubmitting(false);
             return;
@@ -680,7 +791,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
 
       if (!currentMeetingActive) {
         setErrorMessage(
-          "এই কাউন্সেলিং সেশনটি বৰ্তমানে নিষ্ক্রিয় বা সম্পন্ন করা হয়েছে।",
+          "এই কাউন্সেলিং সেশনটি বর্তমানে বন্ধ আছে অথবা শেষ হয়ে গেছে।",
         );
         setIsSubmitting(false);
         return;
@@ -688,7 +799,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
 
       if (!currentMeetLink || !currentMeetLink.trim()) {
         setErrorMessage(
-          "গুগল মিট (Google Meet) লিংকটি লোড হচ্ছে। অনুগ্রহ করে আবার 'মিটিংয়ে প্রবেশ করুন' এ ক্লিক করুন।",
+          "Google Meet লিংক লোড হচ্ছে। অনুগ্রহ করে আবার 'মিটিংয়ে জয়েন করুন' বাটনে ক্লিক করুন।",
         );
         setIsSubmitting(false);
         return;
@@ -703,7 +814,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
     } catch (err: any) {
       console.error("Global join error:", err);
       setErrorMessage(
-        "সার্ভারের সাথে সংযোগ বিচ্ছিন্ন হয়েছে। অনুগ্রহ করে ইন্টারনেট চেক করে আবার চেষ্টা করুন।",
+        "সার্ভারের সাথে সংযোগ বিচ্ছিন্ন হয়েছে। আপনার ইন্টারনেট সংযোগ চেক করে আবার চেষ্টা করুন।",
       );
       setIsSubmitting(false);
     }
@@ -716,7 +827,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
       setDemoModeStep("enter_info");
     } else {
       setDemoError(
-        "ভুল ডেমো কোড! অনুগ্রহ করে আপনার অ্যাডমিন কর্তৃক সেট করা কোডটি সঠিকভাবে দিন।",
+        "ভুল Demo Code দিয়েছেন। অনুগ্রহ করে অ্যাডমিনের দেওয়া ৪ সংখ্যার সঠিক কোডটি লিখুন।",
       );
     }
   }
@@ -724,45 +835,48 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
   async function handleDemoJoin(e: React.FormEvent) {
     e.preventDefault();
     if (!demoNameInput.trim()) {
-      setDemoError("আপনার সম্পূর্ণ নামটি দেওয়া আবশ্যক।");
+      setDemoError("আপনার পূর্ণ নাম (Full Name) লেখা আবশ্যক।");
       return;
     }
 
     if (!googleMeetLink) {
       setDemoError(
-        "গুগল মিট (Google Meet) লিংকটি এখনও সেশনে যুক্ত করা হয়নি।",
+        "এই সেশনের জন্য এখনো Google Meet লিংক যুক্ত করা হয়নি।",
       );
       return;
     }
 
     if (!meetingActive) {
       setDemoError(
-        "এই কাউন্সেলিং সেশনটি বৰ্তমানে নিষ্ক্রিয় বা সম্পন্ন করা হয়েছে।",
+        "এই কাউন্সেলিং সেশনটি বর্তমানে বন্ধ আছে অথবা শেষ হয়ে গেছে।",
       );
       return;
     }
 
     const finalIp =
-      !ipAddress || ipAddress === "যাচাই হচ্ছে..." ? "Unknown" : ipAddress;
+      !ipAddress || ipAddress === "যাচাই চলছে..." ? "Unknown" : ipAddress;
 
     try {
       setIsDemoSubmitting(true);
       setDemoError(null);
 
+      const resolvedDemoIp =
+        finalIp === "Unknown" ? await resolveIpQuickly() : finalIp;
+
       if (blockSystemActive && (isIpBlocked || isDeviceBlockedById || isDeviceBlockedByFp || isUidBlocked)) {
         setIsDemoSubmitting(false);
         setDemoError(
-          "দুঃখিত, আইপি বা ডিভাইস ব্লক থাকার কারণে আপনি জয়েন করতে পারছেন না।",
+          "দুঃখিত, আপনার IP Address বা ডিভাইস ব্লক থাকায় আপনি মিটিংয়ে জয়েন করতে পারবেন না।",
         );
         return;
       }
 
-      if (blockSystemActive && finalIp && finalIp !== "Unknown") {
+      if (blockSystemActive && resolvedDemoIp && resolvedDemoIp !== "Unknown") {
         try {
-          if (await dbService.isIPBlocked(finalIp)) {
+          if (await dbService.isIPBlocked(resolvedDemoIp)) {
             setIsIpBlocked(true);
             setIsDemoSubmitting(false);
-            setDemoError("দুঃখিত, আপনার আইপিটি ব্লকড করা হয়েছে।");
+            setDemoError("দুঃখিত, আপনার IP Address টি ব্লক করা হয়েছে।");
             return;
           }
         } catch (e) {}
@@ -773,7 +887,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
           if (await dbService.isDeviceBlocked(deviceId)) {
             setIsDeviceBlockedById(true);
             setIsDemoSubmitting(false);
-            setDemoError("দুঃখিত, আপনার ডিভাইসটি ব্লকড করা হয়েছে।");
+            setDemoError("দুঃখিত, আপনার ডিভাইসটি ব্লক করা হয়েছে।");
             return;
           }
         } catch (e) {}
@@ -784,7 +898,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
           if (await dbService.isUIDBlocked(uid)) {
             setIsUidBlocked(true);
             setIsDemoSubmitting(false);
-            setDemoError("দুঃখিত, আপনার ইউজার আইডি (UID) ব্লকড করা হয়েছে।");
+            setDemoError("দুঃখিত, আপনার User ID (UID) টি ব্লক করা হয়েছে।");
             return;
           }
         } catch (e) {}
@@ -798,7 +912,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
           name: demoNameInput.trim(),
           gmail: demoGmailInput.trim() || "",
           meetingId: meetingId,
-          ip: finalIp,
+          ip: resolvedDemoIp,
           deviceId: deviceId || "Unknown",
           uid: uid || "Unknown",
           browserFingerprint: getBrowserFingerprint(),
@@ -811,7 +925,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
 
       if (!meetingActive) {
         setDemoError(
-          "এই কাউন্সেলিং সেশনটি বৰ্তমানে নিষ্ক্রিয় বা সম্পন্ন করা হয়েছে।",
+          "এই কাউন্সেলিং সেশনটি বর্তমানে বন্ধ আছে অথবা শেষ হয়ে গেছে।",
         );
         setIsDemoSubmitting(false);
         return;
@@ -819,7 +933,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
 
       if (!googleMeetLink) {
         setDemoError(
-          "গুগল মিট (Google Meet) লিংকটি এখনও সেশনে যুক্ত করা হয়নি।",
+          "এই সেশনের জন্য এখনো Google Meet লিংক যুক্ত করা হয়নি।",
         );
         setIsDemoSubmitting(false);
         return;
@@ -833,22 +947,12 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
       window.location.assign(redirectUrl);
     } catch (err: any) {
       console.error("Demo registration error:", err);
-      setDemoError("সার্ভারের সাথে সংযোগ বিচ্ছিন্ন হয়েছে। আবার চেষ্টা করুন।");
+      setDemoError("সার্ভারের সাথে সংযোগ বিচ্ছিন্ন হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।");
       setIsDemoSubmitting(false);
     }
   }
 
   function getMeetingDateAndParts(dateStr?: string | null, timeStr?: string | null) {
-    const bgDigits: { [key: string]: string } = {
-      "0": "০", "1": "১", "2": "২", "3": "৩", "4": "৪",
-      "5": "৫", "6": "৬", "7": "৭", "8": "৮", "9": "৯",
-    };
-    const toBgNum = (numStr: string) =>
-      numStr
-        .split("")
-        .map((char) => bgDigits[char] || char)
-        .join("");
-
     let formattedDate = "";
     if (dateStr) {
       const parts = dateStr.split("-");
@@ -856,13 +960,13 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
         const year = parts[0];
         const month = parts[1];
         const day = parts[2];
-        const monthsBg = [
-          "জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন",
-          "জুলাই", "আগস্ট", "সেপ্টেম্বর", "অক্টোবর", "নভেম্বর", "ডিসেম্বর"
+        const monthsEn = [
+          "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+          "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
         ];
         const monthIndex = parseInt(month, 10) - 1;
-        const monthBg = monthsBg[monthIndex] || month;
-        formattedDate = `${toBgNum(day)} ${monthBg} ${toBgNum(year)}`;
+        const monthLabel = monthsEn[monthIndex] || month;
+        formattedDate = `${day} ${monthLabel} ${year}`;
       } else {
         formattedDate = dateStr;
       }
@@ -874,16 +978,10 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
       if (tParts.length >= 2) {
         let hour = parseInt(tParts[0], 10);
         const minute = tParts[1];
-        let ampm = "সকাল";
-        if (hour >= 12) {
-          ampm = "বিকাল";
-          if (hour > 12) hour -= 12;
-        } else {
-          if (hour === 0) hour = 12;
-          if (hour >= 6 && hour < 12) ampm = "সকাল";
-          else ampm = "রাত";
-        }
-        formattedTime = `${ampm} ${toBgNum(String(hour))}:${toBgNum(minute)} মিনিট`;
+        const ampm = hour >= 12 ? "PM" : "AM";
+        if (hour > 12) hour -= 12;
+        if (hour === 0) hour = 12;
+        formattedTime = `${hour}:${minute} ${ampm}`;
       } else {
         formattedTime = timeStr;
       }
@@ -895,136 +993,109 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
     };
   }
 
-  function formatMeetingDateTime(dateStr?: string | null, timeStr?: string | null) {
-    if (!dateStr && !timeStr) return "";
-    try {
-      const bgDigits: { [key: string]: string } = {
-        "0": "০", "1": "১", "2": "২", "3": "৩", "4": "৪",
-        "5": "৫", "6": "৬", "7": "৭", "8": "৮", "9": "৯",
-      };
-      const toBgNum = (numStr: string) =>
-        numStr
-          .split("")
-          .map((char) => bgDigits[char] || char)
-          .join("");
-
-      let formattedTime = "";
-      if (timeStr) {
-        const tParts = timeStr.split(":");
-        if (tParts.length >= 2) {
-          let hour = parseInt(tParts[0], 10);
-          const minute = tParts[1];
-          let ampm = "সকাল";
-          if (hour >= 12) {
-            ampm = "বিকাল";
-            if (hour > 12) hour -= 12;
-          } else {
-            if (hour === 0) hour = 12;
-            if (hour >= 6 && hour < 12) ampm = "সকাল";
-            else ampm = "রাত";
-          }
-          formattedTime = `${ampm} ${toBgNum(String(hour))}:${toBgNum(minute)} মিনিট`;
-        } else {
-          formattedTime = timeStr;
-        }
-      }
-
-      let formattedDate = "";
-      if (dateStr) {
-        const parts = dateStr.split("-");
-        if (parts.length === 3) {
-          const year = parts[0];
-          const month = parts[1];
-          const day = parts[2];
-          const monthsBg = [
-            "জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন",
-            "জুলাই", "আগস্ট", "সেপ্টেম্বর", "অক্টোবর", "নভেম্বর", "ডিসেম্বর"
-          ];
-          const monthIndex = parseInt(month, 10) - 1;
-          const monthBg = monthsBg[monthIndex] || month;
-          formattedDate = `${toBgNum(day)} ${monthBg} ${toBgNum(year)}`;
-        } else {
-          formattedDate = dateStr;
-        }
-      }
-
-      if (formattedDate && formattedTime) {
-        return `${formattedDate}, ${formattedTime}`;
-      }
-      return formattedDate || formattedTime;
-    } catch (e) {
-      console.warn("Date parsing error", e);
-    }
-    return `${dateStr || ""} ${timeStr || ""}`.trim();
-  }
-
-  // NEOMORPHISM DESIGN SYSTEM
-  // Base background: #eef2f7
-  // Raised shadow: shadow-[8px_8px_16px_#d1d9e6,-8px_-8px_16px_#ffffff]
-  // Inset shadow: shadow-[inset_3px_3px_6px_#d1d9e6,inset_-3px_-3px_6px_#ffffff]
-  // Button shadow: shadow-[5px_5px_12px_#d1d9e6,-5px_-5px_12px_#ffffff]
+  const schedule = getMeetingDateAndParts(meetingDate, meetingTime);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#f8fafc] via-[#f1f5f9] to-[#e8eef5] text-slate-800 flex flex-col justify-center items-center p-0 sm:p-4 md:p-6 select-text overflow-x-hidden font-sans">
-      
-      {/* PROFESSIONAL PORTAL CONTAINER */}
-      <div className="w-full min-h-screen sm:min-h-0 sm:max-w-[430px] bg-white sm:rounded-[28px] sm:border sm:border-slate-200/90 sm:shadow-[0_20px_60px_-15px_rgba(15,23,42,0.1),0_0_0_1px_rgba(255,255,255,0.8)] flex flex-col relative overflow-hidden transition-all duration-300">
-        
-        {/* MEETING NOTIFICATION POPUP */}
-        {showNotificationPopup && !isLoading && !isBlocked && (
-          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-[100] flex items-center justify-center p-4 font-sans animate-fade-in">
-            <div className="w-full max-w-sm bg-white rounded-3xl border border-slate-100 shadow-[0_25px_50px_-12px_rgba(15,23,42,0.2)] p-6 relative overflow-hidden space-y-4 text-center my-auto transition-all">
-              
-              {/* TOP RIGHT CLOSE ICON */}
-              <button
-                type="button"
-                onClick={() => setShowNotificationPopup(false)}
-                className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold transition duration-150 cursor-pointer"
-                aria-label="Close"
-              >
-                ✕
-              </button>
+    <div className="min-h-screen bg-[#f4f6f9] text-[#111827] flex flex-col justify-start sm:justify-center items-center p-0 sm:p-4 md:p-6 select-text overflow-x-hidden font-sans">
+      {/* MAIN RESPONSIVE PORTAL COLUMN */}
+      <div className="w-full max-w-[440px] mx-auto flex flex-col min-h-screen sm:min-h-0">
 
-              {/* EMBOSSED TOP BADGE ICON */}
-              <div className="flex justify-center pt-1">
-                <div className="h-12 w-12 bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl flex items-center justify-center text-white shadow-[0_8px_16px_-4px_rgba(37,99,235,0.3)]">
-                  <span className="text-xl">📢</span>
+        {/* MEETING NOTIFICATION POPUP (Unity Earning / Counseling Session / E-learning Platform + Formal Bengali Instructions) */}
+        {showNotificationPopup && !isLoading && !isBlocked && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[100] flex items-center justify-center p-4 font-sans animate-fadeIn">
+            <div className="w-full max-w-[390px] bg-white rounded-3xl border border-[#dce3ec] shadow-[0_24px_48px_rgba(11,74,139,0.22)] overflow-hidden relative">
+              {/* Corporate Brand Header Banner (All English as requested) */}
+              <div className="bg-gradient-to-br from-[#0b4a8b] via-[#0d549d] to-[#08386b] text-white px-6 pt-7 pb-6 text-center relative">
+                <button
+                  type="button"
+                  onClick={() => setShowNotificationPopup(false)}
+                  className="absolute top-3.5 right-3.5 text-white/80 hover:text-white bg-white/15 hover:bg-white/25 h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold transition cursor-pointer"
+                  aria-label="Close"
+                >
+                  ✕
+                </button>
+
+                <div className="mx-auto mb-3 h-10 w-10 rounded-xl bg-white/15 border border-white/20 flex items-center justify-center text-white shadow-sm">
+                  <Bell className="h-5 w-5" />
+                </div>
+
+                <p className="text-[12px] font-bold tracking-[0.18em] uppercase text-[#a5d8ff]">
+                  Unity Earning
+                </p>
+                <h2 className="text-[22px] font-extrabold tracking-tight text-white mt-1 leading-tight">
+                  Counseling Session
+                </h2>
+                <div className="mt-1.5 flex items-center justify-center gap-2">
+                  <span className="h-px w-6 bg-white/30" />
+                  <p className="text-[12.5px] font-semibold tracking-wide text-emerald-200">
+                    E-learning Platform
+                  </p>
+                  <span className="h-px w-6 bg-white/30" />
                 </div>
               </div>
 
-              {/* TITLE */}
-              <div className="space-y-1">
-                <span className="inline-flex items-center gap-1.5 bg-blue-50 border border-blue-200/60 px-3 py-1 rounded-full text-[11px] font-bold text-blue-700 tracking-wide">
-                  📌 গুরুত্বপূর্ণ দিকনির্দেশনা
-                </span>
+              {/* Formal Bengali Instructions Body */}
+              <div className="p-5 sm:p-6 space-y-4">
+                <div className="text-center space-y-1">
+                  <h3 className="text-[15.5px] font-extrabold text-[#111827] leading-snug">
+                    মিটিংয়ে প্রবেশের গুরুত্বপূর্ণ নির্দেশনা
+                  </h3>
+                  <p className="text-[12px] text-[#64748b] font-medium">
+                    অনুগ্রহ করে নিচের ধাপগুলো অনুসরণ করে সেশনে যোগ দিন
+                  </p>
+                </div>
+
+                <div className="bg-[#f6faff] border border-[#d6e6f7] rounded-2xl p-4 space-y-3 text-left">
+                  <div className="flex items-start gap-3">
+                    <span className="h-6 w-6 rounded-lg bg-[#0b4a8b] text-white text-[11px] font-extrabold flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
+                      ১
+                    </span>
+                    <p className="text-[12.5px] font-medium text-[#334155] leading-relaxed">
+                      পরবর্তী স্ক্রিনের{" "}
+                      <strong className="text-[#0b4a8b] font-bold">
+                        Full Name
+                      </strong>{" "}
+                      বক্সে অবশ্যই আপনার{" "}
+                      <strong className="text-[#111827] font-bold">
+                        আসল পূর্ণ নাম
+                      </strong>{" "}
+                      লিখুন।
+                    </p>
+                  </div>
+
+                  <div className="h-px bg-[#e2ecf7]" />
+
+                  <div className="flex items-start gap-3">
+                    <span className="h-6 w-6 rounded-lg bg-[#0d7a5f] text-white text-[11px] font-extrabold flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
+                      ২
+                    </span>
+                    <p className="text-[12.5px] font-medium text-[#334155] leading-relaxed">
+                      নাম লেখার পর নিচের{" "}
+                      <strong className="text-[#0b4a8b] font-bold">
+                        “মিটিংয়ে জয়েন করুন (Join Meeting)”
+                      </strong>{" "}
+                      বাটনে ক্লিক করে সরাসরি Google Meet-এ প্রবেশ করুন।
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowNotificationPopup(false)}
+                  className="w-full py-3.5 bg-gradient-to-r from-[#0b4a8b] to-[#0d7a5f] hover:from-[#083a6e] hover:to-[#09604a] text-white font-extrabold rounded-xl shadow-[0_6px_18px_rgba(11,74,139,0.25)] transition text-[13.5px] cursor-pointer flex items-center justify-center gap-2 active:scale-[0.99]"
+                >
+                  <CheckCircle className="w-4 h-4 text-emerald-200 shrink-0" />
+                  <span>বুঝেছি, এগিয়ে যান (Continue)</span>
+                </button>
               </div>
-
-              {/* MESSAGE CONTENT */}
-              <div className="bg-slate-50 border border-slate-200/70 rounded-2xl p-4 space-y-2">
-                <p className="text-xs sm:text-[13px] font-semibold text-slate-800 leading-relaxed">
-                  সেমিনার মিটিংয়ে প্রবেশ করতে নিচে আপনার নাম লিখুন এবং <span className="text-blue-600 font-bold underline decoration-blue-300 underline-offset-2">“মিটিংয়ে প্রবেশ করুন”</span> বাটনে ক্লিক করুন।
-                </p>
-              </div>
-
-              {/* CLOSE / CONTINUE BUTTON */}
-              <button
-                type="button"
-                onClick={() => setShowNotificationPopup(false)}
-                className="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold rounded-xl shadow-[0_4px_12px_rgba(37,99,235,0.25)] transition duration-150 text-[13.5px] cursor-pointer flex items-center justify-center gap-2"
-              >
-                <CheckCircle className="w-4 h-4 text-white shrink-0" />
-                <span>ঠিক আছে, প্রবেশ করুন</span>
-              </button>
-
             </div>
           </div>
         )}
 
         {/* DEMO MODE MODAL OVERLAY */}
         {demoModeStep !== null && (
-          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-[90] flex items-center justify-center p-4 font-sans animate-fade-in">
-            <div className="w-full max-w-sm bg-white rounded-3xl border border-slate-100 shadow-[0_25px_50px_-12px_rgba(15,23,42,0.2)] p-6 relative overflow-hidden space-y-4 my-auto">
-              
+          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-[90] flex items-center justify-center p-4 font-sans animate-fadeIn">
+            <div className="w-full max-w-sm bg-white rounded-2xl border border-[#e6eaf0] shadow-xl p-5 relative space-y-4">
               <button
                 type="button"
                 onClick={() => {
@@ -1034,35 +1105,36 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                   setDemoGmailInput("");
                   setDemoError(null);
                 }}
-                className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold transition duration-150 cursor-pointer"
+                className="absolute top-3.5 right-3.5 text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 h-7 w-7 rounded-lg flex items-center justify-center text-xs font-bold transition cursor-pointer"
+                aria-label="Close"
               >
                 ✕
               </button>
 
               <div className="text-center space-y-1 pt-1">
-                <span className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 px-3 py-0.5 rounded-full text-[10px] font-bold text-emerald-700 uppercase">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                  ডেমো ইউজার পোর্টাল
+                <span className="inline-block bg-[#ddf1fa] text-[#0b4a8b] px-2.5 py-0.5 rounded-md text-[10.5px] font-bold">
+                  Demo User Portal · ডেমো পোর্টাল
                 </span>
-                <h3 className="text-base font-bold text-slate-900">
-                  ইউনিক ডেমো সাইন-ইন
+                <h3 className="text-base font-bold text-[#111827] pt-0.5">
+                  ডেমো অ্যাক্সেস সাইন-ইন
                 </h3>
-                <p className="text-[11px] text-slate-500 font-medium">
-                  অ্যাডমিন কর্তৃক নির্ধারিত কোড দিয়ে প্রবেশ করুন।
+                <p className="text-[11.5px] text-slate-500 font-medium">
+                  অ্যাডমিনের দেওয়া ৪ সংখ্যার Access Code দিন।
                 </p>
               </div>
 
               {demoError && (
-                <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 text-rose-700 font-bold text-[11px] leading-relaxed text-center">
-                  ⚠️ {demoError}
+                <div className="bg-[#fff8e6] border border-[#fde6b0] rounded-xl p-3 flex items-start gap-2 text-slate-700 font-semibold text-xs leading-relaxed">
+                  <AlertTriangle className="h-4 w-4 text-[#d97706] shrink-0 mt-0.5" />
+                  <span>{demoError}</span>
                 </div>
               )}
 
               {demoModeStep === "enter_code" && (
                 <form onSubmit={handleDemoCodeVerify} className="space-y-4">
                   <div className="space-y-1.5 text-center">
-                    <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block">
-                      ৪ সংখ্যার কোড টাইপ করুন
+                    <label className="text-xs font-bold text-slate-700 block">
+                      ৪ সংখ্যার Access Code লিখুন
                     </label>
                     <input
                       type="text"
@@ -1074,51 +1146,49 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                       onChange={(e) =>
                         setDemoEnteredCode(e.target.value.replace(/\D/g, ""))
                       }
-                      className="w-36 mx-auto text-center px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-mono font-bold text-xl tracking-[0.4em] focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all"
+                      className="w-40 mx-auto text-center px-4 py-2.5 bg-[#f8fafc] border border-[#dce3ec] rounded-xl text-[#111827] font-mono tabular-nums font-bold text-xl tracking-[0.4em] focus:outline-none focus:ring-2 focus:ring-[#0b4a8b]/20 focus:border-[#0b4a8b] focus:bg-white transition"
                     />
                   </div>
 
                   <button
                     type="submit"
-                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-[0_4px_12px_rgba(16,185,129,0.25)] transition duration-150 text-[12px] cursor-pointer"
+                    className="w-full py-3 bg-[#0b4a8b] hover:bg-[#083a6e] text-white font-bold rounded-xl shadow-sm transition text-xs cursor-pointer"
                   >
-                    কোড ভেরিফাই করুন
+                    কোড যাচাই করুন (Verify Code)
                   </button>
                 </form>
               )}
 
               {demoModeStep === "enter_info" && (
                 <form onSubmit={handleDemoJoin} className="space-y-4">
-                  <div className="space-y-3">
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-slate-600 block uppercase">
-                        আপনার সম্পূর্ণ নাম
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="যেমন: মোঃ সাকিব হাসান"
-                        value={demoNameInput}
-                        onChange={(e) => setDemoNameInput(e.target.value)}
-                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white"
-                      />
-                    </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 block">
+                      আপনার পূর্ণ নাম (Full Name)
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="এখানে আপনার নাম লিখুন..."
+                      value={demoNameInput}
+                      onChange={(e) => setDemoNameInput(e.target.value)}
+                      className="w-full px-3.5 py-2.5 bg-[#f8fafc] border border-[#dce3ec] rounded-xl text-xs font-semibold text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#0b4a8b]/20 focus:border-[#0b4a8b] focus:bg-white transition"
+                    />
                   </div>
 
                   <button
                     type="submit"
                     disabled={isDemoSubmitting}
-                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-[0_4px_12px_rgba(16,185,129,0.25)] transition duration-150 text-[12px] cursor-pointer flex items-center justify-center gap-2"
+                    className="w-full py-3 bg-[#0d7a5f] hover:bg-[#0a634d] text-white font-bold rounded-xl shadow-sm transition text-xs cursor-pointer flex items-center justify-center gap-2"
                   >
                     {isDemoSubmitting ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin text-white" />
-                        <span>মিটিংয়ে রেফার করা হচ্ছে...</span>
+                        <span>মিটিংয়ে যুক্ত হচ্ছে...</span>
                       </>
                     ) : (
                       <>
                         <CheckCircle className="h-4 w-4 text-white" />
-                        <span>মিটিংয়ে প্রবেশ করুন (ডেমো)</span>
+                        <span>মিটিংয়ে জয়েন করুন (Demo)</span>
                       </>
                     )}
                   </button>
@@ -1130,67 +1200,71 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
 
         {/* LOADING STATE */}
         {isLoading && (
-          <div className="flex-1 flex flex-col items-center justify-center p-8 bg-slate-50 space-y-4 text-center min-h-[500px]">
-            <div className="p-4 bg-white rounded-2xl shadow-[0_8px_20px_-4px_rgba(0,0,0,0.06)] border border-slate-100 flex items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-            </div>
-            <div className="space-y-1">
-              <p className="text-slate-900 font-bold text-sm">
-                ডিভাইস ভেরিফিকেশন চলছে
-              </p>
-              <p className="text-slate-500 font-medium text-[11px]">
-                নিরাপত্তা ব্যবস্থা এবং আইপি অ্যাড্রেস সংযোগ পরীক্ষা হচ্ছে...
-              </p>
+          <div className="flex-1 flex flex-col items-center justify-center p-6 min-h-[460px]">
+            <div className="w-full bg-white border border-[#e6eaf0] rounded-2xl p-8 shadow-[0_2px_8px_rgba(15,23,42,0.04)] text-center space-y-4">
+              <div className="h-12 w-12 bg-[#edf4fc] border border-[#d6e6f7] rounded-xl flex items-center justify-center mx-auto">
+                <Loader2 className="h-6 w-6 animate-spin text-[#0b4a8b]" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-[#111827] font-bold text-sm">
+                  ডিভাইস যাচাই করা হচ্ছে (Verifying...)
+                </p>
+                <p className="text-slate-500 font-medium text-xs">
+                  নিরাপত্তা অবস্থা এবং নেটওয়ার্ক সংযোগ পরীক্ষা চলছে...
+                </p>
+              </div>
             </div>
           </div>
         )}
 
         {/* BLOCKED SCREEN */}
         {!isLoading && isBlocked && (
-          <div className="flex-1 flex flex-col justify-between p-6 bg-slate-50 pt-10">
+          <div className="flex-1 flex flex-col justify-center p-4">
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.3 }}
-              className="space-y-5 text-center pt-4"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25 }}
+              className="bg-white border border-[#e6eaf0] rounded-2xl p-6 shadow-[0_2px_8px_rgba(15,23,42,0.04)] space-y-5 text-center"
             >
-              <div className="h-16 w-16 bg-rose-50 rounded-2xl border border-rose-100 flex items-center justify-center mx-auto shadow-sm">
-                <ShieldAlert className="h-8 w-8 text-rose-600" />
+              <div className="h-14 w-14 bg-rose-50 rounded-xl border border-rose-200 flex items-center justify-center mx-auto">
+                <ShieldAlert className="h-7 w-7 text-rose-600" />
               </div>
 
-              <div className="space-y-2.5">
-                <h1 className="text-xl font-bold text-rose-600 tracking-tight">
-                  অ্যাক্সেস ব্লকড!
+              <div className="space-y-2">
+                <span className="inline-block bg-rose-50 text-rose-700 border border-rose-200 px-2.5 py-0.5 rounded-md text-[11px] font-bold">
+                  নিরাপত্তা ফিল্টার চালু · Security Filter
+                </span>
+                <h1 className="text-lg font-bold text-[#111827]">
+                  প্রবেশাধিকার ব্লক করা হয়েছে! (Blocked)
                 </h1>
 
                 {isVPN ? (
-                  <p className="text-slate-600 text-xs leading-relaxed px-2 font-medium">
-                    নিরাপত্তা জনিত কারণে{" "}
-                    <span className="font-bold text-rose-600 underline">
-                      VPN বা প্রক্সি (Proxy Network)
+                  <p className="text-slate-600 text-xs leading-relaxed font-medium">
+                    নিরাপত্তার স্বার্থে{" "}
+                    <span className="font-bold text-rose-600">
+                      VPN বা Proxy নেটওয়ার্ক
                     </span>{" "}
-                    ব্যবহার করে মিটিংয়ে জয়েন করা সম্পূর্ণরূপে নিষিদ্ধ। অনুগ্রহ
-                    করে আপনার আসল ওয়াইফাই বা মোবাইল ইন্টারনেট ব্যবহার করুন।
+                    ব্যবহার করে মিটিংয়ে জয়েন করা সম্পূর্ণ নিষিদ্ধ। অনুগ্রহ করে সাধারণ Wi-Fi বা মোবাইল ডাটা ব্যবহার করুন।
                   </p>
                 ) : (
-                  <p className="text-slate-600 text-xs leading-relaxed px-2 font-medium">
+                  <p className="text-slate-600 text-xs leading-relaxed font-medium">
                     দুঃখিত, আমাদের সিকিউরিটি ফিল্টার আপনার{" "}
                     <span className="font-bold text-rose-600">
-                      ডিভাইস আইপি অথবা হার্ডওয়্যার আইডি
+                      IP Address বা Device ID
                     </span>{" "}
-                    ব্লক করেছে। আপনি আর এই মিটিং সেশনের জন্য অ্যাক্সেস পাবেন না।
+                    ব্লক করেছে। আপনি এই মিটিং সেশনে প্রবেশ করতে পারবেন না।
                   </p>
                 )}
+              </div>
 
-                <div className="bg-white border border-slate-200 px-4 py-3 rounded-xl font-mono text-[11px] font-semibold text-slate-700 mt-4 text-left space-y-1.5 shadow-2xs">
-                  <p className="flex justify-between border-b border-slate-100 pb-1.5">
-                    <span>IP ADDRESS:</span>{" "}
-                    <span className="text-rose-600 font-bold">{ipAddress}</span>
-                  </p>
-                  <p className="flex justify-between pt-0.5">
-                    <span>USER ID (UID):</span>{" "}
-                    <span className="text-blue-600 font-bold">{uid || "Unknown"}</span>
-                  </p>
+              <div className="bg-[#f8fafc] border border-[#e6eaf0] px-4 py-3 rounded-xl font-mono tabular-nums text-[11px] font-semibold text-slate-700 text-left space-y-2">
+                <div className="flex justify-between border-b border-slate-200/70 pb-1.5">
+                  <span className="text-slate-500">IP ADDRESS</span>
+                  <span className="text-rose-600 font-bold">{ipAddress}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">USER ID (UID)</span>
+                  <span className="text-[#0b4a8b] font-bold">{uid || "Unknown"}</span>
                 </div>
               </div>
             </motion.div>
@@ -1199,333 +1273,370 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
 
         {/* MARQUEE ANNOUNCEMENT */}
         {!isLoading && !isBlocked && noticeActive && noticeText.trim() && (
-          <div className="w-full bg-slate-900 text-white py-2 px-4 overflow-hidden flex items-center gap-2 select-none shrink-0 z-40">
-            <span className="inline-flex items-center gap-1 bg-emerald-500 text-white px-2 py-0.5 rounded text-[9px] font-bold shrink-0 tracking-wide uppercase leading-none">
+          <div className="w-full sm:rounded-t-2xl bg-[#0b4a8b] text-white py-2 px-3.5 overflow-hidden flex items-center gap-2.5 select-none shrink-0 z-40">
+            <span className="inline-flex items-center gap-1 bg-white text-[#0b4a8b] px-2 py-0.5 rounded text-[10.5px] font-extrabold shrink-0">
               <Bell className="h-3 w-3 shrink-0" />
-              <span>ঘোষণা</span>
+              <span>নোটিশ</span>
             </span>
 
-            <div className="flex-1 overflow-hidden flex items-center h-4">
-              <marquee
-                scrollamount="3"
-                direction="left"
-                className="text-[11px] font-semibold font-sans whitespace-nowrap text-white/90 w-full"
-              >
-                {noticeText} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ★ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {noticeText}
-              </marquee>
+            <div className="flex-1 overflow-hidden relative h-4 flex items-center">
+              <div className="animate-marquee whitespace-nowrap text-[11.5px] font-medium text-blue-50">
+                {noticeText} &nbsp;&nbsp;&nbsp;&nbsp; • &nbsp;&nbsp;&nbsp;&nbsp; {noticeText}
+              </div>
             </div>
           </div>
         )}
 
-        {/* MAIN FORM VIEW */}
+        {/* MAIN CORPORATE PORTAL VIEW */}
         {!isLoading && !isBlocked && (
-          <div className="flex-1 overflow-y-auto p-4 sm:p-5 flex flex-col bg-[#f8fafc] relative animate-fade-in space-y-4">
+          <div className="flex-1 p-3.5 sm:p-4 flex flex-col space-y-3.5 animate-fadeIn">
 
-            {/* FORMAL, ELEGANT BRAND CARD WITH SLIM INFO BAR */}
-            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-[0_4px_16px_-2px_rgba(15,23,42,0.04)] space-y-3 shrink-0 relative overflow-hidden text-center">
-              {/* TOP SLENDER COLOR ACCENT (Blue & Mint) */}
-              <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-blue-600 via-blue-500 to-emerald-500"></div>
+            {/* 1. CENTERED CORPORATE HEADER CARD (Demo trigger when Demo Mode active) */}
+            <div
+              onClick={() => {
+                if (demoModeActive) {
+                  setDemoModeStep("enter_code");
+                  setDemoEnteredCode("");
+                  setDemoNameInput("");
+                  setDemoGmailInput("");
+                  setDemoError(null);
+                }
+              }}
+              className={`relative overflow-hidden bg-gradient-to-br from-[#0b4a8b] via-[#0c529a] to-[#083a6e] text-white rounded-2xl px-5 py-4 shadow-[0_8px_22px_rgba(11,74,139,0.22)] text-center select-none ${
+                demoModeActive ? "cursor-pointer hover:brightness-105 transition" : ""
+              }`}
+              title={demoModeActive ? "Demo Session Login" : undefined}
+            >
+              <div className="relative z-10 flex flex-col items-center justify-center space-y-1">
+                <p className="text-[12px] sm:text-[13px] font-bold text-[#bfe0ff] leading-tight">
+                  <span>Unity Earning</span>{" "}
+                  <span className="text-emerald-200 font-semibold">E-learning Platform</span>
+                </p>
 
-              <div className="space-y-1.5 pt-0.5">
-                <div
-                  onClick={() => {
-                    setDemoModeStep("enter_code");
-                    setDemoEnteredCode("");
-                    setDemoNameInput("");
-                    setDemoGmailInput("");
-                    setDemoError(null);
-                  }}
-                  className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200/80 px-3 py-0.5 rounded-full text-[10.5px] font-bold text-emerald-800 tracking-wide select-none cursor-pointer active:scale-95 transition duration-150"
-                  title="ডেমো সেশন লগইন"
-                >
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
-                  </span>
-                  <span>সেশন লাইভ পোর্টাল</span>
-                </div>
-
-                <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 font-sans">
-                  UNITY <span className="text-blue-600">EARNING</span>
+                <h1 className="text-[21px] sm:text-[23px] font-extrabold tracking-tight leading-snug text-white [text-wrap:balance]">
+                  সেমিনার মিটিং পোর্টাল
                 </h1>
-                <p className="text-[11.5px] font-semibold text-slate-500">
-                  অফিসিয়াল সেশন জয়েনিং পোর্টাল
+
+                <p className="text-[11px] font-semibold text-white/80 tracking-wide">
+                  Live · সেশন চালু আছে
                 </p>
               </div>
-
-              {/* SLIM, ELEGANT, COMPACT DATE & TIME INFO BAR (Requested by User) */}
-              {(() => {
-                const schedule = getMeetingDateAndParts(meetingDate, meetingTime);
-                return (
-                  <div className="pt-1 w-full select-none">
-                    <div className="flex items-center justify-center gap-2 sm:gap-3 bg-slate-50 border border-slate-200/80 rounded-xl px-3 py-2 text-[11px] shadow-[inset_0_1px_2px_rgba(0,0,0,0.02)]">
-                      <div className="flex items-center gap-1.5 text-slate-700 font-medium shrink-0">
-                        <Calendar className="h-3.5 w-3.5 text-blue-600 shrink-0" />
-                        <span className="font-bold text-slate-800">{schedule.formattedDate}</span>
-                      </div>
-                      <span className="h-3 w-px bg-slate-200 shrink-0" aria-hidden="true" />
-                      <div className="flex items-center gap-1.5 text-slate-700 font-medium shrink-0">
-                        <Clock className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                        <span className="font-bold text-emerald-700">{schedule.formattedTime}</span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
             </div>
 
-            {/* WARNINGS & ALERTS */}
-            <div className="space-y-3">
-              {errorMessage && !errorMessage.includes("কোটা") && !errorMessage.includes("Quota") && !errorMessage.includes("ফায়ারবেস") && (
-                <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 flex items-start gap-2 text-left">
-                  <AlertCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
-                  <p className="text-xs text-rose-800 font-semibold leading-normal">
+            {/* 2. SLIM, COMPACT 2-COLUMN DATE & TIME BAR */}
+            <div className="grid grid-cols-2 gap-3 select-none">
+              <div className="bg-white border border-[#e6eaf0] rounded-2xl px-3.5 py-2.5 shadow-[0_2px_8px_rgba(15,23,42,0.03)] flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-[11px] font-bold text-[#111827] leading-tight">
+                    মিটিংয়ের তারিখ (Date)
+                  </p>
+                  <p className="text-[11.5px] font-bold text-[#0d7a5f] truncate mt-0.5 tabular-nums">
+                    {schedule.formattedDate}
+                  </p>
+                </div>
+                <Calendar className="h-4 w-4 text-[#0b4a8b]/60 shrink-0" />
+              </div>
+
+              <div className="bg-white border border-[#e6eaf0] rounded-2xl px-3.5 py-2.5 shadow-[0_2px_8px_rgba(15,23,42,0.03)] flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-[11px] font-bold text-[#111827] leading-tight">
+                    নির্ধারিত সময় (Time)
+                  </p>
+                  <p className="text-[11.5px] font-bold text-[#0d7a5f] truncate mt-0.5 tabular-nums">
+                    {schedule.formattedTime}
+                  </p>
+                </div>
+                <Clock className="h-4 w-4 text-[#0b4a8b]/60 shrink-0" />
+              </div>
+            </div>
+
+            {/* 3. ICE-BLUE STATUS & VERIFIED CONNECTION BANNER */}
+            <div className="bg-[#edf4fc] border border-[#d6e6f7] rounded-2xl px-4 py-2.5 flex items-center justify-between gap-2.5 select-none">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="h-7 w-7 rounded-lg bg-white border border-[#d6e6f7] flex items-center justify-center text-[#0b4a8b] shrink-0">
+                  <ShieldCheck className="h-4 w-4" />
+                </div>
+                <p className="text-[11.5px] font-semibold text-slate-700 truncate">
+                  Verified IP · যাচাইকৃত আইপি:{" "}
+                  <span className="font-mono tabular-nums font-bold text-[#0b4a8b]">
+                    {ipAddress === "Unknown" ? "যাচাইকৃত (Protected)" : ipAddress}
+                  </span>
+                </p>
+              </div>
+              <ChevronRight className="h-4 w-4 text-[#0b4a8b] shrink-0" />
+            </div>
+
+            {/* ALERTS (if errors / inactive states) */}
+            {errorMessage &&
+              !errorMessage.includes("Quota") &&
+              !errorMessage.includes("quota") && (
+                <div className="bg-[#fff8e6] border border-[#fde6b0] rounded-2xl p-3.5 flex items-start gap-2.5 text-left">
+                  <AlertTriangle className="h-4 w-4 text-[#d97706] shrink-0 mt-0.5" />
+                  <p className="text-xs text-slate-700 font-semibold leading-relaxed">
                     {errorMessage}
                   </p>
                 </div>
               )}
 
-              {!meetingActive && (
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2 text-left">
-                  <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                  <p className="text-[11px] text-amber-800 leading-normal font-medium">
-                    এই কাউন্সেলিং সেশনটি বৰ্তমানে অ্যাডমিন কর্তৃক নিষ্ক্রিয়
-                    রাখা হয়েছে। আপনি আপনার নাম সাবমিট করে রাখতে পারেন, কিন্তু
-                    মিটিং লিংক অন না করা পর্যন্ত রিডাইরেক্ট হতে পারবেন না।
-                  </p>
+            {!meetingActive && (
+              <div className="bg-[#fff8e6] border border-[#fde6b0] rounded-2xl p-3.5 flex items-start gap-2.5 text-left">
+                <AlertCircle className="h-4 w-4 text-[#d97706] shrink-0 mt-0.5" />
+                <p className="text-xs text-slate-700 font-medium leading-relaxed">
+                  এই সেমিনার সেশনটি বর্তমানে বন্ধ রয়েছে। অ্যাডমিন লিংক সক্রিয় করলে আপনি মিটিংয়ে প্রবেশ করতে পারবেন।
+                </p>
+              </div>
+            )}
+
+            {!publicLinkActive && (
+              <div className="bg-white border border-[#e6eaf0] rounded-2xl p-5 text-center space-y-2.5 shadow-[0_2px_8px_rgba(15,23,42,0.03)]">
+                <div className="mx-auto w-10 h-10 bg-rose-50 border border-rose-200 rounded-xl flex items-center justify-center">
+                  <ShieldAlert className="h-5 w-5 text-rose-600" />
                 </div>
-              )}
+                <h3 className="font-bold text-sm text-[#111827]">
+                  মিটিংয়ে প্রবেশ সাময়িকভাবে বন্ধ
+                </h3>
+                <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                  অ্যাডমিন সাময়িকভাবে পাবলিক লিংকের মাধ্যমে প্রবেশ বন্ধ রেখেছেন।
+                </p>
+              </div>
+            )}
 
-              {!publicLinkActive && (
-                <div className="bg-white border border-rose-200 rounded-2xl p-4 text-center space-y-2 shadow-sm">
-                  <div className="mx-auto w-9 h-9 bg-rose-50 rounded-xl flex items-center justify-center">
-                    <ShieldAlert className="h-5 w-5 text-rose-600" />
+            {/* 4. EYE-CATCHING LEFT-TO-RIGHT HIGHLIGHTED NAME INPUT CARD & JOIN BUTTON */}
+            <form
+              key={showNotificationPopup ? "join-waiting" : "join-active"}
+              onSubmit={handleJoin}
+              className="space-y-3.5 animate-ltr-reveal"
+            >
+              {publicLinkActive && (
+                <div className="relative bg-white border-2 border-[#0b4a8b]/45 rounded-2xl shadow-[0_12px_30px_rgba(11,74,139,0.13)] overflow-hidden text-left">
+                  {/* Top accent rail with continuous left-to-right light sweep */}
+                  <div className="relative h-1.5 bg-gradient-to-r from-[#0b4a8b] via-[#1262b5] to-[#0d7a5f] overflow-hidden">
+                    <div className="animate-ltr-sweep absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/80 to-transparent pointer-events-none" />
                   </div>
 
-                  <div className="space-y-1">
-                    <h3 className="font-bold text-xs text-rose-800 uppercase tracking-wide">
-                      ⚠️ জয়েনিং অপশন বর্তমানে বন্ধ রয়েছে
-                    </h3>
-                    <p className="text-[11px] text-rose-700 font-semibold leading-relaxed">
-                      সম্মানিত এডমিন বর্তমানে সাধারণ লিংকের মাধ্যমে নাম লিখে
-                      জয়েন করার অপশনটি বন্ধ (অফ) করে রেখেছেন।
-                    </p>
-                  </div>
-
-                  <div className="bg-slate-50 border border-slate-200 rounded-lg py-1.5 px-3 text-[10px] font-bold text-rose-600 inline-flex items-center gap-1.5 select-none">
-                    <Clock className="h-3 w-3 text-rose-600" />
-                    <span>স্ট্যাটাস: অ্যাডমিন কর্তৃক সাধারণ জয়েন নিষ্ক্রিয়</span>
-                  </div>
-                </div>
-              )}
-
-              {/* FORM & INPUT CARD - CLEAN, FORMAL & PROFESSIONAL */}
-              <form onSubmit={handleJoin} className="space-y-3.5">
-                {publicLinkActive && (
-                  <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-[0_4px_16px_-2px_rgba(15,23,42,0.04)] space-y-3.5 relative overflow-hidden text-left">
-                    
-                    {/* Card Header - Clean, Formatted & Well-Aligned */}
-                    <div className="flex items-start gap-2.5 sm:gap-3 border-b border-slate-100 pb-3">
-                      <div className="h-8.5 w-8.5 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shrink-0 mt-0.5">
-                        <User className="h-4.5 w-4.5" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <h3 className="text-slate-900 font-bold text-[13.5px] sm:text-sm leading-tight">
-                            আপনার পূর্ণ নাম লিখুন
-                          </h3>
-                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-full shrink-0">
-                            বাধ্যতামূলক
-                          </span>
+                  <div className="p-4 sm:p-5 space-y-3.5">
+                    <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-3">
+                      <div className="flex items-start gap-2.5 min-w-0">
+                        <div className="h-9 w-9 rounded-xl bg-[#0b4a8b] text-white flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                          <User className="h-4.5 w-4.5" />
                         </div>
-                        <p className="text-[11px] text-slate-500 font-medium mt-1 leading-snug">
-                          অফিসিয়াল হাজিরা নিশ্চিত করতে আপনার সঠিক নাম দিন
-                        </p>
+                        <div className="min-w-0">
+                          <h2 className="text-[#111827] font-extrabold text-[15px] leading-tight flex items-center gap-1.5 flex-wrap">
+                            <span>আপনার পূর্ণ নাম লিখুন (Full Name)</span>
+                            {!fullName.trim() && (
+                              <ArrowRight className="h-3.5 w-3.5 text-[#0b4a8b] animate-ltr-nudge shrink-0" />
+                            )}
+                          </h2>
+                          <p className="text-[11.5px] text-[#475569] font-medium mt-0.5">
+                            উপস্থিতি নিশ্চিত করতে নিচের বক্সে আপনার সঠিক নাম লিখুন
+                          </p>
+                        </div>
                       </div>
+                      <span className="text-[11px] font-extrabold text-[#0b4a8b] shrink-0 pt-0.5">
+                        আবশ্যক
+                      </span>
                     </div>
 
-                    {/* EYE-CATCHING HIGHLIGHTED INPUT BOX */}
-                    <div className="relative group">
-                      {/* Subtle ambient animated glowing gradient ring behind input box to immediately draw attention */}
-                      <div
-                        className={`absolute -inset-[1.5px] rounded-2xl bg-gradient-to-r from-blue-500 via-sky-400 to-emerald-500 transition-all duration-300 ${
-                          fullName.trim()
-                            ? "opacity-40 blur-[1px]"
-                            : "opacity-85 blur-[2.5px] animate-pulse"
-                        }`}
-                      />
+                    {/* PROMINENT HIGHLIGHTED INPUT FIELD WITH LEFT-TO-RIGHT SWEEP */}
+                    <div
+                      className={`relative overflow-hidden rounded-xl border-2 transition-all duration-200 ${
+                        fullName.trim()
+                          ? "border-[#0d7a5f] bg-[#f4fbf8] ring-4 ring-[#0d7a5f]/15"
+                          : "border-[#0b4a8b] bg-[#f2f7ff] shadow-[0_0_0_4px_rgba(11,74,139,0.10)] focus-within:bg-white focus-within:shadow-[0_0_0_5px_rgba(11,74,139,0.18)]"
+                      }`}
+                    >
+                      {!fullName.trim() && (
+                        <div
+                          aria-hidden="true"
+                          className="animate-ltr-sweep pointer-events-none absolute inset-y-0 left-0 w-2/5 bg-gradient-to-r from-transparent via-[#0b4a8b]/12 to-transparent"
+                        />
+                      )}
 
-                      <div className="relative bg-white rounded-[14px] flex items-center shadow-xs">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none z-10">
-                          <div className={`h-8 w-8 rounded-lg flex items-center justify-center transition-all duration-200 ${
-                            fullName.trim()
-                              ? "bg-emerald-50 text-emerald-600"
-                              : "bg-blue-50 text-blue-600"
-                          }`}>
-                            <User className="h-4.5 w-4.5 font-bold" />
+                      <div className="relative z-10 flex items-center">
+                        <div className="pl-3 flex items-center pointer-events-none shrink-0">
+                          <div
+                            className={`h-8 w-8 rounded-lg flex items-center justify-center transition-colors ${
+                              fullName.trim()
+                                ? "bg-[#0d7a5f] text-white"
+                                : "bg-[#0b4a8b] text-white"
+                            }`}
+                          >
+                            <User className="h-4 w-4" />
                           </div>
                         </div>
 
                         <input
                           type="text"
                           required
-                          placeholder="এখানে আপনার সঠিক নাম লিখুন..."
+                          autoFocus
+                          placeholder="এখানে আপনার পূর্ণ নাম লিখুন..."
                           value={fullName}
                           onChange={(e) => setFullName(e.target.value)}
-                          className="w-full pl-13 pr-10 py-3.5 bg-white border-2 border-transparent focus:border-blue-500 text-slate-900 placeholder:text-slate-400 placeholder:font-medium rounded-[14px] text-xs sm:text-[14px] font-bold focus:outline-none transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]"
+                          className="w-full min-h-[52px] pl-3 pr-10 py-3.5 bg-transparent text-[#111827] placeholder:text-[#475569] placeholder:font-semibold text-sm font-extrabold focus:outline-none"
                         />
 
-                        <span className="absolute inset-y-0 right-3.5 flex items-center pointer-events-none z-10">
+                        <span className="pr-3 flex items-center pointer-events-none shrink-0">
                           {fullName.trim() ? (
-                            <span className="h-5 w-5 bg-emerald-500 rounded-full flex items-center justify-center text-white text-[10px] font-black shadow-xs">
-                              ✓
-                            </span>
+                            <CheckCircle className="h-5 w-5 text-[#0d7a5f]" />
                           ) : (
-                            <span className="flex h-2.5 w-2.5 relative">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-500 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-600"></span>
-                            </span>
+                            <ArrowRight className="h-4 w-4 text-[#0b4a8b] animate-ltr-nudge" />
                           )}
                         </span>
                       </div>
                     </div>
-
-                    {/* Subtle Notice Alert */}
-                    <div className="bg-rose-50/70 border border-rose-100 px-3 py-1.5 rounded-lg flex items-center justify-center gap-1.5 select-none">
-                      <AlertTriangle className="h-3.5 w-3.5 text-rose-500 shrink-0" />
-                      <p className="text-[10.5px] text-rose-700 font-medium">
-                        নাম ভুল হলে মিটিং থেকে সরাসরি বের করে দেয়া হতে পারে।
-                      </p>
-                    </div>
                   </div>
+                </div>
+              )}
+
+              {/* HIGHLIGHTED JOIN CTA BUTTON WITH LEFT-TO-RIGHT SHIMMER */}
+              <button
+                type="submit"
+                disabled={
+                  isSubmitting ||
+                  !fullName.trim() ||
+                  ipAddress === "যাচাই চলছে..." ||
+                  !publicLinkActive
+                }
+                className={`relative overflow-hidden w-full min-h-[48px] py-3.5 px-4 font-extrabold rounded-xl transition-all duration-200 text-center flex items-center justify-center gap-2 text-[14px] select-none ${
+                  !publicLinkActive
+                    ? "bg-slate-200 text-slate-500 cursor-not-allowed"
+                    : fullName.trim()
+                    ? "bg-gradient-to-r from-[#0b4a8b] to-[#0d7a5f] hover:from-[#083a6e] hover:to-[#09604a] text-white shadow-[0_8px_22px_rgba(11,74,139,0.28)] cursor-pointer active:scale-[0.99]"
+                    : "bg-[#e8eff7] border border-[#cbd9ea] text-[#334155] cursor-not-allowed"
+                }`}
+              >
+                {publicLinkActive && fullName.trim() && !isSubmitting && (
+                  <span
+                    aria-hidden="true"
+                    className="animate-ltr-sweep pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/25 to-transparent"
+                  />
                 )}
+                <span className="relative z-10 flex items-center justify-center gap-2">
+                  {ipAddress === "যাচাই চলছে..." ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin text-[#0b4a8b]" />
+                      <span>নিরাপত্তা যাচাই চলছে...</span>
+                    </>
+                  ) : isSubmitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin text-white" />
+                      <span>মিটিংয়ে যুক্ত হচ্ছে, অপেক্ষা করুন...</span>
+                    </>
+                  ) : !publicLinkActive ? (
+                    <>
+                      <AlertCircle className="h-4 w-4 text-slate-500" />
+                      <span>অ্যাডমিন কর্তৃক জয়েনিং বন্ধ</span>
+                    </>
+                  ) : fullName.trim() ? (
+                    <>
+                      <CheckCircle className="h-4.5 w-4.5 text-emerald-200" />
+                      <span>মিটিংয়ে জয়েন করুন (Join Meeting)</span>
+                      <ArrowRight className="h-4 w-4 text-white animate-ltr-nudge" />
+                    </>
+                  ) : (
+                    <>
+                      <User className="h-4 w-4 text-[#0b4a8b]" />
+                      <span>প্রথমে উপরে আপনার পূর্ণ নাম লিখুন</span>
+                      <ArrowRight className="h-4 w-4 text-[#0b4a8b] animate-ltr-nudge" />
+                    </>
+                  )}
+                </span>
+              </button>
+            </form>
 
-                {/* DYNAMICALLY HIGHLIGHTED ACTION BUTTON */}
-                <div>
-                  <button
-                    type="submit"
-                    disabled={
-                      isSubmitting ||
-                      !fullName.trim() ||
-                      ipAddress === "যাচাই হচ্ছে..." ||
-                      !publicLinkActive
-                    }
-                    className={`w-full py-3.5 font-bold rounded-xl transition-all duration-300 cursor-pointer text-center flex items-center justify-center gap-2 text-xs sm:text-[14px] select-none ${
-                      !publicLinkActive
-                        ? "bg-slate-300 text-slate-500 cursor-not-allowed opacity-70 shadow-none"
-                        : fullName.trim()
-                        ? "bg-gradient-to-r from-blue-600 via-blue-600 to-emerald-500 hover:from-blue-700 hover:to-emerald-600 text-white shadow-[0_8px_24px_-4px_rgba(37,99,235,0.45),0_0_15px_rgba(16,185,129,0.3)] scale-[1.01] active:scale-[0.99] ring-2 ring-emerald-400/40"
-                        : "bg-slate-100 border border-slate-200 text-slate-400 shadow-none cursor-not-allowed hover:bg-slate-150"
-                    }`}
-                  >
-                    {ipAddress === "যাচাই হচ্ছে..." ? (
-                      <div className="flex items-center justify-center gap-2">
-                        <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
-                        <span>নিরাপত্তা ভেরিফাই করা হচ্ছে...</span>
-                      </div>
-                    ) : isSubmitting ? (
-                      <div className="flex items-center gap-1.5 text-white">
-                        <Loader2 className="h-4 w-4 animate-spin text-white" />
-                        <span>লিঙ্ক রিকোয়েস্ট হচ্ছে, অপেক্ষা করুন...</span>
-                      </div>
-                    ) : !publicLinkActive ? (
-                      <div className="flex items-center justify-center gap-1.5 px-1 text-white">
-                        <AlertCircle className="h-4 w-4 text-white" />
-                        <span>জয়েনিং সেশন অ্যাডমিন কর্তৃক নিষ্ক্রিয়</span>
-                      </div>
-                    ) : fullName.trim() ? (
-                      <div className="flex items-center justify-center gap-2 px-1">
-                        <CheckCircle className="h-4.5 w-4.5 text-white" />
-                        <span className="tracking-wide">মিটিংয়ে প্রবেশ করুন</span>
-                        <ArrowRight className="h-4 w-4 text-white animate-pulse" />
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-center gap-2 px-1 text-slate-400">
-                        <User className="h-4 w-4 text-slate-400" />
-                        <span>প্রথমে উপরে আপনার নাম লিখুন</span>
-                      </div>
-                    )}
-                  </button>
-                </div>
-
-                {/* RULES CARD - FORMAL & BALANCED */}
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-4.5 space-y-2.5 shadow-[0_4px_16px_-2px_rgba(15,23,42,0.04)] text-left">
-                  
-                  <div className="flex items-center gap-1.5 font-bold text-xs text-slate-900 border-b border-slate-100 pb-2">
-                    <AlertCircle className="h-3.5 w-3.5 shrink-0 text-blue-600" />
-                    <h2>কাউন্সেলিং সেশন রুলস:</h2>
-                  </div>
-
-                  <ul className="space-y-2 text-[11px] sm:text-[11.5px] text-slate-600 list-none pl-0 leading-relaxed font-medium">
-                    <li className="flex items-start gap-2">
-                      <span className="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full bg-blue-50 border border-blue-200/60 text-blue-700 text-[9.5px] font-bold mt-0.5">
-                        ১
-                      </span>
-                      <span>
-                        মিটিংয়ে ঢুকেই প্রথম একটি{" "}
-                        <strong className="text-slate-900 font-bold underline decoration-rose-300">
-                          স্ক্রিনশট (Screenshot)
-                        </strong>{" "}
-                        নিয়ে কাউন্সেলরকে ইনবক্স করুন।
-                      </span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full bg-blue-50 border border-blue-200/60 text-blue-700 text-[9.5px] font-bold mt-0.5">
-                        ২
-                      </span>
-                      <span>
-                        সেশনের সমস্ত নিয়মনীতি মেনে সম্পূর্ণ সময় মিটিংয়ে থাকা
-                        আবশ্যক।
-                      </span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full bg-blue-50 border border-blue-200/60 text-blue-700 text-[9.5px] font-bold mt-0.5">
-                        ৩
-                      </span>
-                      <span>
-                        মাঝখানে চলে গেলে পুনরায় জয়েন রিকোয়েস্ট এক্সেপ্ট করা
-                        হবে না।
-                      </span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full bg-blue-50 border border-blue-200/60 text-blue-700 text-[9.5px] font-bold mt-0.5">
-                        ৪
-                      </span>
-                      <span>
-                        মিটিং চলাকালীন ফোনে কোনো প্রকার কলে কথা বলা যাবে না।
-                      </span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full bg-blue-50 border border-blue-200/60 text-blue-700 text-[9.5px] font-bold mt-0.5">
-                        ৫
-                      </span>
-                      <span>
-                        ১০ মিনিট জয়েনিং টাইম চলবে এবং পুরো সেশনটি সর্বোচ্চ ৪০
-                        মিনিট হবে।
-                      </span>
-                    </li>
-                  </ul>
-                </div>
-              </form>
-            </div>
-
-            {/* FOOTER VERIFIED SECURITY BADGE */}
-            <div className="bg-white px-3.5 py-2.5 rounded-xl border border-slate-200/80 flex items-center justify-between text-[10.5px] text-slate-500 font-medium select-none shadow-2xs">
-              <div className="flex items-center gap-1.5">
-                <Lock className="h-3 w-3 text-emerald-600" />
-                <span>নিরাপদ সংযোগ কানেক্টেড</span>
+            {/* 5. WARM AMBER CAUTION CARD */}
+            <div className="bg-[#fff8e6] border border-[#fde6b0] rounded-2xl p-4 flex items-start gap-3 text-left">
+              <AlertTriangle className="h-5 w-5 text-[#d97706] shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <h3 className="text-[13.5px] font-extrabold text-[#111827]">
+                  সঠিক নাম ব্যবহারের সতর্কতা (Important)
+                </h3>
+                <p className="text-[12px] text-[#334155] leading-relaxed font-medium">
+                  অনুগ্রহ করে আপনার{" "}
+                  <strong className="text-[#111827] font-bold">
+                    আসল পূর্ণ নাম
+                  </strong>{" "}
+                  লিখুন। ভুল, অসম্পূর্ণ কিংবা ছদ্মনাম ব্যবহার করলে আপনাকে তাৎক্ষণিকভাবে মিটিং থেকে রিমুভ (Remove) করা হতে পারে।
+                </p>
               </div>
-              <span>
-                IP:{" "}
-                <code className="text-slate-800 font-mono font-bold">
-                  {ipAddress === "Unknown" ? "যাচাই হচ্ছে..." : ipAddress}
-                </code>
-              </span>
             </div>
 
+            {/* 6. THIN DIVIDER + SCROLLABLE COUNSELING RULES SECTION */}
+            <div className="pt-2 border-t border-[#e6eaf0] space-y-2.5">
+              <div className="flex items-center justify-between px-1">
+                <div className="flex items-center gap-2 text-[13px] font-extrabold text-[#111827]">
+                  <Lock className="h-3.5 w-3.5 text-[#0b4a8b]" />
+                  <span>কাউন্সেলিং সেশনের নিয়মাবলী (Session Rules)</span>
+                </div>
+                <span className="text-[11px] font-bold text-[#0b4a8b]">
+                  ৫টি নির্দেশনা
+                </span>
+              </div>
+
+              <div className="bg-white border border-[#e6eaf0] rounded-2xl p-4 shadow-[0_2px_8px_rgba(15,23,42,0.03)] text-left">
+                <ul className="space-y-3 text-[12px] text-[#334155] list-none pl-0 leading-relaxed font-medium">
+                  <li className="flex items-start gap-2.5 pb-2.5 border-b border-[#f1f5f9]">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-[#0b4a8b] text-white text-[10.5px] font-extrabold mt-0.5">
+                      ১
+                    </span>
+                    <span>
+                      মিটিংয়ে প্রবেশ করার সাথে সাথে একটি{" "}
+                      <strong className="text-[#111827] font-bold">
+                        Screenshot (স্ক্রিনশট)
+                      </strong>{" "}
+                      নিয়ে আপনার কাউন্সিলরের ইনবক্সে প্রেরণ করুন।
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2.5 pb-2.5 border-b border-[#f1f5f9]">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-[#0b4a8b] text-white text-[10.5px] font-extrabold mt-0.5">
+                      ২
+                    </span>
+                    <span>
+                      সেশনের সকল নিয়ম-শৃঙ্খলা যথাযথভাবে মেনে চলুন এবং মিটিং শেষ না হওয়া পর্যন্ত মনোযোগের সাথে উপস্থিত থাকুন।
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2.5 pb-2.5 border-b border-[#f1f5f9]">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-[#0b4a8b] text-white text-[10.5px] font-extrabold mt-0.5">
+                      ৩
+                    </span>
+                    <span>
+                      মিটিংয়ের মাঝপথে বের হয়ে গেলে পরবর্তীতে পুনরায় প্রবেশের (Re-join) অনুরোধ গ্রহণ করা হবে না।
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2.5 pb-2.5 border-b border-[#f1f5f9]">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-[#0b4a8b] text-white text-[10.5px] font-extrabold mt-0.5">
+                      ৪
+                    </span>
+                    <span>
+                      মিটিং চলাকালীন সময়ে মোবাইল ফোনে কল রিসিভ করা বা কথা বলা সম্পূর্ণ নিষিদ্ধ।
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-[#0d7a5f] text-white text-[10.5px] font-extrabold mt-0.5">
+                      ৫
+                    </span>
+                    <span>
+                      মিটিংয়ে প্রবেশের সুযোগ প্রথম{" "}
+                      <strong className="text-[#111827] font-bold">
+                        ১০ মিনিট
+                      </strong>{" "}
+                      খোলা থাকবে এবং সম্পূর্ণ সেশনটি{" "}
+                      <strong className="text-[#111827] font-bold">
+                        ৪০ মিনিট
+                      </strong>{" "}
+                      পরিচালিত হবে।
+                    </span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            {/* FOOTER */}
+            <p className="text-center text-[11px] text-slate-400 pt-1 pb-4 font-medium">
+              © {new Date().getFullYear()} Unity Earning · E-learning Platform
+            </p>
           </div>
         )}
-
       </div>
     </div>
   );

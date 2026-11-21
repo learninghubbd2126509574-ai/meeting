@@ -108,7 +108,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-100 via-slate-50 to-slate-100 font-sans antialiased text-slate-900">
+    <div className="min-h-screen bg-[#f4f6f9] font-sans antialiased text-[#111827]">
       {currentRoute.type === 'welcome' && (
         <WelcomePage 
           onNavigateToAdmin={navigateToAdmin} 

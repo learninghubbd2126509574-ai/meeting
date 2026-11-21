@@ -96,16 +96,18 @@ CREATE TABLE IF NOT EXISTS public.admin_settings (
   password TEXT DEFAULT '4012',
   "preventRepeatJoins" BOOLEAN DEFAULT true,
   "publicLinkActive" BOOLEAN DEFAULT true,
+  "blockSystemActive" BOOLEAN DEFAULT true,
   "noticeText" TEXT DEFAULT '',
   "noticeActive" BOOLEAN DEFAULT false,
   "demoModeActive" BOOLEAN DEFAULT false,
   "demoCode" TEXT DEFAULT '1234',
   "updatedAt" TIMESTAMPTZ DEFAULT now()
 );
+ALTER TABLE public.admin_settings ADD COLUMN IF NOT EXISTS "blockSystemActive" BOOLEAN DEFAULT true;
 
 -- Insert default admin settings if not exist
-INSERT INTO public.admin_settings (id, password, "preventRepeatJoins", "publicLinkActive", "noticeText", "noticeActive", "demoModeActive", "demoCode")
-VALUES ('settings', '4012', true, true, '', false, false, '1234')
+INSERT INTO public.admin_settings (id, password, "preventRepeatJoins", "publicLinkActive", "blockSystemActive", "noticeText", "noticeActive", "demoModeActive", "demoCode")
+VALUES ('settings', '4012', true, true, true, '', false, false, '1234')
 ON CONFLICT (id) DO NOTHING;
 
 -- 8. Leaderboard Table

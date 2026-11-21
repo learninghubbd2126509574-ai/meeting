@@ -26,6 +26,7 @@ export interface BlockedIP {
   ip: string;
   deviceId?: string;
   uid?: string;
+  browserFingerprint?: string;
   blockedAt: Timestamp | any;
   name: string;
   reason?: string;

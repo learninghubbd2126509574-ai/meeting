@@ -1,4 +1,15 @@
 import { supabase } from "./supabase";
+import { db, auth } from "./firebase";
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  onSnapshot,
+  setDoc,
+  updateDoc,
+} from "firebase/firestore";
 
 export interface MeetingDoc {
   id: string;
@@ -55,13 +66,76 @@ export interface AdminSettingsDoc {
   noticeActive?: boolean;
   demoModeActive?: boolean;
   demoCode?: string;
-  blockSystemActive?: boolean; // When true: block system filters users; When false: ANY blocked user can join!
+  blockSystemActive?: boolean;
+}
+
+function dedupeByKey<T>(
+  items: T[],
+  getKey: (item: T) => string | undefined | null
+): T[] {
+  const seen = new Set<string>();
+  const result: T[] = [];
+  for (const item of items) {
+    if (!item || typeof item !== "object") continue;
+    const key = getKey(item);
+    if (key) {
+      if (seen.has(key)) continue;
+      seen.add(key);
+    }
+    result.push(item);
+  }
+  return result;
+}
+
+function isValidIdentifier(val?: string | null): val is string {
+  if (!val) return false;
+  const trimmed = val.trim();
+  return (
+    trimmed.length > 0 &&
+    trimmed !== "Unknown" &&
+    trimmed !== "N/A" &&
+    trimmed !== "Verifying..." &&
+    trimmed !== "যাচাই চলছে..."
+  );
+}
+
+function safeDocId(val: string): string {
+  return val.trim().replace(/\//g, "_");
+}
+
+function toTimestampMs(val: any): number {
+  if (!val) return 0;
+  try {
+    if (typeof val?.toDate === "function") return val.toDate().getTime();
+    if (typeof val?.seconds === "number") return val.seconds * 1000;
+    const ms = new Date(val).getTime();
+    return Number.isNaN(ms) ? 0 : ms;
+  } catch {
+    return 0;
+  }
+}
+
+function normalizeIsoTimestamp(val: any): string {
+  if (!val) return new Date().toISOString();
+  try {
+    if (typeof val?.toDate === "function") return val.toDate().toISOString();
+    if (typeof val?.seconds === "number")
+      return new Date(val.seconds * 1000).toISOString();
+    if (typeof val === "string") return val;
+    const d = new Date(val);
+    return Number.isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+  } catch {
+    return new Date().toISOString();
+  }
 }
 
 // -------------------------------------------------------------
 // MEETINGS
 // -------------------------------------------------------------
 export async function getMeetings(): Promise<MeetingDoc[]> {
+  let supabaseRows: MeetingDoc[] | null = null;
+  let firestoreRows: MeetingDoc[] | null = null;
+
   try {
     const { data, error } = await supabase
       .from("meetings")
@@ -69,19 +143,51 @@ export async function getMeetings(): Promise<MeetingDoc[]> {
       .order("createdAt", { ascending: false });
 
     if (!error && data) {
-      try {
-        localStorage.setItem("ue_cache_meetings", JSON.stringify(data));
-      } catch (e) {}
-      return data as MeetingDoc[];
+      supabaseRows = data as MeetingDoc[];
     }
   } catch (err) {
     console.warn("Supabase getMeetings notice:", err);
   }
 
-  // LocalStorage fallback for temporary cache
+  try {
+    const snap = await getDocs(collection(db, "meetings"));
+    firestoreRows = snap.docs.map((d) => {
+      const data = d.data() as any;
+      return {
+        id: d.id,
+        googleMeetLink: data.googleMeetLink || "",
+        active: data.active !== false,
+        meetingDate: data.meetingDate || null,
+        meetingTime: data.meetingTime || null,
+        createdAt: normalizeIsoTimestamp(data.createdAt),
+      };
+    });
+  } catch (fsErr) {
+    // Public fallback safe
+  }
+
+  if (supabaseRows !== null || firestoreRows !== null) {
+    const merged = dedupeByKey(
+      [...(supabaseRows || []), ...(firestoreRows || [])],
+      (m) => m.id
+    );
+    merged.sort(
+      (a, b) => toTimestampMs(b.createdAt) - toTimestampMs(a.createdAt)
+    );
+    try {
+      localStorage.setItem("ue_cache_meetings", JSON.stringify(merged));
+    } catch (e) {}
+    return merged;
+  }
+
   try {
     const cached = localStorage.getItem("ue_cache_meetings");
-    if (cached) return JSON.parse(cached);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (Array.isArray(parsed)) {
+        return dedupeByKey(parsed as MeetingDoc[], (m) => m.id);
+      }
+    }
   } catch (e) {}
   return [];
 }
@@ -100,6 +206,21 @@ export async function getMeetingById(id: string): Promise<MeetingDoc | null> {
   } catch (err) {
     console.warn("Supabase getMeetingById notice:", err);
   }
+
+  try {
+    const snap = await getDoc(doc(db, "meetings", safeDocId(id)));
+    if (snap.exists()) {
+      const data = snap.data() as any;
+      return {
+        id: snap.id,
+        googleMeetLink: data.googleMeetLink || "",
+        active: data.active !== false,
+        meetingDate: data.meetingDate || null,
+        meetingTime: data.meetingTime || null,
+        createdAt: normalizeIsoTimestamp(data.createdAt),
+      };
+    }
+  } catch (e) {}
 
   try {
     const cached = localStorage.getItem("ue_cache_meetings");
@@ -123,15 +244,31 @@ export async function saveMeeting(meeting: MeetingDoc): Promise<boolean> {
       createdAt: meeting.createdAt || new Date().toISOString(),
     };
 
-    const { error } = await supabase.from("meetings").upsert(payload);
-    if (error) {
-      console.warn("Supabase saveMeeting notice:", error.message || error);
-    }
+    const supabasePromise = supabase
+      .from("meetings")
+      .upsert(payload)
+      .then(({ error }) => {
+        if (error) console.warn("Supabase saveMeeting notice:", error.message || error);
+      });
+
+    const firestorePromise = setDoc(
+      doc(db, "meetings", safeDocId(meeting.id)),
+      payload,
+      { merge: true }
+    ).catch(() => {});
+
+    await Promise.race([
+      Promise.allSettled([supabasePromise, firestorePromise]),
+      new Promise((resolve) => setTimeout(resolve, 3000)),
+    ]);
 
     try {
       const existingStr = localStorage.getItem("ue_cache_meetings");
       let existingList: MeetingDoc[] = existingStr ? JSON.parse(existingStr) : [];
-      existingList = [payload, ...existingList.filter((m) => m.id !== meeting.id)];
+      existingList = dedupeByKey(
+        [payload, ...existingList.filter((m) => m.id !== meeting.id)],
+        (m) => m.id
+      );
       localStorage.setItem("ue_cache_meetings", JSON.stringify(existingList));
     } catch (e) {}
 
@@ -142,7 +279,10 @@ export async function saveMeeting(meeting: MeetingDoc): Promise<boolean> {
   }
 }
 
-export async function updateMeetingStatus(id: string, active: boolean): Promise<boolean> {
+export async function updateMeetingStatus(
+  id: string,
+  active: boolean
+): Promise<boolean> {
   try {
     const { error } = await supabase
       .from("meetings")
@@ -150,12 +290,15 @@ export async function updateMeetingStatus(id: string, active: boolean): Promise<
       .eq("id", id);
 
     if (error) console.warn("Supabase updateMeetingStatus notice:", error.message || error);
+    updateDoc(doc(db, "meetings", safeDocId(id)), { active }).catch(() => {});
 
     try {
       const existingStr = localStorage.getItem("ue_cache_meetings");
       if (existingStr) {
         let existingList: MeetingDoc[] = JSON.parse(existingStr);
-        existingList = existingList.map((m) => (m.id === id ? { ...m, active } : m));
+        existingList = existingList.map((m) =>
+          m.id === id ? { ...m, active } : m
+        );
         localStorage.setItem("ue_cache_meetings", JSON.stringify(existingList));
       }
     } catch (e) {}
@@ -171,6 +314,7 @@ export async function deleteMeeting(id: string): Promise<boolean> {
   try {
     const { error } = await supabase.from("meetings").delete().eq("id", id);
     if (error) console.warn("Supabase deleteMeeting notice:", error.message || error);
+    deleteDoc(doc(db, "meetings", safeDocId(id))).catch(() => {});
 
     try {
       const existingStr = localStorage.getItem("ue_cache_meetings");
@@ -190,7 +334,10 @@ export async function deleteMeeting(id: string): Promise<boolean> {
 
 export async function deleteAllMeetings(): Promise<boolean> {
   try {
-    const { error } = await supabase.from("meetings").delete().neq("id", "");
+    const { error } = await supabase
+      .from("meetings")
+      .delete()
+      .neq("id", "___impossible_val___");
     if (error) console.warn("Supabase deleteAllMeetings notice:", error.message || error);
   } catch (err) {
     console.warn("Supabase deleteAllMeetings notice:", err);
@@ -203,7 +350,6 @@ export async function deleteAllMeetings(): Promise<boolean> {
 }
 
 export function subscribeMeetings(onUpdate: (meetings: MeetingDoc[]) => void) {
-  // Initial load
   getMeetings().then((list) => {
     if (list) onUpdate(list);
   });
@@ -220,74 +366,231 @@ export function subscribeMeetings(onUpdate: (meetings: MeetingDoc[]) => void) {
     )
     .subscribe();
 
+  const unsubFirestore = onSnapshot(
+    collection(db, "meetings"),
+    async () => {
+      const updated = await getMeetings();
+      onUpdate(updated);
+    },
+    () => {}
+  );
+
   return () => {
     supabase.removeChannel(channel);
+    unsubFirestore();
   };
 }
 
+// Helper to fetch all rows from a Supabase table beyond the default 1000 row limit
+async function fetchAllRows<T>(table: string, orderCol: string): Promise<T[] | null> {
+  try {
+    const pageSize = 1000;
+    let all: T[] = [];
+    let from = 0;
+
+    while (true) {
+      const { data, error } = await supabase
+        .from(table)
+        .select("*")
+        .order(orderCol, { ascending: false })
+        .order("id", { ascending: false })
+        .range(from, from + pageSize - 1);
+
+      if (error) {
+        console.warn(`Supabase ${table} fetch notice:`, error.message || error);
+        return all.length > 0 ? dedupeByKey(all, (r: any) => r?.id) : null;
+      }
+      if (!data || data.length === 0) break;
+      all = all.concat(data as T[]);
+      if (data.length < pageSize) break;
+      from += pageSize;
+    }
+
+    return dedupeByKey(all, (r: any) => r?.id);
+  } catch (err) {
+    console.warn(`Supabase fetchAllRows(${table}) notice:`, err);
+    return null;
+  }
+}
+
 // -------------------------------------------------------------
-// PARTICIPANTS
+// PARTICIPANTS (Permanent until Admin deletes)
 // -------------------------------------------------------------
 export async function getParticipants(): Promise<ParticipantDoc[]> {
-  try {
-    const { data, error } = await supabase
-      .from("participants")
-      .select("*")
-      .order("joinedAt", { ascending: false });
+  const supabaseRows = await fetchAllRows<ParticipantDoc>("participants", "joinedAt");
+  let firestoreRows: ParticipantDoc[] | null = null;
 
-    if (!error && data) {
-      try {
-        localStorage.setItem("ue_cache_participants", JSON.stringify(data));
-      } catch (e) {}
-      return data as ParticipantDoc[];
+  if (auth.currentUser) {
+    try {
+      const snap = await getDocs(collection(db, "participants"));
+      firestoreRows = snap.docs.map((d) => {
+        const data = d.data() as any;
+        return {
+          id: d.id,
+          name: data.name || "",
+          meetingId: data.meetingId || undefined,
+          ip: data.ip || "Unknown",
+          deviceId: data.deviceId || "Unknown",
+          uid: data.uid || "Unknown",
+          browserFingerprint: data.browserFingerprint || "",
+          userAgent: data.userAgent || "",
+          joinedAt: normalizeIsoTimestamp(data.joinedAt),
+          blocked: data.blocked === true,
+        };
+      });
+    } catch (fsErr) {
+      console.warn("Firestore getParticipants fallback notice:", fsErr);
     }
-  } catch (err) {
-    console.warn("Supabase getParticipants notice:", err);
+  }
+
+  if (supabaseRows !== null || firestoreRows !== null) {
+    const merged = dedupeByKey(
+      [...(supabaseRows || []), ...(firestoreRows || [])],
+      (p) => p.id
+    );
+    merged.sort(
+      (a, b) => toTimestampMs(b.joinedAt) - toTimestampMs(a.joinedAt)
+    );
+    try {
+      localStorage.setItem("ue_cache_participants", JSON.stringify(merged));
+    } catch (e) {}
+    return merged;
   }
 
   try {
     const cached = localStorage.getItem("ue_cache_participants");
-    if (cached) return JSON.parse(cached);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (Array.isArray(parsed)) {
+        return dedupeByKey(parsed as ParticipantDoc[], (p) => p.id);
+      }
+    }
   } catch (e) {}
   return [];
 }
 
 export async function saveParticipant(p: ParticipantDoc): Promise<boolean> {
+  const payload = {
+    id: p.id,
+    meetingId: p.meetingId || null,
+    name: p.name,
+    ip: p.ip || "Unknown",
+    deviceId: p.deviceId || "Unknown",
+    uid: p.uid || "Unknown",
+    browserFingerprint: p.browserFingerprint || null,
+    userAgent: p.userAgent || null,
+    joinedAt: p.joinedAt || new Date().toISOString(),
+    blocked: p.blocked === true,
+  };
+
+  // Persist immediately in localStorage cache
   try {
-    const payload = {
-      id: p.id,
-      meetingId: p.meetingId || null,
-      name: p.name,
-      ip: p.ip || null,
-      deviceId: p.deviceId || null,
-      uid: p.uid || null,
-      browserFingerprint: p.browserFingerprint || null,
-      userAgent: p.userAgent || null,
-      joinedAt: p.joinedAt || new Date().toISOString(),
-      blocked: p.blocked || false,
-    };
+    const existingStr = localStorage.getItem("ue_cache_participants");
+    let list: ParticipantDoc[] = existingStr ? JSON.parse(existingStr) : [];
+    list = dedupeByKey(
+      [payload, ...list.filter((x) => x.id !== p.id)],
+      (x) => x.id
+    );
+    localStorage.setItem("ue_cache_participants", JSON.stringify(list));
+  } catch (e) {}
 
-    const { error } = await supabase.from("participants").upsert(payload);
-    if (error) console.error("Supabase saveParticipant error:", error);
-
+  // Dual-write in parallel to Supabase & Firestore and await at least one confirmed write before redirecting
+  const supabasePromise = (async () => {
     try {
-      const existingStr = localStorage.getItem("ue_cache_participants");
-      let list: ParticipantDoc[] = existingStr ? JSON.parse(existingStr) : [];
-      list = [payload, ...list.filter((x) => x.id !== p.id)];
-      localStorage.setItem("ue_cache_participants", JSON.stringify(list));
-    } catch (e) {}
+      const { error } = await supabase.from("participants").upsert(payload);
+      if (error) {
+        console.warn("Supabase saveParticipant error:", error.message || error);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.warn("Supabase saveParticipant exception:", err);
+      return false;
+    }
+  })();
 
-    return true;
-  } catch (err) {
-    console.warn("Supabase saveParticipant notice:", err);
-    return false;
-  }
+  const firestorePromise = (async () => {
+    try {
+      await setDoc(doc(db, "participants", safeDocId(payload.id)), payload, {
+        merge: true,
+      });
+      return true;
+    } catch (err) {
+      return false;
+    }
+  })();
+
+  // Wait up to 4.5s for both, or finish immediately once at least one succeeds after a short grace window
+  const allResult = await Promise.race([
+    Promise.all([supabasePromise, firestorePromise]).then(([s, f]) => s || f),
+    new Promise<boolean>((resolve) => {
+      let resolved = false;
+      supabasePromise.then((ok) => {
+        if (ok && !resolved) {
+          setTimeout(() => {
+            if (!resolved) {
+              resolved = true;
+              resolve(true);
+            }
+          }, 450);
+        }
+      });
+      firestorePromise.then((ok) => {
+        if (ok && !resolved) {
+          setTimeout(() => {
+            if (!resolved) {
+              resolved = true;
+              resolve(true);
+            }
+          }, 450);
+        }
+      });
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          resolve(false);
+        }
+      }, 4500);
+    }),
+  ]);
+
+  return allResult;
+}
+
+export async function markParticipantsBlocked(
+  ids: string[],
+  blocked: boolean
+): Promise<void> {
+  if (!ids.length) return;
+  try {
+    await supabase.from("participants").update({ blocked }).in("id", ids);
+  } catch (e) {}
+
+  await Promise.allSettled(
+    ids.map((id) =>
+      updateDoc(doc(db, "participants", safeDocId(id)), { blocked }).catch(
+        () => {}
+      )
+    )
+  );
+
+  try {
+    const existingStr = localStorage.getItem("ue_cache_participants");
+    if (existingStr) {
+      const list: ParticipantDoc[] = JSON.parse(existingStr);
+      const updated = list.map((p) =>
+        ids.includes(p.id) ? { ...p, blocked } : p
+      );
+      localStorage.setItem("ue_cache_participants", JSON.stringify(updated));
+    }
+  } catch (e) {}
 }
 
 export async function deleteParticipant(id: string): Promise<boolean> {
   try {
     const { error } = await supabase.from("participants").delete().eq("id", id);
     if (error) console.error("Supabase deleteParticipant error:", error);
+    await deleteDoc(doc(db, "participants", safeDocId(id))).catch(() => {});
 
     try {
       const existingStr = localStorage.getItem("ue_cache_participants");
@@ -306,7 +609,10 @@ export async function deleteParticipant(id: string): Promise<boolean> {
 
 export async function deleteAllParticipants(): Promise<boolean> {
   try {
-    const { error } = await supabase.from("participants").delete().neq("id", "");
+    const { error } = await supabase
+      .from("participants")
+      .delete()
+      .neq("id", "___impossible_val___");
     if (error) console.error("Supabase deleteAllParticipants error:", error);
   } catch (err) {
     console.warn("Supabase deleteAllParticipants notice:", err);
@@ -318,7 +624,9 @@ export async function deleteAllParticipants(): Promise<boolean> {
   return true;
 }
 
-export function subscribeParticipants(onUpdate: (participants: ParticipantDoc[]) => void) {
+export function subscribeParticipants(
+  onUpdate: (participants: ParticipantDoc[]) => void
+) {
   getParticipants().then((list) => {
     if (list) onUpdate(list);
   });
@@ -335,75 +643,200 @@ export function subscribeParticipants(onUpdate: (participants: ParticipantDoc[])
     )
     .subscribe();
 
+  let unsubFirestore: (() => void) | null = null;
+  if (auth.currentUser) {
+    unsubFirestore = onSnapshot(
+      collection(db, "participants"),
+      async () => {
+        const updated = await getParticipants();
+        onUpdate(updated);
+      },
+      () => {}
+    );
+  }
+
   return () => {
     supabase.removeChannel(channel);
+    if (unsubFirestore) unsubFirestore();
   };
 }
 
 // -------------------------------------------------------------
-// DEMO PARTICIPANTS
+// DEMO PARTICIPANTS (Permanent until Admin deletes)
 // -------------------------------------------------------------
 export async function getDemoParticipants(): Promise<DemoParticipantDoc[]> {
-  try {
-    const { data, error } = await supabase
-      .from("demo_participants")
-      .select("*")
-      .order("joinedAt", { ascending: false });
+  const supabaseRows = await fetchAllRows<DemoParticipantDoc>(
+    "demo_participants",
+    "joinedAt"
+  );
+  let firestoreRows: DemoParticipantDoc[] | null = null;
 
-    if (!error && data) {
-      try {
-        localStorage.setItem("ue_cache_demo_participants", JSON.stringify(data));
-      } catch (e) {}
-      return data as DemoParticipantDoc[];
+  if (auth.currentUser) {
+    try {
+      const snap = await getDocs(collection(db, "demoParticipants"));
+      firestoreRows = snap.docs.map((d) => {
+        const data = d.data() as any;
+        return {
+          id: d.id,
+          name: data.name || "",
+          meetingId: data.meetingId || undefined,
+          gmail: data.gmail || "",
+          ip: data.ip || "Unknown",
+          deviceId: data.deviceId || "Unknown",
+          uid: data.uid || "Unknown",
+          browserFingerprint: data.browserFingerprint || "",
+          userAgent: data.userAgent || "",
+          joinedAt: normalizeIsoTimestamp(data.joinedAt),
+          blocked: data.blocked === true,
+        };
+      });
+    } catch (fsErr) {
+      console.warn("Firestore getDemoParticipants fallback notice:", fsErr);
     }
-  } catch (err) {
-    console.warn("Supabase getDemoParticipants notice:", err);
+  }
+
+  if (supabaseRows !== null || firestoreRows !== null) {
+    const merged = dedupeByKey(
+      [...(supabaseRows || []), ...(firestoreRows || [])],
+      (p) => p.id
+    );
+    merged.sort(
+      (a, b) => toTimestampMs(b.joinedAt) - toTimestampMs(a.joinedAt)
+    );
+    try {
+      localStorage.setItem("ue_cache_demo_participants", JSON.stringify(merged));
+    } catch (e) {}
+    return merged;
   }
 
   try {
     const cached = localStorage.getItem("ue_cache_demo_participants");
-    if (cached) return JSON.parse(cached);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (Array.isArray(parsed)) {
+        return dedupeByKey(parsed as DemoParticipantDoc[], (p) => p.id);
+      }
+    }
   } catch (e) {}
   return [];
 }
 
-export async function saveDemoParticipant(p: DemoParticipantDoc): Promise<boolean> {
+export async function saveDemoParticipant(
+  p: DemoParticipantDoc
+): Promise<boolean> {
+  const payload = {
+    id: p.id,
+    name: p.name,
+    meetingId: p.meetingId || null,
+    gmail: p.gmail || null,
+    ip: p.ip || "Unknown",
+    deviceId: p.deviceId || "Unknown",
+    uid: p.uid || "Unknown",
+    browserFingerprint: p.browserFingerprint || null,
+    userAgent: p.userAgent || null,
+    joinedAt: p.joinedAt || new Date().toISOString(),
+    blocked: p.blocked === true,
+  };
+
   try {
-    const payload = {
-      id: p.id,
-      name: p.name,
-      meetingId: p.meetingId || null,
-      gmail: p.gmail || null,
-      ip: p.ip || null,
-      deviceId: p.deviceId || null,
-      uid: p.uid || null,
-      browserFingerprint: p.browserFingerprint || null,
-      userAgent: p.userAgent || null,
-      joinedAt: p.joinedAt || new Date().toISOString(),
-      blocked: p.blocked || false,
-    };
+    const existingStr = localStorage.getItem("ue_cache_demo_participants");
+    let list: DemoParticipantDoc[] = existingStr ? JSON.parse(existingStr) : [];
+    list = dedupeByKey(
+      [payload, ...list.filter((x) => x.id !== p.id)],
+      (x) => x.id
+    );
+    localStorage.setItem("ue_cache_demo_participants", JSON.stringify(list));
+  } catch (e) {}
 
-    const { error } = await supabase.from("demo_participants").upsert(payload);
-    if (error) console.error("Supabase saveDemoParticipant error:", error);
-
+  const supabasePromise = (async () => {
     try {
-      const existingStr = localStorage.getItem("ue_cache_demo_participants");
-      let list: DemoParticipantDoc[] = existingStr ? JSON.parse(existingStr) : [];
-      list = [payload, ...list.filter((x) => x.id !== p.id)];
-      localStorage.setItem("ue_cache_demo_participants", JSON.stringify(list));
-    } catch (e) {}
+      const { error } = await supabase.from("demo_participants").upsert(payload);
+      if (error) {
+        console.warn("Supabase saveDemoParticipant error:", error.message || error);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.warn("Supabase saveDemoParticipant exception:", err);
+      return false;
+    }
+  })();
 
-    return true;
-  } catch (err) {
-    console.warn("Supabase saveDemoParticipant notice:", err);
-    return false;
-  }
+  const firestorePromise = (async () => {
+    try {
+      await setDoc(doc(db, "demoParticipants", safeDocId(payload.id)), payload, {
+        merge: true,
+      });
+      return true;
+    } catch (err) {
+      return false;
+    }
+  })();
+
+  const allResult = await Promise.race([
+    Promise.all([supabasePromise, firestorePromise]).then(([s, f]) => s || f),
+    new Promise<boolean>((resolve) => {
+      let resolved = false;
+      supabasePromise.then((ok) => {
+        if (ok && !resolved) {
+          setTimeout(() => {
+            if (!resolved) {
+              resolved = true;
+              resolve(true);
+            }
+          }, 450);
+        }
+      });
+      firestorePromise.then((ok) => {
+        if (ok && !resolved) {
+          setTimeout(() => {
+            if (!resolved) {
+              resolved = true;
+              resolve(true);
+            }
+          }, 450);
+        }
+      });
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          resolve(false);
+        }
+      }, 4500);
+    }),
+  ]);
+
+  return allResult;
+}
+
+export async function markDemoParticipantBlocked(
+  id: string,
+  blocked: boolean
+): Promise<void> {
+  try {
+    await supabase.from("demo_participants").update({ blocked }).eq("id", id);
+  } catch (e) {}
+  try {
+    await updateDoc(doc(db, "demoParticipants", safeDocId(id)), { blocked });
+  } catch (e) {}
+  try {
+    const existingStr = localStorage.getItem("ue_cache_demo_participants");
+    if (existingStr) {
+      const list: DemoParticipantDoc[] = JSON.parse(existingStr);
+      const updated = list.map((d) => (d.id === id ? { ...d, blocked } : d));
+      localStorage.setItem("ue_cache_demo_participants", JSON.stringify(updated));
+    }
+  } catch (e) {}
 }
 
 export async function deleteDemoParticipant(id: string): Promise<boolean> {
   try {
-    const { error } = await supabase.from("demo_participants").delete().eq("id", id);
+    const { error } = await supabase
+      .from("demo_participants")
+      .delete()
+      .eq("id", id);
     if (error) console.error("Supabase deleteDemoParticipant error:", error);
+    await deleteDoc(doc(db, "demoParticipants", safeDocId(id))).catch(() => {});
 
     try {
       const existingStr = localStorage.getItem("ue_cache_demo_participants");
@@ -422,7 +855,10 @@ export async function deleteDemoParticipant(id: string): Promise<boolean> {
 
 export async function deleteAllDemoParticipants(): Promise<boolean> {
   try {
-    const { error } = await supabase.from("demo_participants").delete().neq("id", "");
+    const { error } = await supabase
+      .from("demo_participants")
+      .delete()
+      .neq("id", "___impossible_val___");
     if (error) console.error("Supabase deleteAllDemoParticipants error:", error);
   } catch (err) {
     console.warn("Supabase deleteAllDemoParticipants notice:", err);
@@ -434,7 +870,9 @@ export async function deleteAllDemoParticipants(): Promise<boolean> {
   return true;
 }
 
-export function subscribeDemoParticipants(onUpdate: (demoList: DemoParticipantDoc[]) => void) {
+export function subscribeDemoParticipants(
+  onUpdate: (demoList: DemoParticipantDoc[]) => void
+) {
   getDemoParticipants().then((list) => {
     if (list) onUpdate(list);
   });
@@ -451,158 +889,301 @@ export function subscribeDemoParticipants(onUpdate: (demoList: DemoParticipantDo
     )
     .subscribe();
 
+  let unsubFirestore: (() => void) | null = null;
+  if (auth.currentUser) {
+    unsubFirestore = onSnapshot(
+      collection(db, "demoParticipants"),
+      async () => {
+        const updated = await getDemoParticipants();
+        onUpdate(updated);
+      },
+      () => {}
+    );
+  }
+
   return () => {
     supabase.removeChannel(channel);
+    if (unsubFirestore) unsubFirestore();
   };
 }
 
 // -------------------------------------------------------------
-// BLOCKED IPS, DEVICES & UIDS
+// BLOCKED IPS, DEVICES & UIDS (Dual-Persisted & Strictly Enforced)
 // -------------------------------------------------------------
 export async function getBlockedIPs(): Promise<BlockedIPDoc[]> {
+  let supabaseRows: BlockedIPDoc[] | null = null;
+  let firestoreRows: BlockedIPDoc[] | null = null;
+
   try {
     const { data, error } = await supabase.from("blocked_ips").select("*");
     if (!error && data) {
-      try {
-        localStorage.setItem("ue_cache_blocked_ips", JSON.stringify(data));
-      } catch (e) {}
-      return data as BlockedIPDoc[];
+      supabaseRows = data as BlockedIPDoc[];
     }
   } catch (err) {
     console.warn("Supabase getBlockedIPs notice:", err);
   }
 
+  if (auth.currentUser) {
+    try {
+      const snap = await getDocs(collection(db, "blockedIPs"));
+      firestoreRows = snap.docs.map((d) => {
+        const data = d.data() as any;
+        return {
+          ip: data.ip || d.id,
+          name: data.name || undefined,
+          deviceId: data.deviceId || undefined,
+          uid: data.uid || undefined,
+          browserFingerprint: data.browserFingerprint || undefined,
+          reason: data.reason || "Blocked by Admin",
+          blockedAt: normalizeIsoTimestamp(data.blockedAt),
+        };
+      });
+    } catch (e) {}
+  }
+
+  if (supabaseRows !== null || firestoreRows !== null) {
+    const merged = dedupeByKey(
+      [...(supabaseRows || []), ...(firestoreRows || [])].filter((b) =>
+        isValidIdentifier(b.ip)
+      ),
+      (b) => b.ip
+    );
+    try {
+      localStorage.setItem("ue_cache_blocked_ips", JSON.stringify(merged));
+    } catch (e) {}
+    return merged;
+  }
+
   try {
     const cached = localStorage.getItem("ue_cache_blocked_ips");
-    if (cached) return JSON.parse(cached);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (Array.isArray(parsed)) {
+        return dedupeByKey(
+          (parsed as BlockedIPDoc[]).filter((b) => isValidIdentifier(b.ip)),
+          (b) => b.ip
+        );
+      }
+    }
   } catch (e) {}
   return [];
 }
 
 export async function blockIP(record: BlockedIPDoc): Promise<boolean> {
+  if (!isValidIdentifier(record.ip)) return false;
+  const cleanIp = record.ip.trim();
+
   const payload: any = {
-    ip: record.ip,
+    ip: cleanIp,
     name: record.name || null,
     deviceId: record.deviceId || null,
     uid: record.uid || null,
     browserFingerprint: record.browserFingerprint || null,
-    reason: record.reason || "অ্যাডমিন কর্তৃক ব্লক করা হয়েছে",
+    reason: record.reason || "Blocked by Admin",
     blockedAt: record.blockedAt || new Date().toISOString(),
   };
 
   try {
     const existingStr = localStorage.getItem("ue_cache_blocked_ips");
     let list: BlockedIPDoc[] = existingStr ? JSON.parse(existingStr) : [];
-    list = [payload, ...list.filter((x) => x.ip !== record.ip)];
+    list = dedupeByKey(
+      [payload, ...list.filter((x) => x.ip !== cleanIp)],
+      (x) => x.ip
+    );
     localStorage.setItem("ue_cache_blocked_ips", JSON.stringify(list));
   } catch (e) {}
 
-  try {
-    const { error } = await supabase.from("blocked_ips").upsert(payload);
-    if (error) {
-      console.warn("Supabase blockIP notice:", error.message || error);
-      // Fallback: try minimal payload if schema columns are missing
-      const { error: fallbackError } = await supabase.from("blocked_ips").upsert({
-        ip: record.ip,
-        blockedAt: payload.blockedAt,
-      });
-      if (fallbackError) {
-        console.warn("Supabase blockIP fallback notice:", fallbackError.message || fallbackError);
+  const supabasePromise = (async () => {
+    try {
+      const { error } = await supabase.from("blocked_ips").upsert(payload);
+      if (error) {
+        await supabase.from("blocked_ips").upsert({
+          ip: cleanIp,
+          blockedAt: payload.blockedAt,
+        });
       }
+      return true;
+    } catch (err) {
+      console.warn("Supabase blockIP notice:", err);
+      return false;
     }
-    return true;
-  } catch (err) {
-    console.warn("Supabase blockIP notice:", err);
-    return true;
-  }
+  })();
+
+  const firestorePromise = setDoc(
+    doc(db, "blockedIPs", safeDocId(cleanIp)),
+    payload,
+    { merge: true }
+  )
+    .then(() => true)
+    .catch(() => false);
+
+  await Promise.race([
+    Promise.allSettled([supabasePromise, firestorePromise]),
+    new Promise((resolve) => setTimeout(resolve, 3000)),
+  ]);
+
+  return true;
 }
 
 export async function unblockIP(ip: string): Promise<boolean> {
+  if (!isValidIdentifier(ip)) return false;
+  const cleanIp = ip.trim();
+
   try {
     const existingStr = localStorage.getItem("ue_cache_blocked_ips");
     if (existingStr) {
       let list: BlockedIPDoc[] = JSON.parse(existingStr);
-      list = list.filter((b) => b.ip !== ip);
+      list = list.filter((b) => b.ip !== cleanIp);
       localStorage.setItem("ue_cache_blocked_ips", JSON.stringify(list));
     }
   } catch (e) {}
 
-  try {
-    const { error } = await supabase.from("blocked_ips").delete().eq("ip", ip);
-    if (error) console.warn("Supabase unblockIP notice:", error.message || error);
-    return true;
-  } catch (err) {
-    console.warn("Supabase unblockIP notice:", err);
-    return true;
-  }
+  await Promise.allSettled([
+    supabase.from("blocked_ips").delete().eq("ip", cleanIp),
+    deleteDoc(doc(db, "blockedIPs", safeDocId(cleanIp))),
+  ]);
+
+  return true;
 }
 
-export async function blockDevice(deviceId: string, ip?: string, uid?: string): Promise<boolean> {
-  if (!deviceId || deviceId === "Unknown") return false;
+export async function blockDevice(
+  deviceId: string,
+  ip?: string,
+  uid?: string
+): Promise<boolean> {
+  if (!isValidIdentifier(deviceId)) return false;
+  const cleanDev = deviceId.trim();
   const payload = {
-    deviceId,
-    ip: ip || null,
-    uid: uid || null,
+    deviceId: cleanDev,
+    ip: isValidIdentifier(ip) ? ip.trim() : null,
+    uid: isValidIdentifier(uid) ? uid.trim() : null,
     blockedAt: new Date().toISOString(),
   };
 
   try {
-    const { error } = await supabase.from("blocked_devices").upsert(payload);
-    if (error) {
-      console.warn("Supabase blockDevice notice:", error.message || error);
-      await supabase.from("blocked_devices").upsert({ deviceId });
+    const existingStr = localStorage.getItem("ue_cache_blocked_devices");
+    let list: any[] = existingStr ? JSON.parse(existingStr) : [];
+    list = dedupeByKey(
+      [payload, ...list.filter((d) => d.deviceId !== cleanDev)],
+      (d) => d.deviceId
+    );
+    localStorage.setItem("ue_cache_blocked_devices", JSON.stringify(list));
+  } catch (e) {}
+
+  const supabasePromise = (async () => {
+    try {
+      const { error } = await supabase.from("blocked_devices").upsert(payload);
+      if (error) {
+        await supabase.from("blocked_devices").upsert({ deviceId: cleanDev });
+      }
+    } catch (err) {
+      console.warn("Supabase blockDevice notice:", err);
     }
-    return true;
-  } catch (err) {
-    console.warn("Supabase blockDevice notice:", err);
-    return true;
-  }
+  })();
+
+  const firestorePromise = setDoc(
+    doc(db, "blockedDevices", safeDocId(cleanDev)),
+    payload,
+    { merge: true }
+  ).catch(() => {});
+
+  await Promise.race([
+    Promise.allSettled([supabasePromise, firestorePromise]),
+    new Promise((resolve) => setTimeout(resolve, 2500)),
+  ]);
+
+  return true;
 }
 
 export async function unblockDevice(deviceId: string): Promise<boolean> {
-  if (!deviceId || deviceId === "Unknown") return false;
+  if (!isValidIdentifier(deviceId)) return false;
+  const cleanDev = deviceId.trim();
+
   try {
-    const { error } = await supabase.from("blocked_devices").delete().eq("deviceId", deviceId);
-    if (error) console.warn("Supabase unblockDevice notice:", error.message || error);
-    return true;
-  } catch (err) {
-    console.warn("Supabase unblockDevice notice:", err);
-    return true;
-  }
+    const existingStr = localStorage.getItem("ue_cache_blocked_devices");
+    if (existingStr) {
+      const list = JSON.parse(existingStr).filter(
+        (d: any) => d.deviceId !== cleanDev
+      );
+      localStorage.setItem("ue_cache_blocked_devices", JSON.stringify(list));
+    }
+  } catch (e) {}
+
+  await Promise.allSettled([
+    supabase.from("blocked_devices").delete().eq("deviceId", cleanDev),
+    deleteDoc(doc(db, "blockedDevices", safeDocId(cleanDev))),
+  ]);
+
+  return true;
 }
 
-export async function blockUID(uid: string, ip?: string, deviceId?: string): Promise<boolean> {
-  if (!uid || uid === "Unknown") return false;
+export async function blockUID(
+  uid: string,
+  ip?: string,
+  deviceId?: string
+): Promise<boolean> {
+  if (!isValidIdentifier(uid)) return false;
+  const cleanUid = uid.trim();
   const payload = {
-    uid,
-    ip: ip || null,
-    deviceId: deviceId || null,
+    uid: cleanUid,
+    ip: isValidIdentifier(ip) ? ip.trim() : null,
+    deviceId: isValidIdentifier(deviceId) ? deviceId.trim() : null,
     blockedAt: new Date().toISOString(),
   };
 
   try {
-    const { error } = await supabase.from("blocked_uids").upsert(payload);
-    if (error) {
-      console.warn("Supabase blockUID notice:", error.message || error);
-      await supabase.from("blocked_uids").upsert({ uid });
+    const existingStr = localStorage.getItem("ue_cache_blocked_uids");
+    let list: any[] = existingStr ? JSON.parse(existingStr) : [];
+    list = dedupeByKey(
+      [payload, ...list.filter((u) => u.uid !== cleanUid)],
+      (u) => u.uid
+    );
+    localStorage.setItem("ue_cache_blocked_uids", JSON.stringify(list));
+  } catch (e) {}
+
+  const supabasePromise = (async () => {
+    try {
+      const { error } = await supabase.from("blocked_uids").upsert(payload);
+      if (error) {
+        await supabase.from("blocked_uids").upsert({ uid: cleanUid });
+      }
+    } catch (err) {
+      console.warn("Supabase blockUID notice:", err);
     }
-    return true;
-  } catch (err) {
-    console.warn("Supabase blockUID notice:", err);
-    return true;
-  }
+  })();
+
+  const firestorePromise = setDoc(
+    doc(db, "blockedUIDs", safeDocId(cleanUid)),
+    payload,
+    { merge: true }
+  ).catch(() => {});
+
+  await Promise.race([
+    Promise.allSettled([supabasePromise, firestorePromise]),
+    new Promise((resolve) => setTimeout(resolve, 2500)),
+  ]);
+
+  return true;
 }
 
 export async function unblockUID(uid: string): Promise<boolean> {
-  if (!uid || uid === "Unknown") return false;
+  if (!isValidIdentifier(uid)) return false;
+  const cleanUid = uid.trim();
+
   try {
-    const { error } = await supabase.from("blocked_uids").delete().eq("uid", uid);
-    if (error) console.warn("Supabase unblockUID notice:", error.message || error);
-    return true;
-  } catch (err) {
-    console.warn("Supabase unblockUID notice:", err);
-    return true;
-  }
+    const existingStr = localStorage.getItem("ue_cache_blocked_uids");
+    if (existingStr) {
+      const list = JSON.parse(existingStr).filter((u: any) => u.uid !== cleanUid);
+      localStorage.setItem("ue_cache_blocked_uids", JSON.stringify(list));
+    }
+  } catch (e) {}
+
+  await Promise.allSettled([
+    supabase.from("blocked_uids").delete().eq("uid", cleanUid),
+    deleteDoc(doc(db, "blockedUIDs", safeDocId(cleanUid))),
+  ]);
+
+  return true;
 }
 
 export async function resetAllBlocks(): Promise<boolean> {
@@ -610,8 +1191,7 @@ export async function resetAllBlocks(): Promise<boolean> {
     localStorage.removeItem("ue_cache_blocked_ips");
     localStorage.removeItem("ue_cache_blocked_devices");
     localStorage.removeItem("ue_cache_blocked_uids");
-    
-    // Clear blocked flags from cached participants
+
     try {
       const pStr = localStorage.getItem("ue_cache_participants");
       if (pStr) {
@@ -627,13 +1207,19 @@ export async function resetAllBlocks(): Promise<boolean> {
   } catch (e) {}
 
   try {
-    // Delete all records from blocked tables in Supabase
-    await supabase.from("blocked_ips").delete().neq("ip", "___impossible_reset_val___");
-    await supabase.from("blocked_devices").delete().neq("deviceId", "___impossible_reset_val___");
-    await supabase.from("blocked_uids").delete().neq("uid", "___impossible_reset_val___");
-    // Also reset blocked flag in participants
-    await supabase.from("participants").update({ blocked: false }).eq("blocked", true);
-    await supabase.from("demo_participants").update({ blocked: false }).eq("blocked", true);
+    await Promise.allSettled([
+      supabase.from("blocked_ips").delete().neq("ip", "___impossible_reset_val___"),
+      supabase
+        .from("blocked_devices")
+        .delete()
+        .neq("deviceId", "___impossible_reset_val___"),
+      supabase.from("blocked_uids").delete().neq("uid", "___impossible_reset_val___"),
+      supabase.from("participants").update({ blocked: false }).eq("blocked", true),
+      supabase
+        .from("demo_participants")
+        .update({ blocked: false })
+        .eq("blocked", true),
+    ]);
   } catch (err) {
     console.warn("resetAllBlocks notice:", err);
   }
@@ -641,58 +1227,121 @@ export async function resetAllBlocks(): Promise<boolean> {
 }
 
 export async function isIPBlocked(ip: string): Promise<boolean> {
-  if (!ip || ip === "Unknown" || ip === "যাচাই হচ্ছে...") return false;
-  try {
-    const { data } = await supabase
-      .from("blocked_ips")
-      .select("ip")
-      .eq("ip", ip)
-      .maybeSingle();
+  if (!isValidIdentifier(ip)) return false;
+  const cleanIp = ip.trim();
 
-    if (data) return true;
-  } catch (err) {
-    console.warn("isIPBlocked notice:", err);
-  }
+  const [sbBlocked, fsBlocked] = await Promise.all([
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from("blocked_ips")
+          .select("ip")
+          .eq("ip", cleanIp)
+          .maybeSingle();
+        return Boolean(data);
+      } catch {
+        return false;
+      }
+    })(),
+    (async () => {
+      try {
+        const snap = await getDoc(doc(db, "blockedIPs", safeDocId(cleanIp)));
+        return snap.exists();
+      } catch {
+        return false;
+      }
+    })(),
+  ]);
+
+  if (sbBlocked || fsBlocked) return true;
 
   try {
     const cached = localStorage.getItem("ue_cache_blocked_ips");
     if (cached) {
       const list: BlockedIPDoc[] = JSON.parse(cached);
-      return list.some((b) => b.ip === ip);
+      return list.some((b) => b.ip === cleanIp);
     }
   } catch (e) {}
   return false;
 }
 
 export async function isDeviceBlocked(deviceId: string): Promise<boolean> {
-  if (!deviceId || deviceId === "Unknown") return false;
-  try {
-    const { data } = await supabase
-      .from("blocked_devices")
-      .select("deviceId")
-      .eq("deviceId", deviceId)
-      .maybeSingle();
+  if (!isValidIdentifier(deviceId)) return false;
+  const cleanDev = deviceId.trim();
 
-    if (data) return true;
-  } catch (err) {
-    console.warn("isDeviceBlocked notice:", err);
-  }
+  const [sbBlocked, fsBlocked] = await Promise.all([
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from("blocked_devices")
+          .select("deviceId")
+          .eq("deviceId", cleanDev)
+          .maybeSingle();
+        return Boolean(data);
+      } catch {
+        return false;
+      }
+    })(),
+    (async () => {
+      try {
+        const snap = await getDoc(
+          doc(db, "blockedDevices", safeDocId(cleanDev))
+        );
+        return snap.exists();
+      } catch {
+        return false;
+      }
+    })(),
+  ]);
+
+  if (sbBlocked || fsBlocked) return true;
+
+  try {
+    const cached = localStorage.getItem("ue_cache_blocked_devices");
+    if (cached) {
+      const list: any[] = JSON.parse(cached);
+      return list.some((b) => b.deviceId === cleanDev);
+    }
+  } catch (e) {}
   return false;
 }
 
 export async function isUIDBlocked(uid: string): Promise<boolean> {
-  if (!uid || uid === "Unknown") return false;
-  try {
-    const { data } = await supabase
-      .from("blocked_uids")
-      .select("uid")
-      .eq("uid", uid)
-      .maybeSingle();
+  if (!isValidIdentifier(uid)) return false;
+  const cleanUid = uid.trim();
 
-    if (data) return true;
-  } catch (err) {
-    console.warn("isUIDBlocked notice:", err);
-  }
+  const [sbBlocked, fsBlocked] = await Promise.all([
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from("blocked_uids")
+          .select("uid")
+          .eq("uid", cleanUid)
+          .maybeSingle();
+        return Boolean(data);
+      } catch {
+        return false;
+      }
+    })(),
+    (async () => {
+      try {
+        const snap = await getDoc(doc(db, "blockedUIDs", safeDocId(cleanUid)));
+        return snap.exists();
+      } catch {
+        return false;
+      }
+    })(),
+  ]);
+
+  if (sbBlocked || fsBlocked) return true;
+
+  try {
+    const cached = localStorage.getItem("ue_cache_blocked_uids");
+    if (cached) {
+      const list: any[] = JSON.parse(cached);
+      return list.some((b) => b.uid === cleanUid);
+    }
+  } catch (e) {}
   return false;
 }
 
@@ -713,24 +1362,80 @@ export function subscribeBlockedIPs(onUpdate: (list: BlockedIPDoc[]) => void) {
     )
     .subscribe();
 
+  let unsubFirestore: (() => void) | null = null;
+  if (auth.currentUser) {
+    unsubFirestore = onSnapshot(
+      collection(db, "blockedIPs"),
+      async () => {
+        const updated = await getBlockedIPs();
+        onUpdate(updated);
+      },
+      () => {}
+    );
+  }
+
   return () => {
     supabase.removeChannel(channel);
+    if (unsubFirestore) unsubFirestore();
   };
 }
 
 export async function getBlockedDevices(): Promise<{ deviceId: string }[]> {
+  let supabaseRows: { deviceId: string }[] | null = null;
+  let firestoreRows: { deviceId: string }[] | null = null;
+
   try {
     const { data, error } = await supabase.from("blocked_devices").select("*");
     if (!error && data) {
-      return data;
+      supabaseRows = data as { deviceId: string }[];
     }
   } catch (err) {
     console.warn("getBlockedDevices notice:", err);
   }
+
+  if (auth.currentUser) {
+    try {
+      const snap = await getDocs(collection(db, "blockedDevices"));
+      firestoreRows = snap.docs.map((d) => ({
+        deviceId: (d.data() as any)?.deviceId || d.id,
+        ...(d.data() as any),
+      }));
+    } catch (e) {}
+  }
+
+  if (supabaseRows !== null || firestoreRows !== null) {
+    const merged = dedupeByKey(
+      [...(supabaseRows || []), ...(firestoreRows || [])].filter((d) =>
+        isValidIdentifier(d.deviceId)
+      ),
+      (d) => d.deviceId
+    );
+    try {
+      localStorage.setItem("ue_cache_blocked_devices", JSON.stringify(merged));
+    } catch (e) {}
+    return merged;
+  }
+
+  try {
+    const cached = localStorage.getItem("ue_cache_blocked_devices");
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (Array.isArray(parsed)) {
+        return dedupeByKey(
+          (parsed as { deviceId: string }[]).filter((d) =>
+            isValidIdentifier(d.deviceId)
+          ),
+          (d) => d.deviceId
+        );
+      }
+    }
+  } catch (e) {}
   return [];
 }
 
-export function subscribeBlockedDevices(onUpdate: (list: { deviceId: string }[]) => void) {
+export function subscribeBlockedDevices(
+  onUpdate: (list: { deviceId: string }[]) => void
+) {
   getBlockedDevices().then((list) => {
     if (list) onUpdate(list);
   });
@@ -747,20 +1452,74 @@ export function subscribeBlockedDevices(onUpdate: (list: { deviceId: string }[])
     )
     .subscribe();
 
+  let unsubFirestore: (() => void) | null = null;
+  if (auth.currentUser) {
+    unsubFirestore = onSnapshot(
+      collection(db, "blockedDevices"),
+      async () => {
+        const updated = await getBlockedDevices();
+        onUpdate(updated);
+      },
+      () => {}
+    );
+  }
+
   return () => {
     supabase.removeChannel(channel);
+    if (unsubFirestore) unsubFirestore();
   };
 }
 
 export async function getBlockedUIDs(): Promise<{ uid: string }[]> {
+  let supabaseRows: { uid: string }[] | null = null;
+  let firestoreRows: { uid: string }[] | null = null;
+
   try {
     const { data, error } = await supabase.from("blocked_uids").select("*");
     if (!error && data) {
-      return data;
+      supabaseRows = data as { uid: string }[];
     }
   } catch (err) {
     console.warn("getBlockedUIDs notice:", err);
   }
+
+  if (auth.currentUser) {
+    try {
+      const snap = await getDocs(collection(db, "blockedUIDs"));
+      firestoreRows = snap.docs.map((d) => ({
+        uid: (d.data() as any)?.uid || d.id,
+        ...(d.data() as any),
+      }));
+    } catch (e) {}
+  }
+
+  if (supabaseRows !== null || firestoreRows !== null) {
+    const merged = dedupeByKey(
+      [...(supabaseRows || []), ...(firestoreRows || [])].filter((u) =>
+        isValidIdentifier(u.uid)
+      ),
+      (u) => u.uid
+    );
+    try {
+      localStorage.setItem("ue_cache_blocked_uids", JSON.stringify(merged));
+    } catch (e) {}
+    return merged;
+  }
+
+  try {
+    const cached = localStorage.getItem("ue_cache_blocked_uids");
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (Array.isArray(parsed)) {
+        return dedupeByKey(
+          (parsed as { uid: string }[]).filter((u) =>
+            isValidIdentifier(u.uid)
+          ),
+          (u) => u.uid
+        );
+      }
+    }
+  } catch (e) {}
   return [];
 }
 
@@ -781,13 +1540,26 @@ export function subscribeBlockedUIDs(onUpdate: (list: { uid: string }[]) => void
     )
     .subscribe();
 
+  let unsubFirestore: (() => void) | null = null;
+  if (auth.currentUser) {
+    unsubFirestore = onSnapshot(
+      collection(db, "blockedUIDs"),
+      async () => {
+        const updated = await getBlockedUIDs();
+        onUpdate(updated);
+      },
+      () => {}
+    );
+  }
+
   return () => {
     supabase.removeChannel(channel);
+    if (unsubFirestore) unsubFirestore();
   };
 }
 
 // -------------------------------------------------------------
-// SETTINGS
+// SETTINGS (Synced across Supabase + Firestore)
 // -------------------------------------------------------------
 export async function getAdminSettings(): Promise<AdminSettingsDoc | null> {
   let cached: AdminSettingsDoc | null = null;
@@ -796,27 +1568,48 @@ export async function getAdminSettings(): Promise<AdminSettingsDoc | null> {
     if (cachedStr) cached = JSON.parse(cachedStr);
   } catch (e) {}
 
-  try {
-    const { data, error } = await supabase
-      .from("admin_settings")
-      .select("*")
-      .eq("id", "settings")
-      .maybeSingle();
+  let sbData: AdminSettingsDoc | null = null;
+  let fsData: AdminSettingsDoc | null = null;
 
-    if (!error && data) {
-      const merged = { ...cached, ...data };
+  await Promise.all([
+    (async () => {
       try {
-        localStorage.setItem("ue_cache_settings", JSON.stringify(merged));
-      } catch (e) {}
-      return merged as AdminSettingsDoc;
-    }
-  } catch (err) {
-    console.warn("Supabase getAdminSettings notice:", err);
+        const { data, error } = await supabase
+          .from("admin_settings")
+          .select("*")
+          .eq("id", "settings")
+          .maybeSingle();
+        if (!error && data) {
+          sbData = data as AdminSettingsDoc;
+        }
+      } catch (err) {
+        console.warn("Supabase getAdminSettings notice:", err);
+      }
+    })(),
+    (async () => {
+      try {
+        const snap = await getDoc(doc(db, "adminSettings", "settings"));
+        if (snap.exists()) {
+          fsData = snap.data() as AdminSettingsDoc;
+        }
+      } catch (err) {}
+    })(),
+  ]);
+
+  if (sbData || fsData) {
+    const merged = { ...cached, ...(sbData || {}), ...(fsData || {}) };
+    try {
+      localStorage.setItem("ue_cache_settings", JSON.stringify(merged));
+    } catch (e) {}
+    return merged as AdminSettingsDoc;
   }
+
   return cached;
 }
 
-export async function saveAdminSettings(settings: Partial<AdminSettingsDoc>): Promise<boolean> {
+export async function saveAdminSettings(
+  settings: Partial<AdminSettingsDoc>
+): Promise<boolean> {
   const payload = {
     id: "settings",
     ...settings,
@@ -830,19 +1623,42 @@ export async function saveAdminSettings(settings: Partial<AdminSettingsDoc>): Pr
     localStorage.setItem("ue_cache_settings", JSON.stringify(merged));
   } catch (e) {}
 
-  try {
-    const { error } = await supabase.from("admin_settings").upsert(payload);
-    if (error) {
-      console.warn("Supabase saveAdminSettings notice:", error.message || error);
+  const fsPayload = { ...settings };
+  const firestorePromise = setDoc(
+    doc(db, "adminSettings", "settings"),
+    fsPayload,
+    { merge: true }
+  ).catch(() => {});
+
+  const supabasePromise = (async () => {
+    try {
+      const { error } = await supabase.from("admin_settings").upsert(payload);
+      if (error) {
+        console.warn("Supabase saveAdminSettings notice:", error.message || error);
+        // Fallback if live Supabase table lacks blockSystemActive column
+        if ("blockSystemActive" in payload) {
+          const { blockSystemActive: _omit, ...restPayload } = payload as any;
+          if (Object.keys(restPayload).length > 2) {
+            await supabase.from("admin_settings").upsert(restPayload);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Supabase saveAdminSettings notice:", err);
     }
-    return true;
-  } catch (err) {
-    console.warn("Supabase saveAdminSettings notice:", err);
-    return true;
-  }
+  })();
+
+  await Promise.race([
+    Promise.allSettled([firestorePromise, supabasePromise]),
+    new Promise((resolve) => setTimeout(resolve, 2500)),
+  ]);
+
+  return true;
 }
 
-export function subscribeAdminSettings(onUpdate: (settings: AdminSettingsDoc) => void) {
+export function subscribeAdminSettings(
+  onUpdate: (settings: AdminSettingsDoc) => void
+) {
   getAdminSettings().then((s) => {
     if (s) onUpdate(s);
   });
@@ -859,7 +1675,17 @@ export function subscribeAdminSettings(onUpdate: (settings: AdminSettingsDoc) =>
     )
     .subscribe();
 
+  const unsubFirestore = onSnapshot(
+    doc(db, "adminSettings", "settings"),
+    async () => {
+      const updated = await getAdminSettings();
+      if (updated) onUpdate(updated);
+    },
+    () => {}
+  );
+
   return () => {
     supabase.removeChannel(channel);
+    unsubFirestore();
   };
 }
