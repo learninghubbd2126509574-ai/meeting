@@ -1005,7 +1005,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[100] flex items-center justify-center p-4 font-sans animate-fadeIn">
             <div className="w-full max-w-[390px] bg-white rounded-3xl border border-[#dce3ec] shadow-[0_24px_48px_rgba(11,74,139,0.22)] overflow-hidden relative">
               {/* Corporate Brand Header Banner (All English as requested) */}
-              <div className="bg-gradient-to-br from-[#0b4a8b] via-[#0d549d] to-[#08386b] text-white px-6 pt-7 pb-6 text-center relative">
+              <div className="bg-gradient-to-br from-[#0b4a8b] via-[#0d549d] to-[#08386b] text-white px-6 pt-6 pb-5 text-center relative">
                 <button
                   type="button"
                   onClick={() => setShowNotificationPopup(false)}
@@ -1015,23 +1015,23 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
                   ✕
                 </button>
 
-                <div className="mx-auto mb-3 h-10 w-10 rounded-xl bg-white/15 border border-white/20 flex items-center justify-center text-white shadow-sm">
+                <div className="mx-auto mb-2.5 h-10 w-10 rounded-xl bg-white/15 border border-white/20 flex items-center justify-center text-white shadow-sm">
                   <Bell className="h-5 w-5" />
                 </div>
 
-                <p className="text-[12px] font-bold tracking-[0.18em] uppercase text-[#a5d8ff]">
+                <p className="font-display-en text-[13.5px] sm:text-[14px] font-bold tracking-[0.08em] uppercase text-[#a5d8ff] leading-tight">
                   Unity Earning
                 </p>
-                <h2 className="text-[22px] font-extrabold tracking-tight text-white mt-1 leading-tight">
-                  Counseling Session
-                </h2>
-                <div className="mt-1.5 flex items-center justify-center gap-2">
-                  <span className="h-px w-6 bg-white/30" />
-                  <p className="text-[12.5px] font-semibold tracking-wide text-emerald-200">
+                <div className="mt-0.5 flex items-center justify-center gap-2">
+                  <span className="h-px w-4 bg-white/30 shrink-0" />
+                  <p className="font-display-en text-[15.5px] sm:text-[17px] font-semibold tracking-[0.03em] text-emerald-200 whitespace-nowrap leading-snug">
                     E-learning Platform
                   </p>
-                  <span className="h-px w-6 bg-white/30" />
+                  <span className="h-px w-4 bg-white/30 shrink-0" />
                 </div>
+                <h2 className="font-display-en text-[22px] sm:text-[23px] font-bold tracking-tight text-white mt-1.5 leading-tight">
+                  Counseling Session
+                </h2>
               </div>
 
               {/* Formal Bengali Instructions Body */}
@@ -1308,17 +1308,17 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
               title={demoModeActive ? "Demo Session Login" : undefined}
             >
               <div className="relative z-10 flex flex-col items-center justify-center space-y-1">
-                <p className="text-[12px] sm:text-[13px] font-bold text-[#bfe0ff] leading-tight">
+                <p className="font-display-en text-[12px] sm:text-[13px] font-semibold tracking-wide text-[#bfe0ff] leading-tight">
                   <span>Unity Earning</span>{" "}
                   <span className="text-emerald-200 font-semibold">E-learning Platform</span>
                 </p>
 
-                <h1 className="text-[21px] sm:text-[23px] font-extrabold tracking-tight leading-snug text-white [text-wrap:balance]">
-                  সেমিনার মিটিং পোর্টাল
+                <h1 className="font-display-en text-[21px] sm:text-[24px] font-bold tracking-[0.01em] leading-snug text-white [text-wrap:balance]">
+                  Counseling & Seminar Portal
                 </h1>
 
-                <p className="text-[11px] font-semibold text-white/80 tracking-wide">
-                  Live · সেশন চালু আছে
+                <p className="font-display-en text-[11px] font-semibold text-emerald-200/95 tracking-[0.16em] uppercase">
+                  Session Live
                 </p>
               </div>
             </div>
@@ -1328,7 +1328,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
               <div className="bg-white border border-[#e6eaf0] rounded-2xl px-3.5 py-2.5 shadow-[0_2px_8px_rgba(15,23,42,0.03)] flex items-center justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-[11px] font-bold text-[#111827] leading-tight">
-                    মিটিংয়ের তারিখ (Date)
+                    তারিখ (Date)
                   </p>
                   <p className="text-[11.5px] font-bold text-[#0d7a5f] truncate mt-0.5 tabular-nums">
                     {schedule.formattedDate}
@@ -1340,7 +1340,7 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
               <div className="bg-white border border-[#e6eaf0] rounded-2xl px-3.5 py-2.5 shadow-[0_2px_8px_rgba(15,23,42,0.03)] flex items-center justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-[11px] font-bold text-[#111827] leading-tight">
-                    নির্ধারিত সময় (Time)
+                    সময় (Time)
                   </p>
                   <p className="text-[11.5px] font-bold text-[#0d7a5f] truncate mt-0.5 tabular-nums">
                     {schedule.formattedTime}

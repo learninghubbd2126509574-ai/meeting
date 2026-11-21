@@ -27,6 +27,10 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.font-display-en {
+  font-family: 'Outfit', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+}
+
 /* Custom scrollbars for a cleaner UI layout inside lists */
 .custom-scrollbar::-webkit-scrollbar {
   width: 5px;
