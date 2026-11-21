@@ -1198,20 +1198,76 @@ export default function JoinPage({ meetingId }: JoinPageProps) {
           </div>
         )}
 
-        {/* LOADING STATE */}
+        {/* LOADING STATE — Minimal Executive Spinning 'U' Monogram (No text) */}
         {isLoading && (
-          <div className="flex-1 flex flex-col items-center justify-center p-6 min-h-[460px]">
-            <div className="w-full bg-white border border-[#e6eaf0] rounded-2xl p-8 shadow-[0_2px_8px_rgba(15,23,42,0.04)] text-center space-y-4">
-              <div className="h-12 w-12 bg-[#edf4fc] border border-[#d6e6f7] rounded-xl flex items-center justify-center mx-auto">
-                <Loader2 className="h-6 w-6 animate-spin text-[#0b4a8b]" />
-              </div>
-              <div className="space-y-1">
-                <p className="text-[#111827] font-bold text-sm">
-                  ডিভাইস যাচাই করা হচ্ছে (Verifying...)
-                </p>
-                <p className="text-slate-500 font-medium text-xs">
-                  নিরাপত্তা অবস্থা এবং নেটওয়ার্ক সংযোগ পরীক্ষা চলছে...
-                </p>
+          <div
+            className="flex-1 flex items-center justify-center min-h-[75vh] sm:min-h-[480px] p-6 select-none"
+            role="status"
+            aria-label="Loading"
+          >
+            <div className="relative h-28 w-28 flex items-center justify-center">
+              {/* Soft Ambient Navy Halo */}
+              <div className="absolute inset-1 rounded-full bg-[#0b4a8b]/10 blur-md" />
+
+              {/* Crisp Circular Track Surface */}
+              <div className="relative h-24 w-24 rounded-full bg-white border border-[#e6eaf0] shadow-[0_14px_34px_rgba(11,74,139,0.14)] flex items-center justify-center">
+                {/* Primary Smooth Rotating Gradient Arc */}
+                <svg
+                  className="absolute inset-0 h-full w-full animate-loader-spin"
+                  viewBox="0 0 96 96"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <defs>
+                    <linearGradient id="uLoaderGrad" x1="12" y1="12" x2="84" y2="84" gradientUnits="userSpaceOnUse">
+                      <stop offset="0%" stopColor="#0b4a8b" />
+                      <stop offset="55%" stopColor="#1d6fd6" />
+                      <stop offset="100%" stopColor="#0d7a5f" />
+                    </linearGradient>
+                  </defs>
+                  <circle
+                    cx="48"
+                    cy="48"
+                    r="40"
+                    stroke="#e8eff7"
+                    strokeWidth="4"
+                  />
+                  <circle
+                    cx="48"
+                    cy="48"
+                    r="40"
+                    stroke="url(#uLoaderGrad)"
+                    strokeWidth="4.5"
+                    strokeLinecap="round"
+                    strokeDasharray="118 140"
+                  />
+                </svg>
+
+                {/* Subtle Counter-Rotating Precision Inner Orbit */}
+                <svg
+                  className="absolute inset-0 h-full w-full animate-loader-spin-reverse"
+                  viewBox="0 0 96 96"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <circle
+                    cx="48"
+                    cy="48"
+                    r="33"
+                    stroke="#93c5fd"
+                    strokeOpacity="0.55"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeDasharray="36 172"
+                  />
+                </svg>
+
+                {/* Centered Executive 'U' Brand Emblem */}
+                <div className="relative z-10 h-14 w-14 rounded-full bg-gradient-to-br from-[#0b4a8b] via-[#0d549d] to-[#073360] shadow-[inset_0_1px_1px_rgba(255,255,255,0.28),0_6px_14px_rgba(11,74,139,0.28)] flex items-center justify-center">
+                  <span className="font-display-en text-[27px] font-extrabold text-white leading-none tracking-tight">
+                    U
+                  </span>
+                </div>
               </div>
             </div>
           </div>

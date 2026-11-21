@@ -114,13 +114,41 @@ body {
   animation: ltrArrowNudge 1.4s ease-in-out infinite;
 }
 
+@keyframes loaderSpin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes loaderSpinReverse {
+  0% {
+    transform: rotate(360deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+.animate-loader-spin {
+  animation: loaderSpin 1.05s cubic-bezier(0.5, 0.15, 0.5, 0.85) infinite;
+}
+
+.animate-loader-spin-reverse {
+  animation: loaderSpinReverse 2.2s linear infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-fadeIn,
   .animate-fade-in,
   .animate-marquee,
   .animate-ltr-reveal,
   .animate-ltr-sweep,
-  .animate-ltr-nudge {
+  .animate-ltr-nudge,
+  .animate-loader-spin,
+  .animate-loader-spin-reverse {
     animation: none !important;
   }
 }
